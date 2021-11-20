@@ -1,7 +1,5 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    // println!("cargo:rustc-link-lib=static=z");
-    // println!("cargo:rustc-link-lib=dylib=dl");
     println!("cargo:rustc-link-lib=framework=OpenAL");
     println!("cargo:rustc-link-lib=framework=Foundation");
     println!("cargo:rustc-link-lib=framework=AudioToolbox");
@@ -21,39 +19,20 @@ fn main() {
     println!("cargo:rustc-link-lib=framework=CoreText");
     println!("cargo:rustc-link-lib=framework=IOKit");
     println!("cargo:rustc-link-lib=framework=ForceFeedback");
-    // println!("cargo:rustc-link-lib=framework=Cocoa");
     println!("cargo:rustc-link-lib=framework=GameController");
     println!("cargo:rustc-link-lib=framework=Carbon");
-    // println!("cargo:rustc-link-lib=framework=InputMethodKit");
     println!("cargo:rustc-link-lib=framework=Metal");
     println!("cargo:rustc-link-lib=dylib=z");
     println!("cargo:rustc-link-lib=dylib=c++");
-    // println!("cargo:rustc-link-lib=static=X11");
-    // println!("cargo:rustc-link-lib=dylib=stdc++");
-    // println!("cargo:rustc-link-lib=dylib=vdpau");
-    // println!("cargo:rustc-link-lib=dylib=va");
-    // println!("cargo:rustc-link-lib=dylib=va-drm");
-    // println!("cargo:rustc-link-lib=dylib=va-x11");
-    // println!("cargo:rustc-link-lib=dylib=xcb");
-
-    // println!("cargo:rustc-link-lib=static=x264");
-    // println!("cargo:rustc-link-search=native=./native/x264");
-    // println!("cargo:rustc-link-lib=static=mp3lame");
-    // println!("cargo:rustc-link-lib=static=postproc");
-    // println!("cargo:rustc-link-search=native=target/native/lib");
     println!("cargo:rustc-link-search=native=ffmpeg-build/lib");
     println!("cargo:rustc-link-lib=static=lzma");
     println!("cargo:rustc-link-lib=static=expat");
     println!("cargo:rustc-link-lib=static=iconv");
-    // println!("cargo:rustc-link-lib=static=iconv.2");
     println!("cargo:rustc-link-lib=static=gettextpo");
     println!("cargo:rustc-link-lib=static=png16");
     println!("cargo:rustc-link-lib=static=png");
     println!("cargo:rustc-link-lib=static=yasm");
     println!("cargo:rustc-link-lib=static=bz2");
-    // println!("cargo:rustc-link-lib=static=SDL2");
-    // println!("cargo:rustc-link-lib=static=SDL2main");
-    // println!("cargo:rustc-link-lib=static=SDL2_test");
     println!("cargo:rustc-link-lib=static=udfread");
     println!("cargo:rustc-link-lib=static=bluray");
     println!("cargo:rustc-link-lib=static=freetype");
@@ -83,7 +62,6 @@ fn main() {
     println!("cargo:rustc-link-lib=static=webp");
     println!("cargo:rustc-link-lib=static=webpmux");
     println!("cargo:rustc-link-lib=static=webpdemux");
-    // println!("cargo:rustc-link-lib=static=webpdecoder");
     println!("cargo:rustc-link-lib=static=openjp2");
     println!("cargo:rustc-link-lib=static=aom");
     println!("cargo:rustc-link-lib=static=dav1d");
@@ -91,20 +69,12 @@ fn main() {
     println!("cargo:rustc-link-lib=static=openh264");
     println!("cargo:rustc-link-lib=static=x264");
     println!("cargo:rustc-link-lib=static=x265");
-    // println!("cargo:rustc-link-lib=static=charset");
-    // println!("cargo:rustc-link-lib=static=intl");
-    // println!("cargo:rustc-link-lib=static=textstyle");
-
     println!("cargo:rustc-link-lib=static=avutil");
-    // println!("cargo:rustc-link-search=native=target/native/lib");
     println!("cargo:rustc-link-lib=static=avformat");
     println!("cargo:rustc-link-lib=static=postproc");
-    // println!("cargo:rustc-link-search=native=native/lib");
     println!("cargo:rustc-link-lib=static=avfilter");
     println!("cargo:rustc-link-lib=static=avdevice");
     println!("cargo:rustc-link-lib=static=swscale");
     println!("cargo:rustc-link-lib=static=swresample");
     println!("cargo:rustc-link-lib=static=avcodec");
-    // println!("cargo:rustc-link-search=native=native/lib");
 }
-
