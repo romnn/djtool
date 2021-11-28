@@ -149,67 +149,105 @@ impl Format {
     }
 }
 
-fn cmp_format(a: &Format, b: &Format) -> Ordering {
-    // sort by width
-    if a.width == b.width {
-        // Format 137 downloads slowly, give it less priority
-        // see https://github.com/kkdai/youtube/pull/171
-        if a.itag == Some(137) {
-            return Ordering::Less;
-        }
-        if b.itag == Some(137) {
-            return Ordering::Greater;
-        }
-        // sort by fps
-        if a.fps == b.fps {
-            let a_audio_channels = a.audio_channels.unwrap_or(0);
-            let b_audio_channels = b.audio_channels.unwrap_or(0);
-            if a.fps.is_none()
+#[derive(Debug, Clone)]
+pub struct FormatList {
+    formats: Vec<Format>,
+}
+
+impl From<Vec<Format>> for FormatList {
+    fn from(mut formats: Vec<Format>) -> FormatList {
+        formats.sort_by(FormatList::cmp_format);
+        FormatList { formats }
+    }
+}
+
+impl FormatList {
+    fn sort(&mut self) {
+        self.formats.sort_by(Self::cmp_format);
+    }
+
+    fn with_mime_type(&self, substr: &str) -> Vec<&Format> {
+        self.formats
+            .iter()
+            .filter(|f| {
+                f.mime_type
+                    .as_ref()
+                    .map(|m| m.to_lowercase().contains(substr))
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    fn audio(&self) -> Vec<&Format> {
+        self.with_mime_type("audio")
+    }
+
+    fn video(&self) -> Vec<&Format> {
+        self.with_mime_type("video")
+    }
+
+    fn cmp_format(a: &Format, b: &Format) -> Ordering {
+        // sort by width
+        if a.width == b.width {
+            // Format 137 downloads slowly, give it less priority
+            // see https://github.com/kkdai/youtube/pull/171
+            if a.itag == Some(137) {
+                return Ordering::Less;
+            }
+            if b.itag == Some(137) {
+                return Ordering::Greater;
+            }
+            // sort by fps
+            if a.fps == b.fps {
+                let a_audio_channels = a.audio_channels.unwrap_or(0);
+                let b_audio_channels = b.audio_channels.unwrap_or(0);
+                if a.fps.is_none()
             // if a.fps.unwrap_or(0) == 0
                 && a_audio_channels > 0
                 && b_audio_channels > 0
-            {
-                // audio
-                // sort by codec
-                if a.codec() == b.codec() {
-                    // sort by audio channel
-                    if a_audio_channels == b_audio_channels {
-                        // sort by audio bitrate
-                        if a.bitrate == b.bitrate {
-                            // sort by audio sample rate
-                            return b.audio_sample_rate.cmp(&a.audio_sample_rate);
+                {
+                    // audio
+                    // sort by codec
+                    if a.codec() == b.codec() {
+                        // sort by audio channel
+                        if a_audio_channels == b_audio_channels {
+                            // sort by audio bitrate
+                            if a.bitrate == b.bitrate {
+                                // sort by audio sample rate
+                                return b.audio_sample_rate.cmp(&a.audio_sample_rate);
+                            }
+                            return b.bitrate.cmp(&a.bitrate);
                         }
-                        return b.bitrate.cmp(&a.bitrate);
+                        return b_audio_channels.cmp(&a_audio_channels);
                     }
-                    return b_audio_channels.cmp(&a_audio_channels);
+                    let mut rank: HashMap<Codec, u16> = HashMap::new();
+                    rank.insert(Codec::MP4, 2);
+                    rank.insert(Codec::OPUS, 1);
+                    return rank
+                        .get(&b.codec())
+                        .unwrap_or(&0)
+                        .cmp(&rank.get(&a.codec()).unwrap_or(&0));
                 }
+                // video
+                // sort by codec
                 let mut rank: HashMap<Codec, u16> = HashMap::new();
-                rank.insert(Codec::MP4, 2);
-                rank.insert(Codec::OPUS, 1);
+                rank.insert(Codec::AV01, 3);
+                rank.insert(Codec::VP9, 2);
+                rank.insert(Codec::AVC1, 1);
+
+                if a.codec() == b.codec() {
+                    // sort by audio bitrate
+                    return b.bitrate.cmp(&a.bitrate);
+                }
                 return rank
                     .get(&b.codec())
                     .unwrap_or(&0)
                     .cmp(&rank.get(&a.codec()).unwrap_or(&0));
             }
-            // video
-            // sort by codec
-            let mut rank: HashMap<Codec, u16> = HashMap::new();
-            rank.insert(Codec::AV01, 3);
-            rank.insert(Codec::VP9, 2);
-            rank.insert(Codec::AVC1, 1);
-
-            if a.codec() == b.codec() {
-                // sort by audio bitrate
-                return b.bitrate.cmp(&a.bitrate);
-            }
-            return rank
-                .get(&b.codec())
-                .unwrap_or(&0)
-                .cmp(&rank.get(&a.codec()).unwrap_or(&0));
+            return b.fps.unwrap_or(0).cmp(&a.fps.unwrap_or(0));
         }
-        return b.fps.unwrap_or(0).cmp(&a.fps.unwrap_or(0));
+        return b.width.unwrap_or(0).cmp(&a.width.unwrap_or(0));
     }
-    return b.width.unwrap_or(0).cmp(&a.width.unwrap_or(0));
 }
 
 /*
@@ -379,7 +417,7 @@ pub struct Video {
     dash_manifest_url: Option<String>,
     thumbnails: Vec<Thumbnail>,
     duration_seconds: Option<i32>,
-    formats: Vec<Format>,
+    formats: FormatList,
 }
 
 impl Video {
@@ -403,7 +441,7 @@ impl Video {
                 .unwrap_or(&Vec::new())
                 .to_vec(),
         );
-        formats.sort_by(cmp_format);
+        let formats: FormatList = formats.into();
         Self {
             id: data
                 .video_details
@@ -522,7 +560,7 @@ impl Chunk {
 }
 struct Download {
     client: Arc<reqwest::Client>,
-    // progress: (mpsc::Sender<Result<usize>>, mpsc::Receiver<Result<usize>>),
+    temp_dir: TempDir,
     concurrency: usize,
     url: String,
     headers: HeaderMap,
@@ -535,8 +573,6 @@ struct Download {
 }
 
 impl Download {
-    // client: reqwest::Client,
-    // async fn new(url: String, output_path: tokio::fs::File) -> Result<Self> {
     async fn new(url: String, output_path: PathBuf) -> Result<Self> {
         let client = Arc::new(reqwest::Client::new());
         let info = Self::preflight(&client, &url).await?;
@@ -550,7 +586,7 @@ impl Download {
 
         let mut download = Self {
             client,
-            // progress,
+            temp_dir: TempDir::new("djtool")?,
             concurrency,
             url,
             headers: HeaderMap::new(),
@@ -677,7 +713,7 @@ impl Download {
                         range_start,
                         range_end,
                     );
-                    let path = self.output_path.with_file_name(chunk_name);
+                    let path = self.temp_dir.path().join(chunk_name);
 
                     Chunk {
                         client: self.client.clone(),
@@ -733,7 +769,7 @@ impl Download {
                         if let Err(err) = chunk.download(&progress).await {
                             let _ = progress.send(Err(err.into())).await;
                         };
-                        println!("chunk is done");
+                        // println!("chunk is done");
                     }
                 })
                 .await;
@@ -745,12 +781,12 @@ impl Download {
             match chunk_downloaded {
                 Ok(chunk_downloaded) => {
                     downloaded += chunk_downloaded;
-                    println!("downloaded: {}", downloaded);
+                    // println!("downloaded: {}", downloaded);
                 }
                 Err(err) => eprintln!("chunk failed: {}", err),
             }
         }
-        download.await;
+        download.await?;
         println!("download completed: {}", downloaded);
 
         // concat = tokio::spawn(async move {
@@ -788,11 +824,25 @@ impl Download {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct OutputVideo {
+    pub info: Video,
+    // id: Option<String>,
+    // title: Option<String>,
+    // description: Option<String>,
+    // author: Option<String>,
+    // duration_seconds: Option<i32>,
+    pub thumbnail: Option<PathBuf>,
+    pub audio_file: PathBuf,
+    pub content_length: u64,
+    pub format: Format,
+}
+
 impl Downloader {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             client: Arc::new(reqwest::Client::new()),
-        }
+        })
     }
 
     async fn fetch_player_config(&self, id: &String) -> Result<String> {
@@ -1045,7 +1095,7 @@ impl Downloader {
         video: &Video,
         format: &Format,
         output_path: PathBuf,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let stream_url = self.get_stream_url(video, format).await?;
         println!("stream url: {}", stream_url);
         // let res = task::spawn_blocking(move || {
@@ -1080,26 +1130,26 @@ impl Downloader {
         // .map_err(|err| eprintln!("IO error: {:?}", err));
 
         // tokio::run(task);
-        return Ok(());
+        // return Ok(());
 
         // pos := int64(0); pos < format.ContentLength;
         // let mut res = reqwest::blocking::get(stream_url.clone())?;
-        let res = self.client.get(stream_url.clone()).send().await?;
+        // let res = self.client.get(stream_url.clone()).send().await?;
 
         // let chunk_size: u64 = 10_000_000;
-        let total_size = res
-            .content_length()
-            .or(format
-                .content_length
-                .as_ref()
-                .and_then(|length| length.parse::<u64>().ok()))
-            .unwrap_or(0);
+        // let total_size = res
+        //     .content_length()
+        //     .or(format
+        //         .content_length
+        //         .as_ref()
+        //         .and_then(|length| length.parse::<u64>().ok()))
+        //     .unwrap_or(0);
 
         // let outfile = tokio::fs::File::create(outfile).await?;
         // let mut outfile = tokio::io::BufWriter::new(outfile);
         //
-        let mut downloaded: u64 = 0;
-        let mut old_percent = 0.0;
+        // let mut downloaded: u64 = 0;
+        // let mut old_percent = 0.0;
 
         // println!("start");
         // let result = res.bytes().await?;
@@ -1163,42 +1213,61 @@ impl Downloader {
         //     // pb.set_position(new);
         // }
 
-        Ok(())
+        Ok(download.info.content_length)
     }
 
-    pub async fn download_video(&self, id: String) -> Result<()> {
+    pub async fn download_audio(&self, id: String, dest: PathBuf) -> Result<OutputVideo> {
         let video = self.get_video(&id).await?;
         // if video.formats.len() < 1 {
         // todo: raise error here
         // panic!("todo: error when no formats");
         // }
-        for (i, f) in video.formats.iter().enumerate() {
+        let audio_formats = video.formats.audio();
+        for (i, f) in audio_formats.iter().enumerate() {
             println!(
-                "{}: {:?} {:?} {:?} {:?}",
-                i, f.quality_label, f.mime_type, f.bitrate, f.url
+                "{}: {:?} {:?} {:?}",
+                i, f.quality_label, f.mime_type, f.bitrate
             );
+
+            // println!(
+            //     "{}: {:?} {:?} {:?} {:?}",
+            //     i, f.quality_label, f.mime_type, f.bitrate, f.url
+            // );
         }
-        let format = video.formats.first().unwrap();
+        let format = audio_formats.first().unwrap().to_owned().to_owned();
         println!(
             "Video '{:?}' - Quality '{:?}' - Codec '{:?}'",
             video.title, format.quality_label, format.mime_type
         );
 
-        let random_filename = utils::random_filename(25);
-        println!("random filename: {}", random_filename);
+        // let random_filename = utils::random_filename(25);
+        // println!("random filename: {}", random_filename);
 
         let sanitized_filename = utils::sanitize_filename(video.title.clone().unwrap());
         println!("sanitized filename: {}", sanitized_filename);
 
-        // let tmp = env::temp_dir();
-        // let output_path = tmp.join(random_filename);
-        let tmp = TempDir::new(&sanitized_filename)?;
-        let output_path = tmp.path().join(sanitized_filename);
+        // let output_path = self.temp_dir.path().join(sanitized_filename);
+        let output_path = if dest.extension().is_some() {
+            dest
+        } else {
+            let _ = tokio::fs::create_dir_all(&dest).await;
+            dest.join(sanitized_filename)
+        };
         println!("output path: {}", output_path.display());
 
-        // let output_file = File::create(output_path).unwrap();
-        self.download(&video, &format, output_path).await?;
+        // create the directory if it does not already exist
+        let content_length = self.download(&video, &format, output_path.clone()).await?;
 
-        Ok(())
+        Ok(OutputVideo {
+            info: video,
+            // title: video.title
+            // description: Option<String>,
+            // author: Option<String>,
+            // duration_seconds: vieo.duration_seconds,
+            thumbnail: None,
+            audio_file: output_path,
+            content_length,
+            format,
+        })
     }
 }

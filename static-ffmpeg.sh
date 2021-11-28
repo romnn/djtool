@@ -12,7 +12,7 @@ mkdir -p "$CMPL"
 # rm -fr $CMPL/*
 export PATH="${TARGET}/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/include:/usr/local/opt:/usr/local/Cellar:/usr/local/lib:/usr/local/share:/usr/local/etc"
 
-if false; then
+if true; then
   # xz
   cd ${CMPL}
   git -c http.sslVerify=false clone https://git.tukaani.org/xz.git
@@ -86,7 +86,6 @@ if false; then
   cd bzip2
   make -j "$THREADS" && make install PREFIX=${TARGET}
   rm -fr $CMPL/*
-fi
 
   # SDL2
   # requires correct iconv
@@ -100,7 +99,6 @@ fi
   make -j "$THREADS" && make install
   rm -fr $CMPL/*
 
-if false; then
   # libudfread git
   cd ${CMPL}
   git clone https://github.com/vlc-mirror/libudfread.git
