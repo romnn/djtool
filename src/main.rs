@@ -1,11 +1,10 @@
-// fn main() {
-//     println!("Hello, world!");
-// }
-
 extern crate ffmpeg_next as ffmpeg;
 
+use tokio;
 use std::env;
 use std::path::Path;
+mod download;
+mod utils;
 
 use ffmpeg::{codec, filter, format, frame, media};
 use ffmpeg::{rescale, Rescale};
@@ -192,7 +191,18 @@ impl Transcoder {
         }
     }
 }
-fn main() {
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let downloader = download::Downloader::new();
+    // https://www.youtube.com/watch?v=KUyJFHgrrZc
+    // https://www.youtube.com/watch?v=_Q8ELKOLudE
+    // Hb5ZXUeGPHc
+    let video = downloader.download_video("_Q8ELKOLudE".to_string()).await?;
+    Ok(())
+}
+
+fn old() {
     ffmpeg::init().unwrap();
 
     let input = env::args().nth(1).expect("missing input");
