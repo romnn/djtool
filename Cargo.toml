@@ -11,7 +11,8 @@ lto = true # Link Time Optimization (LTO)
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ffmpeg-next = "4.4.0-next.2"
+ffmpeg-next = { version = "4.4.0-next.2", features = ["build"] }
+# , "avcodec", "avdevice", "avfilter", "avformat", "swresample", "swscale"] }
 reqwest = { version = "0.11.6", features = ["json", "blocking", "default-tls", "stream"] }
 anyhow = "1.0"
 async-trait = "0.1.51"
@@ -29,6 +30,8 @@ Boa = "0.13.0"
 futures = "0.3.17"
 num_cpus = "1.13.0"
 num = "0.4"
+http = "0.2.5"
+tempdir = "0.3.7"
 
 # [target.x86_64-unknown-linux-gnu.ffmpeg]
 # [ffmpeg]

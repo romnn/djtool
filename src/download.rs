@@ -2,11 +2,13 @@ use crate::utils;
 use anyhow::Result;
 use boa;
 // use futures::future::join_all;
-use futures_util::StreamExt;
+use futures_util::{stream, StreamExt};
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use regex::Regex;
 // use regex::RegexSet;
+use http::header::HeaderMap;
+use num::cast::NumCast;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::cmp::{min, Ordering};
@@ -14,16 +16,19 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-// use std::path::Path;
-use num::cast::NumCast;
+use std::path::PathBuf;
+// use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::AsyncWriteExt;
+use tempdir::TempDir;
+use tokio::io::{copy, AsyncSeek, AsyncWriteExt};
+use tokio::sync::{mpsc, Mutex};
 use tokio::task;
 use url::Url;
 
 #[derive(Debug)]
 pub struct Downloader {
-    client: reqwest::Client,
+    client: Arc<reqwest::Client>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -462,42 +467,98 @@ struct PreflightDownloadInfo {
     rangeable: bool,
 }
 
-struct Chunk {}
+struct Chunk {
+    client: Arc<reqwest::Client>,
+    // progress: mpsc::Sender<Result<usize>>,
+    headers: HeaderMap,
+    url: String,
+    path: PathBuf,
+    range_start: u64,
+    range_end: u64,
+    downloaded: u64,
+}
 
+impl Chunk {
+    async fn download(&mut self, progress: &mpsc::Sender<Result<usize>>) -> Result<()> {
+        let res = self
+            .client
+            .get(self.url.clone())
+            .headers(self.headers.clone())
+            .header(
+                "Range",
+                format!("bytes={}-{}", self.range_start, self.range_end),
+            )
+            .send()
+            .await?;
+
+        let mut data_stream = res.bytes_stream();
+        let mut chunk_file = tokio::fs::File::create(self.path.clone()).await?;
+        // if let Err(err) = chunk_file {
+        //     let _ = progress.send(Err(err.into())).await;
+        //     break;
+        // }
+        // let chunk_file = chunk_file.unwrap();
+        while let Some(byte_chunk) = data_stream.next().await {
+            // let chunk = item.or(Err(format!("Error while downloading file")))?;
+            let byte_chunk = byte_chunk?;
+            // output_file.write(&chunk).unwrap();
+            // .or(Err(format!("Error while writing to file")))?;
+            // let new = min(downloaded + (chunk.len() as u64), total_size);
+            // let new_percent = 100.0 * (downloaded as f32 / total_size as f32);
+            // if new_percent - old_percent > 10.0 {
+            //     old_percent = new_percent;
+            //     println!("downloaded: {}%", new_percent);
+            // }
+            // downloaded = new;
+            // pb.set_position(new);
+            // output_file.start_seek(chunk.range_start).await?;
+            chunk_file.write(&byte_chunk).await?;
+            let _ = progress.send(Ok(byte_chunk.len())).await;
+            self.downloaded += byte_chunk.len() as u64;
+        }
+        // chunk_file.close()?;
+        Ok(())
+    }
+}
 struct Download {
-    client: reqwest::Client,
+    client: Arc<reqwest::Client>,
+    // progress: (mpsc::Sender<Result<usize>>, mpsc::Receiver<Result<usize>>),
     concurrency: usize,
     url: String,
-    output_file: tokio::fs::File,
+    headers: HeaderMap,
+    output_path: PathBuf,
     chunk_size: u64,
-    // headers []GotHeader
-    // StopProgress bool
-    // content_length: Option<u64>,
     info: PreflightDownloadInfo,
     downloaded: u64,
-    chunks: Vec<Chunk>,
+    chunks: Arc<Mutex<Vec<Chunk>>>,
     started_at: Instant,
 }
 
 impl Download {
     // client: reqwest::Client,
-    async fn new(url: String, output_file: tokio::fs::File) -> Result<Self> {
-        let client = reqwest::Client::new();
+    // async fn new(url: String, output_path: tokio::fs::File) -> Result<Self> {
+    async fn new(url: String, output_path: PathBuf) -> Result<Self> {
+        let client = Arc::new(reqwest::Client::new());
         let info = Self::preflight(&client, &url).await?;
+        // println!("preflight check completed");
         let concurrency = Self::default_concurrency();
         let chunk_size = Self::default_chunk_size(&info, concurrency, None, None);
+        // let sanitized_name = utils::sanitize_filename(video.title.clone().unwrap());
+        //
+        // create channel for download updates
+        // let (tx, mut rx) = mpsc::channel::<Result<usize>>(100);
 
-        // compute ranges fro the chunks
         let mut download = Self {
             client,
+            // progress,
             concurrency,
             url,
-            output_file,
+            headers: HeaderMap::new(),
+            output_path,
             chunk_size,
             info,
-            // content_length: info.content_length,
             downloaded: 0,
-            chunks: Vec::<Chunk>::new(),
+            chunks: Arc::new(Mutex::new(Vec::<Chunk>::new())),
             started_at: Instant::now(),
         };
         download.compute_chunks();
@@ -514,10 +575,6 @@ impl Download {
     fn set_concurrency(&mut self, concurrency: usize, min: Option<u64>, max: Option<u64>) {
         self.chunk_size = Self::default_chunk_size(&self.info, concurrency, min, max);
         self.compute_chunks();
-    }
-
-    fn compute_chunks(&mut self) {
-        // todo
     }
 
     fn default_concurrency() -> usize {
@@ -600,8 +657,133 @@ impl Download {
         })
     }
 
+    fn compute_chunks(&mut self) {
+        let num_chunks =
+            (0..(self.info.content_length as f32 / self.chunk_size as f32).ceil() as usize);
+        // let (tx, _) = &self.progress;
+        self.chunks = Arc::new(Mutex::new(
+            num_chunks
+                .into_iter()
+                .map(|chunk| {
+                    let range_start = chunk as u64 * self.chunk_size;
+                    let range_end =
+                        ((chunk as u64 + 1) * self.chunk_size - 1).min(self.info.content_length);
+                    let chunk_name = format!(
+                        "{}.{}-{}.chunk",
+                        self.output_path
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .unwrap_or(""),
+                        range_start,
+                        range_end,
+                    );
+                    let path = self.output_path.with_file_name(chunk_name);
+
+                    Chunk {
+                        client: self.client.clone(),
+                        // progress: tx.clone(),
+                        headers: self.headers.clone(),
+                        url: self.url.clone(),
+                        path,
+                        range_start,
+                        range_end,
+                        downloaded: 0,
+                    }
+                })
+                .collect(),
+        ));
+    }
+
     async fn start(&mut self) -> Result<()> {
         self.started_at = Instant::now();
+        let chunks_clone = self.chunks.clone();
+
+        let (tx, mut rx) = mpsc::channel::<Result<usize>>(100);
+        // println!("starting download with {} chunks", chunks.len());
+
+        // tokio::spawn(async move {
+        // let chunks: Vec<_> = stream::iter(&self.chunks)
+        //     .map(|chunk| {
+        //         let sender = tx.clone();
+        //         async move {
+        //             println!("chunk {}-{}", chunk.range_start, chunk.range_end);
+        //             let _ = sender.send(0).await;
+        //             0
+        //         }
+        //     })
+        //     .collect()
+        //     .await;
+
+        let concurrency = self.concurrency.clone();
+        let client = self.client.clone();
+        let output_path = self.output_path.clone();
+        let headers = self.headers.clone();
+        let download = tokio::spawn(async move {
+            let mut chunks = chunks_clone.lock().await;
+            stream::iter(chunks.iter_mut())
+                .for_each_concurrent(concurrency, move |chunk| {
+                    // let progress = tx.clone();
+                    // let client = client.clone();
+                    // let headers = headers.clone();
+                    let progress = tx.clone();
+                    println!("{}", chunk.path.display());
+
+                    async move {
+                        println!("chunk {}-{}", chunk.range_start, chunk.range_end);
+                        if let Err(err) = chunk.download(&progress).await {
+                            let _ = progress.send(Err(err.into())).await;
+                        };
+                        println!("chunk is done");
+                    }
+                })
+                .await;
+        });
+
+        let mut downloaded = 0;
+        // let (_, rx) = &mut self.progress;
+        while let Some(chunk_downloaded) = rx.recv().await {
+            match chunk_downloaded {
+                Ok(chunk_downloaded) => {
+                    downloaded += chunk_downloaded;
+                    println!("downloaded: {}", downloaded);
+                }
+                Err(err) => eprintln!("chunk failed: {}", err),
+            }
+        }
+        download.await;
+        println!("download completed: {}", downloaded);
+
+        // concat = tokio::spawn(async move {
+
+        // pre-allocate the output file
+        let mut output_file = tokio::fs::File::create(self.output_path.clone()).await?;
+        // output_file.set_len(self.info.content_length).await?;
+
+        // recombine the chunk files into final file sequentially
+        let mut chunks = self.chunks.lock().await;
+        // let chunk_stream = stream::iter(chunks.iter())
+        // chunks.iter()
+        // .for_each(|chunk| async move {
+        for chunk in chunks.iter() {
+            let mut chunk_file = tokio::fs::File::open(chunk.path.clone()).await?;
+            tokio::io::copy(&mut chunk_file, &mut output_file).await?;
+        }
+        println!("concatenated: {}", self.output_path.display());
+
+        // self.chunks: Vec<_> = num_chunks
+        //     .into_iter()
+        //     .map(|chunk| {
+        //         // let client = self.client.clone();
+        //         // let url = stream_url.clone();
+        //         // async move {
+        //         //     // req.Header.Set("Range", fmt.Sprintf("bytes=%v-%v", pos, pos+chunkSize-1))
+        //         //     client.get(url).send().await
+        //         // }
+        //     })
+        //     .into_iter()
+        //     .map(tokio::spawn)
+        //     .collect();
+
         Ok(())
     }
 }
@@ -609,7 +791,7 @@ impl Download {
 impl Downloader {
     pub fn new() -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: Arc::new(reqwest::Client::new()),
         }
     }
 
@@ -862,7 +1044,7 @@ impl Downloader {
         &self,
         video: &Video,
         format: &Format,
-        mut output_file: tokio::fs::File,
+        output_path: PathBuf,
     ) -> Result<()> {
         let stream_url = self.get_stream_url(video, format).await?;
         println!("stream url: {}", stream_url);
@@ -877,7 +1059,8 @@ impl Downloader {
         //
         // create the output file and pre allocate its size
         //
-        let download = Download::new(stream_url, output_file);
+        let mut download = Download::new(stream_url, output_path).await?;
+        download.start().await?;
         // client: self.client,
         // concurrency: 8,
         // url: stream_url,
@@ -888,7 +1071,6 @@ impl Downloader {
         // chunks: Vec::<Chunk>,
         // started_at: Instant,
         // };
-        output_file.set_len(10).await?;
         // .and_then(|mut file| {
         //     file.poll_set_len(10)
         // })
@@ -964,22 +1146,22 @@ impl Downloader {
         //     println!("chunk completed: {:?}", chunk);
         // }
 
-        let mut stream = res.bytes_stream();
+        // let mut stream = res.bytes_stream();
 
-        while let Some(item) = stream.next().await {
-            // let chunk = item.or(Err(format!("Error while downloading file")))?;
-            let chunk = item.unwrap();
-            output_file.write(&chunk).unwrap();
-            // .or(Err(format!("Error while writing to file")))?;
-            let new = min(downloaded + (chunk.len() as u64), total_size);
-            let new_percent = 100.0 * (downloaded as f32 / total_size as f32);
-            if new_percent - old_percent > 10.0 {
-                old_percent = new_percent;
-                println!("downloaded: {}%", new_percent);
-            }
-            downloaded = new;
-            // pb.set_position(new);
-        }
+        // while let Some(item) = stream.next().await {
+        //     // let chunk = item.or(Err(format!("Error while downloading file")))?;
+        //     let chunk = item.unwrap();
+        //     // output_file.write(&chunk).unwrap();
+        //     // .or(Err(format!("Error while writing to file")))?;
+        //     let new = min(downloaded + (chunk.len() as u64), total_size);
+        //     let new_percent = 100.0 * (downloaded as f32 / total_size as f32);
+        //     if new_percent - old_percent > 10.0 {
+        //         old_percent = new_percent;
+        //         println!("downloaded: {}%", new_percent);
+        //     }
+        //     downloaded = new;
+        //     // pb.set_position(new);
+        // }
 
         Ok(())
     }
@@ -1008,13 +1190,14 @@ impl Downloader {
         let sanitized_filename = utils::sanitize_filename(video.title.clone().unwrap());
         println!("sanitized filename: {}", sanitized_filename);
 
-        let tmp = env::temp_dir();
-        let output_path = tmp.join(random_filename);
+        // let tmp = env::temp_dir();
+        // let output_path = tmp.join(random_filename);
+        let tmp = TempDir::new(&sanitized_filename)?;
+        let output_path = tmp.path().join(sanitized_filename);
         println!("output path: {}", output_path.display());
 
-        let output_file = tokio::fs::File::create(output_path).await?;
         // let output_file = File::create(output_path).unwrap();
-        self.download(&video, &format, output_file).await?;
+        self.download(&video, &format, output_path).await?;
 
         Ok(())
     }
