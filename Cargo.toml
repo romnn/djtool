@@ -32,83 +32,89 @@ tempdir = "0.3.7"
 libc = "0.2"
 
 [build-dependencies]
-num_cpus   = "1.11"
+anyhow = "1.0"
+num_cpus   = "1.13"
 cc         = "1.0"
 pkg-config = "0.3"
 bindgen    = { version = "0.59", default-features = false, features = ["runtime"] }
+
+rayon = { version = "1.5.1", optional=true }
+crossbeam-channel = { version = "0.4", optional = true }
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]
 vcpkg = "0.2"
 
 [features]
-default  = ["avcodec", "avdevice", "avfilter", "avformat", "swresample", "swscale"]
+default  = ["parallel-build", "avcodec", "avdevice", "avfilter", "avformat", "swresample", "swscale"]
+
+parallel-build = ["rayon", "crossbeam-channel"]
 
 # static = []
 # build  = ["static"]
 
 # licensing
-build-license-gpl      = ["build"]
-build-license-nonfree  = ["build"]
-build-license-version3 = ["build"]
+build-license-gpl      = []
+build-license-nonfree  = []
+build-license-version3 = []
 
 # misc
-build-drm   = ["build"]
-build-nvenc = ["build"]
-build-pic   = ["build"]
-build-zlib  = ["build"]
+build-drm   = []
+build-nvenc = []
+build-pic   = []
+build-zlib  = []
 
 # ssl
-build-lib-gnutls  = ["build"]
-build-lib-openssl = ["build"]
+build-lib-gnutls  = []
+build-lib-openssl = []
 
 # filters
-build-lib-fontconfig = ["build"]
-build-lib-frei0r     = ["build"]
-build-lib-ladspa     = ["build"]
-build-lib-ass        = ["build"]
-build-lib-freetype   = ["build"]
-build-lib-freebidi   = ["build"]
-build-lib-opencv     = ["build"]
-build-lib-vmaf       = ["build"]
+build-lib-fontconfig = []
+build-lib-frei0r     = []
+build-lib-ladspa     = []
+build-lib-ass        = []
+build-lib-freetype   = []
+build-lib-freebidi   = []
+build-lib-opencv     = []
+build-lib-vmaf       = []
 
 # encoders/decoders
-build-lib-aacplus          = ["build"]
-build-lib-celt             = ["build"]
-build-lib-dav1d            = ["build"]
-build-lib-dcadec           = ["build"]
-build-lib-faac             = ["build"]
-build-lib-fdk-aac          = ["build"]
-build-lib-gsm              = ["build"]
-build-lib-ilbc             = ["build"]
-build-lib-kvazaar          = ["build"]
-build-lib-mp3lame          = ["build"]
-build-lib-opencore-amrnb   = ["build"]
-build-lib-opencore-amrwb   = ["build"]
-build-lib-openh264         = ["build"]
-build-lib-openjpeg         = ["build"]
-build-lib-opus             = ["build"]
-build-lib-schroedinger     = ["build"]
-build-lib-shine            = ["build"]
-build-lib-snappy           = ["build"]
-build-lib-speex            = ["build"]
-build-lib-stagefright-h264 = ["build"]
-build-lib-theora           = ["build"]
-build-lib-twolame          = ["build"]
-build-lib-utvideo          = ["build"]
-build-lib-vo-aacenc        = ["build"]
-build-lib-vo-amrwbenc      = ["build"]
-build-lib-vorbis           = ["build"]
-build-lib-vpx              = ["build"]
-build-lib-wavpack          = ["build"]
-build-lib-webp             = ["build"]
-build-lib-x264             = ["build"]
-build-lib-x265             = ["build"]
-build-lib-avs              = ["build"]
-build-lib-xvid             = ["build"]
+build-lib-aacplus          = []
+build-lib-celt             = []
+build-lib-dav1d            = []
+build-lib-dcadec           = []
+build-lib-faac             = []
+build-lib-fdk-aac          = []
+build-lib-gsm              = []
+build-lib-ilbc             = []
+build-lib-kvazaar          = []
+build-lib-mp3lame          = []
+build-lib-opencore-amrnb   = []
+build-lib-opencore-amrwb   = []
+build-lib-openh264         = []
+build-lib-openjpeg         = []
+build-lib-opus             = []
+build-lib-schroedinger     = []
+build-lib-shine            = []
+build-lib-snappy           = []
+build-lib-speex            = []
+build-lib-stagefright-h264 = []
+build-lib-theora           = []
+build-lib-twolame          = []
+build-lib-utvideo          = []
+build-lib-vo-aacenc        = []
+build-lib-vo-amrwbenc      = []
+build-lib-vorbis           = []
+build-lib-vpx              = []
+build-lib-wavpack          = []
+build-lib-webp             = []
+build-lib-x264             = []
+build-lib-x265             = []
+build-lib-avs              = []
+build-lib-xvid             = []
 
 # protocols
-build-lib-smbclient = ["build"]
-build-lib-ssh       = ["build"]
+build-lib-smbclient = []
+build-lib-ssh       = []
 
 # components
 avcodec    = []

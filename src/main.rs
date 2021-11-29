@@ -1,4 +1,5 @@
 // extern crate ffmpeg_next as ffmpeg;
+#![deny(warnings)]
 
 use std::env;
 use std::path::Path;

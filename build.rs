@@ -2,7 +2,10 @@ extern crate bindgen;
 extern crate cc;
 extern crate num_cpus;
 extern crate pkg_config;
+mod buildtools;
 
+use anyhow::Result;
+use buildtools::dep_graph::{DepGraph, Dependency};
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Write};
@@ -18,6 +21,7 @@ use bindgen::callbacks::{
 struct Library {
     name: &'static str,
     is_feature: bool,
+    // libraries: &[Library],
 }
 
 impl Library {
@@ -29,6 +33,57 @@ impl Library {
         }
     }
 }
+
+// static LIBRARIES: &[Library] = &[Library {
+//     name: "ffmpeg",
+//     is_feature: false,
+//     libraries: &[
+//         Library {
+//             name: "avcodec",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "avdevice",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "avfilter",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "avformat",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "avresample",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "avutil",
+//             is_feature: false,
+//         },
+//         Library {
+//             name: "postproc",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "swresample",
+//             is_feature: true,
+//         },
+//         Library {
+//             name: "swscale",
+//             is_feature: true,
+//         },
+//     ],
+// }];
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+struct BuildDependency {
+    name: String,
+    // build: Box<dyn Fn() -> Result<()> + Send + Sync>,
+}
+
+impl BuildDependency {}
 
 static LIBRARIES: &[Library] = &[
     Library {
@@ -71,7 +126,6 @@ static LIBRARIES: &[Library] = &[
 
 #[derive(Debug)]
 struct Callbacks;
-
 
 impl ParseCallbacks for Callbacks {
     fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
@@ -131,75 +185,82 @@ impl ParseCallbacks for Callbacks {
     }
 }
 
-fn version() -> String {
-    let major: u8 = env::var("CARGO_PKG_VERSION_MAJOR")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let minor: u8 = env::var("CARGO_PKG_VERSION_MINOR")
-        .unwrap()
-        .parse()
-        .unwrap();
-
-    format!("{}.{}", major, minor)
-}
+const FFMPEG_VERSION: &str = "4.4";
+// fn version() -> String {
+//     // let major: u8 = env::var("CARGO_PKG_VERSION_MAJOR")
+//     //     .unwrap()
+//     //     .parse()
+//     //     .unwrap();
+//     // let minor: u8 = env::var("CARGO_PKG_VERSION_MINOR")
+//     //     .unwrap()
+//     //     .parse()
+//     //     .unwrap();
+//     // format!("{}.{}", major, minor)
+// }
 
 fn output() -> PathBuf {
     PathBuf::from(env::var("OUT_DIR").unwrap())
+        .canonicalize()
+        .unwrap()
 }
 
 fn source() -> PathBuf {
-    output().join(format!("ffmpeg-{}", version()))
+    output().join(format!("ffmpeg-{}", FFMPEG_VERSION))
 }
 
 fn search() -> PathBuf {
     let mut absolute = env::current_dir().unwrap();
     absolute.push(&output());
     absolute.push("dist");
-
     absolute
 }
 
-fn fetch() -> io::Result<()> {
-    let output_base_path = output();
-    let clone_dest_dir = format!("ffmpeg-{}", version());
-    let _ = std::fs::remove_dir_all(output_base_path.join(&clone_dest_dir));
-    let status = Command::new("git")
-        .current_dir(&output_base_path)
-        .arg("clone")
-        .arg("--depth=1")
-        .arg("-b")
-        .arg(format!("release/{}", version()))
-        .arg("https://github.com/FFmpeg/FFmpeg")
-        .arg(&clone_dest_dir)
-        .status()?;
+struct GitRepository<'a> {
+    url: &'a str,
+    path: PathBuf,
+    branch: Option<String>,
+}
 
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::new(io::ErrorKind::Other, "fetch failed"))
+impl GitRepository<'_> {
+    pub fn clone(&self) -> Result<()> {
+        let _ = std::fs::remove_dir_all(&self.path);
+        let mut cmd = Command::new("git");
+        cmd.arg("clone").arg("--depth=1");
+        if let Some(branch) = &self.branch {
+            cmd.arg("-b").arg(branch);
+        }
+
+        cmd.arg(self.url).arg(self.path.to_str().unwrap());
+        println!(
+            "cargo:warning=Cloning {} into {}",
+            self.url,
+            self.path.display()
+        );
+
+        if cmd.status()?.success() {
+            Ok(())
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "fetch failed").into())
+        }
     }
 }
 
-fn switch(configure: &mut Command, feature: &str, name: &str) {
-    let arg = if env::var("CARGO_FEATURE_".to_string() + feature).is_ok() {
-        "--enable-"
-    } else {
-        "--disable-"
+fn fetch() -> Result<()> {
+    let output_base_path = output();
+    let repo = GitRepository {
+        url: "https://github.com/FFmpeg/FFmpeg",
+        path: output_base_path.join(format!("ffmpeg-{}", FFMPEG_VERSION)),
+        branch: Some(format!("release/{}", FFMPEG_VERSION)),
     };
-    configure.arg(arg.to_string() + name);
+    repo.clone()?;
+    Ok(())
 }
 
-
-fn build() -> io::Result<()> {
-    let source_dir = source();
-
-    // Command's path is not relative to command's current_dir
-    let configure_path = source_dir.join("configure");
+fn build_ffmpeg() -> Result<()> {
+    let configure_path = source().join("configure");
     assert!(configure_path.exists());
     let mut configure = Command::new(&configure_path);
-    configure.current_dir(&source_dir);
-
+    configure.current_dir(&source());
     configure.arg(format!("--prefix={}", search().to_string_lossy()));
 
     if env::var("TARGET").unwrap() != env::var("HOST").unwrap() {
@@ -238,6 +299,9 @@ fn build() -> io::Result<()> {
 
     configure.arg("--enable-pic");
 
+    // disable all features and only used what is explicitely enabled
+    configure.arg("--disable-everything");
+
     // stop autodetected libraries enabling themselves, causing linking errors
     configure.arg("--disable-autodetect");
 
@@ -247,32 +311,37 @@ fn build() -> io::Result<()> {
     macro_rules! enable {
         ($conf:expr, $feat:expr, $name:expr) => {
             if env::var(concat!("CARGO_FEATURE_", $feat)).is_ok() {
-                $conf.arg(concat!("--enable-", $name));
+                $conf.arg(format!("--enable-{}", $name));
             }
         };
     }
-
-    // macro_rules! disable {
-    //     ($conf:expr, $feat:expr, $name:expr) => (
-    //         if env::var(concat!("CARGO_FEATURE_", $feat)).is_err() {
-    //             $conf.arg(concat!("--disable-", $name));
-    //         }
-    //     )
-    // }
-
-    // the binary using ffmpeg-sys must comply with GPL
-    switch(&mut configure, "BUILD_LICENSE_GPL", "gpl");
+    macro_rules! switch {
+        ($conf:expr, $feat:expr, $name:expr) => {
+            let arg = if env::var(format!("CARGO_FEATURE_{}", $feat)).is_ok() {
+                "enable"
+            } else {
+                "disable"
+            };
+            $conf.arg(format!("--{}-{}", arg, $name));
+        };
+    }
 
     // the binary using ffmpeg-sys must comply with (L)GPLv3
-    switch(&mut configure, "BUILD_LICENSE_VERSION3", "version3");
+    switch!(configure, "BUILD_LICENSE_VERSION3", "version3");
 
     // the binary using ffmpeg-sys cannot be redistributed
-    switch(&mut configure, "BUILD_LICENSE_NONFREE", "nonfree");
+    switch!(configure, "BUILD_LICENSE_NONFREE", "nonfree");
 
     // configure building libraries based on features
+    switch!(configure, "BUILD_LICENSE_NONFREE", "nonfree");
+
     for lib in LIBRARIES.iter().filter(|lib| lib.is_feature) {
-        switch(&mut configure, &lib.name.to_uppercase(), lib.name);
+        switch!(configure, &lib.name.to_uppercase(), lib.name);
     }
+    // enable!(configure, "BUILD_LIB_AVCODEC", "avcodec");
+    // enable!(configure, "BUILD_LIB_AVDEVICE", "avdevice");
+    // enable!(configure, "BUILD_LIB_AVFILTER", "avfilter");
+    // enable!(configure, "BUILD_LIB_AVFORMAT", "avformat");
 
     // configure external SSL libraries
     enable!(configure, "BUILD_LIB_GNUTLS", "gnutls");
@@ -352,7 +421,8 @@ fn build() -> io::Result<()> {
                 "configure failed {}",
                 String::from_utf8_lossy(&output.stderr)
             ),
-        ));
+        )
+        .into());
     }
 
     // run make
@@ -363,7 +433,7 @@ fn build() -> io::Result<()> {
         .status()?
         .success()
     {
-        return Err(io::Error::new(io::ErrorKind::Other, "make failed"));
+        return Err(io::Error::new(io::ErrorKind::Other, "make failed").into());
     }
 
     // run make install
@@ -373,7 +443,7 @@ fn build() -> io::Result<()> {
         .status()?
         .success()
     {
-        return Err(io::Error::new(io::ErrorKind::Other, "make install failed"));
+        return Err(io::Error::new(io::ErrorKind::Other, "make install failed").into());
     }
 
     Ok(())
@@ -386,10 +456,6 @@ fn try_vcpkg(_statik: bool) -> Option<Vec<PathBuf>> {
 
 #[cfg(target_env = "msvc")]
 fn try_vcpkg(statik: bool) -> Option<Vec<PathBuf>> {
-    if !statik {
-        env::set_var("VCPKGRS_DYNAMIC", "1");
-    }
-
     vcpkg::find_package("ffmpeg")
         .map_err(|e| {
             println!("Could not find ffmpeg with vcpkg: {}", e);
@@ -617,32 +683,48 @@ fn maybe_search_include(include_paths: &[PathBuf], header: &str) -> Option<Strin
     }
 }
 
-fn link_to_libraries(statik: bool) {
-    let ffmpeg_ty = if statik { "static" } else { "dylib" };
-    for lib in LIBRARIES {
-        let feat_is_enabled = lib.feature_name().and_then(|f| env::var(&f).ok()).is_some();
-        if !lib.is_feature || feat_is_enabled {
-            println!("cargo:rustc-link-lib={}={}", ffmpeg_ty, lib.name);
-        }
-    }
-    if env::var("CARGO_FEATURE_BUILD_ZLIB").is_ok() && cfg!(target_os = "linux") {
-        println!("cargo:rustc-link-lib=z");
-    }
-}
-
 fn main() {
-    let statik = env::var("CARGO_FEATURE_STATIC").is_ok();
+    println!("cargo:warning={}", source().display());
 
-    let include_paths: Vec<PathBuf> = if env::var("CARGO_FEATURE_BUILD").is_ok() {
+    let ffmpeg_dep = Dependency::new(BuildDependency {
+        name: "ffmpeg".to_string(),
+        // build: Box::new(build_ffmpeg),
+    });
+
+    let dependencies = DepGraph::new(&[ffmpeg_dep]).unwrap();
+    for dep in dependencies {
+        println!("cargo:warning={:?}", dep);
+    }
+    return ();
+
+    let include_paths: Vec<PathBuf> = {
         println!(
             "cargo:rustc-link-search=native={}",
             search().join("lib").to_string_lossy()
         );
-        link_to_libraries(statik);
-        if fs::metadata(&search().join("lib").join("libavutil.a")).is_err() {
+        let enabled_libraries: Vec<_> = LIBRARIES
+            .iter()
+            .filter(|lib| {
+                !lib.is_feature || lib.feature_name().and_then(|f| env::var(&f).ok()).is_some()
+            })
+            .collect();
+
+        for lib in &enabled_libraries {
+            println!("cargo:rustc-link-lib=static={}", lib.name);
+        }
+        if env::var("CARGO_FEATURE_BUILD_ZLIB").is_ok() && cfg!(target_os = "linux") {
+            println!("cargo:rustc-link-lib=z");
+        }
+
+        let needs_rebuild = enabled_libraries
+            .iter()
+            .map(|lib| search().join("lib").join(format!("lib{}.a", lib.name)))
+            .any(|lib| lib.metadata().is_err());
+
+        if false || needs_rebuild {
             fs::create_dir_all(&output()).expect("failed to create build directory");
             fetch().unwrap();
-            build().unwrap();
+            build_ffmpeg().unwrap();
         }
 
         // Check additional required libraries.
@@ -656,6 +738,7 @@ fn main() {
                 .map(|line| line.unwrap())
                 .unwrap();
 
+            // TODO: could use regex here
             let linker_args = extra_libs.split('=').last().unwrap().split(' ');
             let include_libs = linker_args
                 .filter(|v| v.starts_with("-l"))
@@ -667,68 +750,60 @@ fn main() {
         }
 
         vec![search().join("include")]
-    }
-    // Use prebuilt library
-    else if let Ok(ffmpeg_dir) = env::var("FFMPEG_DIR") {
-        let ffmpeg_dir = PathBuf::from(ffmpeg_dir);
-        println!(
-            "cargo:rustc-link-search=native={}",
-            ffmpeg_dir.join("lib").to_string_lossy()
-        );
-        link_to_libraries(statik);
-        vec![ffmpeg_dir.join("include")]
-    } else if let Some(paths) = try_vcpkg(statik) {
-        // vcpkg doesn't detect the "system" dependencies
-        if statik {
-            if cfg!(feature = "avcodec") || cfg!(feature = "avdevice") {
-                println!("cargo:rustc-link-lib=ole32");
-            }
-
-            if cfg!(feature = "avformat") {
-                println!("cargo:rustc-link-lib=secur32");
-                println!("cargo:rustc-link-lib=ws2_32");
-            }
-
-            // avutil depdendencies
-            println!("cargo:rustc-link-lib=bcrypt");
-            println!("cargo:rustc-link-lib=user32");
-        }
-
-        paths
-    }
-    // Fallback to pkg-config
-    else {
-        pkg_config::Config::new()
-            .statik(statik)
-            .probe("libavutil")
-            .unwrap();
-
-        let libs = vec![
-            ("libavformat", "AVFORMAT"),
-            ("libavfilter", "AVFILTER"),
-            ("libavdevice", "AVDEVICE"),
-            ("libavresample", "AVRESAMPLE"),
-            ("libswscale", "SWSCALE"),
-            ("libswresample", "SWRESAMPLE"),
-        ];
-
-        for (lib_name, env_variable_name) in libs.iter() {
-            if env::var(format!("CARGO_FEATURE_{}", env_variable_name)).is_ok() {
-                pkg_config::Config::new()
-                    .statik(statik)
-                    .probe(lib_name)
-                    .unwrap();
-            }
-        }
-
-        pkg_config::Config::new()
-            .statik(statik)
-            .probe("libavcodec")
-            .unwrap()
-            .include_paths
     };
+    // else if let Some(paths) = try_vcpkg(statik) {
+    //     // vcpkg doesn't detect the "system" dependencies
+    //     if statik {
+    //         if cfg!(feature = "avcodec") || cfg!(feature = "avdevice") {
+    //             println!("cargo:rustc-link-lib=ole32");
+    //         }
 
-    if statik && cfg!(target_os = "macos") {
+    //         if cfg!(feature = "avformat") {
+    //             println!("cargo:rustc-link-lib=secur32");
+    //             println!("cargo:rustc-link-lib=ws2_32");
+    //         }
+
+    //         // avutil depdendencies
+    //         println!("cargo:rustc-link-lib=bcrypt");
+    //         println!("cargo:rustc-link-lib=user32");
+    //     }
+
+    //     paths
+    // }
+    ////
+    //// Fallback to pkg-config
+    //else {
+    //    pkg_config::Config::new()
+    //        .statik(statik)
+    //        .probe("libavutil")
+    //        .unwrap();
+
+    //    let libs = vec![
+    //        ("libavformat", "AVFORMAT"),
+    //        ("libavfilter", "AVFILTER"),
+    //        ("libavdevice", "AVDEVICE"),
+    //        ("libavresample", "AVRESAMPLE"),
+    //        ("libswscale", "SWSCALE"),
+    //        ("libswresample", "SWRESAMPLE"),
+    //    ];
+
+    //    for (lib_name, env_variable_name) in libs.iter() {
+    //        if env::var(format!("CARGO_FEATURE_{}", env_variable_name)).is_ok() {
+    //            pkg_config::Config::new()
+    //                .statik(statik)
+    //                .probe(lib_name)
+    //                .unwrap();
+    //        }
+    //    }
+
+    //    pkg_config::Config::new()
+    //        .statik(statik)
+    //        .probe("libavcodec")
+    //        .unwrap()
+    //        .include_paths
+    //};
+
+    if cfg!(target_os = "macos") {
         let frameworks = vec![
             "AppKit",
             "AudioToolbox",
@@ -751,6 +826,8 @@ fn main() {
             println!("cargo:rustc-link-lib=framework={}", f);
         }
     }
+
+    return ();
 
     check_features(
         include_paths.clone(),
@@ -880,7 +957,375 @@ fn main() {
             ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_ARCH_SPARC"),
             (
                 "libavcodec/avcodec.h",
-                Some("av.h"));
+                Some("avcodec"),
+                "FF_API_UNUSED_MEMBERS",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_IDCT_XVIDMMX",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_INPUT_PRESERVED",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_NORMALIZE_AQP",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_GMC"),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_MV0"),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_CODEC_NAME"),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_AFD"),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_VISMV"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_DV_FRAME_PROFILE",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_AUDIOENC_DELAY",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_VAAPI_CONTEXT",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_AVCTX_TIMEBASE",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_MPV_OPT"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_STREAM_CODEC_TAG",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_QUANT_BIAS"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_RC_STRATEGY",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_CODED_FRAME",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_MOTION_EST"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_WITHOUT_PREFIX",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_CONVERGENCE_DURATION",
+            ),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_PRIVATE_OPT",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_CODER_TYPE"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_RTP_CALLBACK",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_STAT_BITS"),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_VBV_DELAY"),
+            (
+                "libavcodec/avcodec.h",
+                Some("avcodec"),
+                "FF_API_SIDEDATA_ONLY_PKT",
+            ),
+            ("libavcodec/avcodec.h", Some("avcodec"), "FF_API_AVPICTURE"),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_LAVF_BITEXACT",
+            ),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_LAVF_FRAC",
+            ),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_URL_FEOF",
+            ),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_PROBESIZE_32",
+            ),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_LAVF_AVCTX",
+            ),
+            (
+                "libavformat/avformat.h",
+                Some("avformat"),
+                "FF_API_OLD_OPEN_CALLBACKS",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_AVFILTERPAD_PUBLIC",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_FOO_COUNT",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_OLD_FILTER_OPTS",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_OLD_FILTER_OPTS_ERROR",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_AVFILTER_OPEN",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_OLD_FILTER_REGISTER",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_OLD_GRAPH_PARSE",
+            ),
+            (
+                "libavfilter/avfilter.h",
+                Some("avfilter"),
+                "FF_API_NOCONST_GET_NAME",
+            ),
+            (
+                "libavresample/avresample.h",
+                Some("avresample"),
+                "FF_API_RESAMPLE_CLOSE_OPEN",
+            ),
+            (
+                "libswscale/swscale.h",
+                Some("swscale"),
+                "FF_API_SWS_CPU_CAPS",
+            ),
+            ("libswscale/swscale.h", Some("swscale"), "FF_API_ARCH_BFIN"),
+        ],
+    );
+
+    let clang_includes = include_paths
+        .iter()
+        .map(|include| format!("-I{}", include.to_string_lossy()));
+
+    // The bindgen::Builder is the main entry point
+    // to bindgen, and lets you build up options for
+    // the resulting bindings.
+    let mut builder = bindgen::Builder::default()
+        .clang_args(clang_includes)
+        .ctypes_prefix("libc")
+        // https://github.com/rust-lang/rust-bindgen/issues/550
+        .blocklist_type("max_align_t")
+        .blocklist_function("_.*")
+        // Blocklist functions with u128 in signature.
+        // https://github.com/zmwangx/rust-ffmpeg-sys/issues/1
+        // https://github.com/rust-lang/rust-bindgen/issues/1549
+        .blocklist_function("acoshl")
+        .blocklist_function("acosl")
+        .blocklist_function("asinhl")
+        .blocklist_function("asinl")
+        .blocklist_function("atan2l")
+        .blocklist_function("atanhl")
+        .blocklist_function("atanl")
+        .blocklist_function("cbrtl")
+        .blocklist_function("ceill")
+        .blocklist_function("copysignl")
+        .blocklist_function("coshl")
+        .blocklist_function("cosl")
+        .blocklist_function("dreml")
+        .blocklist_function("ecvt_r")
+        .blocklist_function("erfcl")
+        .blocklist_function("erfl")
+        .blocklist_function("exp2l")
+        .blocklist_function("expl")
+        .blocklist_function("expm1l")
+        .blocklist_function("fabsl")
+        .blocklist_function("fcvt_r")
+        .blocklist_function("fdiml")
+        .blocklist_function("finitel")
+        .blocklist_function("floorl")
+        .blocklist_function("fmal")
+        .blocklist_function("fmaxl")
+        .blocklist_function("fminl")
+        .blocklist_function("fmodl")
+        .blocklist_function("frexpl")
+        .blocklist_function("gammal")
+        .blocklist_function("hypotl")
+        .blocklist_function("ilogbl")
+        .blocklist_function("isinfl")
+        .blocklist_function("isnanl")
+        .blocklist_function("j0l")
+        .blocklist_function("j1l")
+        .blocklist_function("jnl")
+        .blocklist_function("ldexpl")
+        .blocklist_function("lgammal")
+        .blocklist_function("lgammal_r")
+        .blocklist_function("llrintl")
+        .blocklist_function("llroundl")
+        .blocklist_function("log10l")
+        .blocklist_function("log1pl")
+        .blocklist_function("log2l")
+        .blocklist_function("logbl")
+        .blocklist_function("logl")
+        .blocklist_function("lrintl")
+        .blocklist_function("lroundl")
+        .blocklist_function("modfl")
+        .blocklist_function("nanl")
+        .blocklist_function("nearbyintl")
+        .blocklist_function("nextafterl")
+        .blocklist_function("nexttoward")
+        .blocklist_function("nexttowardf")
+        .blocklist_function("nexttowardl")
+        .blocklist_function("powl")
+        .blocklist_function("qecvt")
+        .blocklist_function("qecvt_r")
+        .blocklist_function("qfcvt")
+        .blocklist_function("qfcvt_r")
+        .blocklist_function("qgcvt")
+        .blocklist_function("remainderl")
+        .blocklist_function("remquol")
+        .blocklist_function("rintl")
+        .blocklist_function("roundl")
+        .blocklist_function("scalbl")
+        .blocklist_function("scalblnl")
+        .blocklist_function("scalbnl")
+        .blocklist_function("significandl")
+        .blocklist_function("sinhl")
+        .blocklist_function("sinl")
+        .blocklist_function("sqrtl")
+        .blocklist_function("strtold")
+        .blocklist_function("tanhl")
+        .blocklist_function("tanl")
+        .blocklist_function("tgammal")
+        .blocklist_function("truncl")
+        .blocklist_function("y0l")
+        .blocklist_function("y1l")
+        .blocklist_function("ynl")
+        .rustified_enum("*")
+        .prepend_enum_name(false)
+        .derive_eq(true)
+        .size_t_is_usize(true)
+        .parse_callbacks(Box::new(Callbacks));
+
+    // The input headers we would like to generate
+    // bindings for.
+    if env::var("CARGO_FEATURE_AVCODEC").is_ok() {
+        builder = builder
+            .header(search_include(&include_paths, "libavcodec/avcodec.h"))
+            .header(search_include(&include_paths, "libavcodec/dv_profile.h"))
+            .header(search_include(&include_paths, "libavcodec/avfft.h"))
+            .header(search_include(&include_paths, "libavcodec/vaapi.h"))
+            .header(search_include(&include_paths, "libavcodec/vorbis_parser.h"));
+    }
+
+    if env::var("CARGO_FEATURE_AVDEVICE").is_ok() {
+        builder = builder.header(search_include(&include_paths, "libavdevice/avdevice.h"));
+    }
+
+    if env::var("CARGO_FEATURE_AVFILTER").is_ok() {
+        builder = builder
+            .header(search_include(&include_paths, "libavfilter/buffersink.h"))
+            .header(search_include(&include_paths, "libavfilter/buffersrc.h"))
+            .header(search_include(&include_paths, "libavfilter/avfilter.h"));
+    }
+
+    if env::var("CARGO_FEATURE_AVFORMAT").is_ok() {
+        builder = builder
+            .header(search_include(&include_paths, "libavformat/avformat.h"))
+            .header(search_include(&include_paths, "libavformat/avio.h"));
+    }
+
+    if env::var("CARGO_FEATURE_AVRESAMPLE").is_ok() {
+        builder = builder.header(search_include(&include_paths, "libavresample/avresample.h"));
+    }
+
+    builder = builder
+        .header(search_include(&include_paths, "libavutil/adler32.h"))
+        .header(search_include(&include_paths, "libavutil/aes.h"))
+        .header(search_include(&include_paths, "libavutil/audio_fifo.h"))
+        .header(search_include(&include_paths, "libavutil/base64.h"))
+        .header(search_include(&include_paths, "libavutil/blowfish.h"))
+        .header(search_include(&include_paths, "libavutil/bprint.h"))
+        .header(search_include(&include_paths, "libavutil/buffer.h"))
+        .header(search_include(&include_paths, "libavutil/camellia.h"))
+        .header(search_include(&include_paths, "libavutil/cast5.h"))
+        .header(search_include(&include_paths, "libavutil/channel_layout.h"))
+        .header(search_include(&include_paths, "libavutil/cpu.h"))
+        .header(search_include(&include_paths, "libavutil/crc.h"))
+        .header(search_include(&include_paths, "libavutil/dict.h"))
+        .header(search_include(&include_paths, "libavutil/display.h"))
+        .header(search_include(&include_paths, "libavutil/downmix_info.h"))
+        .header(search_include(&include_paths, "libavutil/error.h"))
+        .header(search_include(&include_paths, "libavutil/eval.h"))
+        .header(search_include(&include_paths, "libavutil/fifo.h"))
+        .header(search_include(&include_paths, "libavutil/file.h"))
+        .header(search_include(&include_paths, "libavutil/frame.h"))
+        .header(search_include(&include_paths, "libavutil/hash.h"))
+        .header(search_include(&include_paths, "libavutil/hmac.h"))
+        .header(search_include(&include_paths, "libavutil/hwcontext.h"))
+        .header(search_include(&include_paths, "libavutil/imgutils.h"))
+        .header(search_include(&include_paths, "libavutil/lfg.h"))
+        .header(search_include(&include_paths, "libavutil/log.h"))
+        .header(search_include(&include_paths, "libavutil/lzo.h"))
+        .header(search_include(&include_paths, "libavutil/macros.h"))
+        .header(search_include(&include_paths, "libavutil/mathematics.h"))
+        .header(search_include(&include_paths, "libavutil/md5.h"))
+        .header(search_include(&include_paths, "libavutil/mem.h"))
+        .header(search_include(&include_paths, "libavutil/motion_vector.h"))
+        .header(search_include(&include_paths, "libavutil/murmur3.h"))
+        .header(search_include(&include_paths, "libavutil/opt.h"))
+        .header(search_include(&include_paths, "libavutil/parseutils.h"))
+        .header(search_include(&include_paths, "libavutil/pixdesc.h"))
+        .header(search_include(&include_paths, "libavutil/pixfmt.h"))
+        .header(search_include(&include_paths, "libavutil/random_seed.h"))
+        .header(search_include(&include_paths, "libavutil/rational.h"))
+        .header(search_include(&include_paths, "libavutil/replaygain.h"))
+        .header(search_include(&include_paths, "libavutil/ripemd.h"))
+        .header(search_include(&include_paths, "libavutil/samplefmt.h"))
+        .header(search_include(&include_paths, "libavutil/sha.h"))
+        .header(search_include(&include_paths, "libavutil/sha512.h"))
+        .header(search_include(&include_paths, "libavutil/stereo3d.h"))
+        .header(search_include(&include_paths, "libavutil/avstring.h"))
+        .header(search_include(&include_paths, "libavutil/threadmessage.h"))
+        .header(search_include(&include_paths, "libavutil/time.h"))
+        .header(search_include(&include_paths, "libavutil/timecode.h"))
+        .header(search_include(&include_paths, "libavutil/twofish.h"))
+        .header(search_include(&include_paths, "libavutil/avutil.h"))
+        .header(search_include(&include_paths, "libavutil/xtea.h"));
+
+    if env::var("CARGO_FEATURE_POSTPROC").is_ok() {
+        builder = builder.header(search_include(&include_paths, "libpostproc/postprocess.h"));
+    }
+
+    if env::var("CARGO_FEATURE_SWRESAMPLE").is_ok() {
+        builder = builder.header(search_include(&include_paths, "libswresample/swresample.h"));
     }
 
     if env::var("CARGO_FEATURE_SWSCALE").is_ok() {
