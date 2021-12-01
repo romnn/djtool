@@ -1,25 +1,24 @@
 #[macro_use]
-pub mod dictionary;
-pub mod channel_layout;
-pub mod chroma;
-pub mod color;
+// pub mod dictionary;
+// pub mod channel_layout;
+// pub mod chroma;
+// pub mod color;
 pub mod error;
-pub mod format;
-pub mod frame;
-pub mod interrupt;
-pub mod log;
-pub mod mathematics;
-pub mod media;
-pub mod option;
-pub mod picture;
-pub mod range;
-pub mod rational;
-pub mod time;
-
+// pub mod format;
+// pub mod frame;
+// pub mod interrupt;
+// pub mod log;
+// pub mod mathematics;
+// pub mod media;
+// pub mod option;
+// pub mod picture;
+// pub mod range;
+// pub mod rational;
+// pub mod time;
 use std::ffi::CStr;
 use std::str::from_utf8_unchecked;
 
-use crate::ffmpeg::ffi::*;
+use super::ffi::*;
 
 #[inline(always)]
 pub fn version() -> u32 {

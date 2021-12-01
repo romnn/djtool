@@ -64,6 +64,7 @@ default  = [
   "ffmpeg-license-nonfree",
 ]
 
+force-build = []
 parallel-build = ["rayon", "crossbeam-channel"]
 
 # licensing

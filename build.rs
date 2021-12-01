@@ -359,7 +359,7 @@ fn main() {
         search().join("lib").to_string_lossy()
     );
 
-    if need_build {
+    if need_build || feature_env_set("force-build") {
         let _ = std::fs::remove_dir_all(&search());
 
         for inner in dependencies.into_iter() {
