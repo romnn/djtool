@@ -6,3 +6,4 @@ ffmpeg-build/
 *.wav
 *.wmv
 *.webm
+*.aac

@@ -1,10 +1,19 @@
+use super::InnerGraph;
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, RwLock,
+};
+
 #[derive(Clone, Debug)]
 struct ComponentNode {
     stack_idx: usize,
     stacked: bool,
 }
 
-struct TarjanStronglyConnectedComponents<'a, I>
+pub struct TarjanStronglyConnectedComponents<'a, I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
@@ -19,7 +28,7 @@ impl<'a, I> TarjanStronglyConnectedComponents<'a, I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
-    fn new(graph: &'a InnerGraph<I>) -> TarjanStronglyConnectedComponents<I> {
+    pub fn new(graph: &'a InnerGraph<I>) -> TarjanStronglyConnectedComponents<I> {
         TarjanStronglyConnectedComponents {
             graph,
             stack: Vec::<&I>::new(),
@@ -29,7 +38,7 @@ where
         }
     }
 
-    fn has_circles(&'a mut self) -> bool {
+    pub fn has_circles(&'a mut self) -> bool {
         // start depth first search from each node that has not yet been visited
         for node in self.graph.keys() {
             if !self.seen.contains_key(&node) {
@@ -76,7 +85,7 @@ where
         if self.nodes[stack_idx].stack_idx == stack_idx {
             let mut circle = Vec::<&I>::new();
             let mut i = self.stack.len() - 1;
-            while true {
+            loop {
                 let w = self.stack[i];
                 let n_stack_idx = self.seen[w];
                 self.nodes[n_stack_idx].stacked = false;
@@ -92,5 +101,3 @@ where
         &self.nodes[stack_idx]
     }
 }
-
-

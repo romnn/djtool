@@ -252,6 +252,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bindgen",
+ "bitflags",
  "cc",
  "crossbeam-channel 0.4.4",
  "futures",

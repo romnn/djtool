@@ -1,7 +1,8 @@
 [package]
 name = "djtool"
 version = "0.1.0"
-edition = "2021"
+# edition = "2021"
+edition = "2018"
 
 [profile.release]
 # opt-level = 's'  # Optimize for size.
@@ -30,12 +31,14 @@ num = "0.4"
 http = "0.2.5"
 tempdir = "0.3.7"
 libc = "0.2"
+bitflags = "1.2"
 
 [build-dependencies]
 anyhow = "1.0"
 num_cpus   = "1.13"
 cc         = "1.0"
 pkg-config = "0.3"
+lazy_static = "1.4.0"
 bindgen    = { version = "0.59", default-features = false, features = ["runtime"] }
 
 rayon = { version = "1.5.1", optional=true }
@@ -45,83 +48,94 @@ crossbeam-channel = { version = "0.4", optional = true }
 vcpkg = "0.2"
 
 [features]
-default  = ["parallel-build", "avcodec", "avdevice", "avfilter", "avformat", "swresample", "swscale"]
+default  = [
+  # parallel dependency graph iterator to build dependencies in parallel
+  "parallel-build",
+  # standard ffmpeg libraries
+  "ffmpeg-avcodec",
+  "ffmpeg-avdevice",
+  "ffmpeg-avfilter",
+  "ffmpeg-avformat",
+  "ffmpeg-swresample",
+  "ffmpeg-swscale",
+  # additional ffmpeg decoders and encoders
+  "ffmpeg-mp3lame",
+  # miscelanious
+  "ffmpeg-license-nonfree",
+]
 
 parallel-build = ["rayon", "crossbeam-channel"]
 
-# static = []
-# build  = ["static"]
-
 # licensing
-build-license-gpl      = []
-build-license-nonfree  = []
-build-license-version3 = []
+ffmpeg-license-gpl      = []
+ffmpeg-license-nonfree  = []
+ffmpeg-license-version3 = []
 
 # misc
-build-drm   = []
-build-nvenc = []
-build-pic   = []
-build-zlib  = []
+ffmpeg-drm   = []
+ffmpeg-nvenc = []
+ffmpeg-pic   = []
+ffmpeg-zlib  = []
 
 # ssl
-build-lib-gnutls  = []
-build-lib-openssl = []
+ffmpeg-gnutls  = []
+ffmpeg-openssl = []
 
 # filters
-build-lib-fontconfig = []
-build-lib-frei0r     = []
-build-lib-ladspa     = []
-build-lib-ass        = []
-build-lib-freetype   = []
-build-lib-freebidi   = []
-build-lib-opencv     = []
-build-lib-vmaf       = []
+ffmpeg-fontconfig = []
+ffmpeg-frei0r     = []
+ffmpeg-ladspa     = []
+ffmpeg-ass        = []
+ffmpeg-freetype   = []
+ffmpeg-freebidi   = []
+ffmpeg-opencv     = []
+ffmpeg-vmaf       = []
 
 # encoders/decoders
-build-lib-aacplus          = []
-build-lib-celt             = []
-build-lib-dav1d            = []
-build-lib-dcadec           = []
-build-lib-faac             = []
-build-lib-fdk-aac          = []
-build-lib-gsm              = []
-build-lib-ilbc             = []
-build-lib-kvazaar          = []
-build-lib-mp3lame          = []
-build-lib-opencore-amrnb   = []
-build-lib-opencore-amrwb   = []
-build-lib-openh264         = []
-build-lib-openjpeg         = []
-build-lib-opus             = []
-build-lib-schroedinger     = []
-build-lib-shine            = []
-build-lib-snappy           = []
-build-lib-speex            = []
-build-lib-stagefright-h264 = []
-build-lib-theora           = []
-build-lib-twolame          = []
-build-lib-utvideo          = []
-build-lib-vo-aacenc        = []
-build-lib-vo-amrwbenc      = []
-build-lib-vorbis           = []
-build-lib-vpx              = []
-build-lib-wavpack          = []
-build-lib-webp             = []
-build-lib-x264             = []
-build-lib-x265             = []
-build-lib-avs              = []
-build-lib-xvid             = []
+ffmpeg-aacplus          = []
+ffmpeg-celt             = []
+ffmpeg-dav1d            = []
+ffmpeg-dcadec           = []
+ffmpeg-faac             = []
+ffmpeg-fdk-aac          = []
+ffmpeg-gsm              = []
+ffmpeg-ilbc             = []
+ffmpeg-kvazaar          = []
+ffmpeg-mp3lame          = []
+ffmpeg-opencore-amrnb   = []
+ffmpeg-opencore-amrwb   = []
+ffmpeg-openh264         = []
+ffmpeg-openjpeg         = []
+ffmpeg-opus             = []
+ffmpeg-schroedinger     = []
+ffmpeg-shine            = []
+ffmpeg-snappy           = []
+ffmpeg-speex            = []
+ffmpeg-stagefright-h264 = []
+ffmpeg-theora           = []
+ffmpeg-twolame          = []
+ffmpeg-utvideo          = []
+ffmpeg-vo-aacenc        = []
+ffmpeg-vo-amrwbenc      = []
+ffmpeg-vorbis           = []
+ffmpeg-vpx              = []
+ffmpeg-wavpack          = []
+ffmpeg-webp             = []
+ffmpeg-x264             = []
+ffmpeg-x265             = []
+ffmpeg-avs              = []
+ffmpeg-xvid             = []
 
 # protocols
-build-lib-smbclient = []
-build-lib-ssh       = []
+ffmpeg-smbclient = []
+ffmpeg-ssh       = []
 
 # components
-avcodec    = []
-avdevice   = ["avformat"]
-avfilter   = []
-avformat   = ["avcodec"]
-avresample = []
-postproc   = []
-swresample = []
-swscale    = []
+ffmpeg-avcodec    = []
+ffmpeg-avdevice   = ["ffmpeg-avformat"]
+ffmpeg-avfilter   = []
+ffmpeg-avformat   = ["ffmpeg-avcodec"]
+ffmpeg-avresample = []
+ffmpeg-postproc   = []
+ffmpeg-swresample = []
+ffmpeg-swscale    = []

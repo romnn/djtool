@@ -1,10 +1,16 @@
+pub mod components;
+#[cfg(feature = "parallel-build")]
+pub mod parallel;
+
 use anyhow::Result;
+use components::TarjanStronglyConnectedComponents;
 use std::cmp;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::iter::FromIterator;
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use std::ops;
 use std::ops::Deref;
@@ -12,36 +18,38 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, RwLock,
 };
-use std::thread;
 
-#[derive(Debug)]
-pub enum DepGraphError {
-    CloseNodeError(String, &'static str),
-    /// The list of dependencies is empty
-    EmptyListError,
-    IteratorDropped,
-    NoAvailableNodeError,
-    ResolveGraphError(&'static str),
-}
+type InnerGraph<I> = HashMap<I, HashSet<I>>;
+type Graph<I> = Arc<RwLock<InnerGraph<I>>>;
 
-impl fmt::Display for DepGraphError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CloseNodeError(name, reason) => {
-                write!(f, "Failed to close node {}: {}", name, reason)
-            }
-            Self::EmptyListError => write!(f, "The dependency list is empty"),
-            Self::IteratorDropped => write!(
-                f,
-                "The iterator attached to the coordination thread dropped"
-            ),
-            Self::NoAvailableNodeError => write!(f, "No node are currently available"),
-            Self::ResolveGraphError(reason) => write!(f, "Failed to resolve the graph: {}", reason),
-        }
-    }
-}
+// #[derive(Debug)]
+// pub enum DepGraphError {
+//     CloseNodeError(String, &'static str),
+//     /// The list of dependencies is empty
+//     EmptyListError,
+//     IteratorDropped,
+//     NoAvailableNodeError,
+//     ResolveGraphError(&'static str),
+// }
 
-impl error::Error for DepGraphError {}
+// impl fmt::Display for DepGraphError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Self::CloseNodeError(name, reason) => {
+//                 write!(f, "Failed to close node {}: {}", name, reason)
+//             }
+//             Self::EmptyListError => write!(f, "The dependency list is empty"),
+//             Self::IteratorDropped => write!(
+//                 f,
+//                 "The iterator attached to the coordination thread dropped"
+//             ),
+//             Self::NoAvailableNodeError => write!(f, "No node are currently available"),
+//             Self::ResolveGraphError(reason) => write!(f, "Failed to resolve the graph: {}", reason),
+//         }
+//     }
+// }
+
+// impl error::Error for DepGraphError {}
 
 #[derive(Clone, Debug)]
 pub struct Dependency<I>
@@ -74,14 +82,12 @@ where
     }
 }
 
-pub type InnerGraph<I> = HashMap<I, HashSet<I>>;
-pub type Graph<I> = Arc<RwLock<InnerGraph<I>>>;
-
+#[derive(Debug)]
 pub struct DepGraph<I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
-    pub ready_nodes: Vec<I>,
+    pub ready_nodes: HashSet<I>,
     pub deps: Graph<I>,
     pub reverse_deps: Graph<I>,
 }
@@ -90,13 +96,16 @@ impl<I> DepGraph<I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
-    pub fn new(nodes: &[Dependency<I>]) -> Result<Self> {
+    pub fn new(nodes: Vec<Dependency<I>>) -> Result<Self> {
         let (ready_nodes, deps, reverse_deps) = DepGraph::parse_nodes(nodes);
 
         // check for cyclic dependencies
         if TarjanStronglyConnectedComponents::new(&deps).has_circles() {
             panic!("has circles");
         }
+
+        println!("cargo:warning=deps: {:?}", deps);
+        println!("cargo:warning=reverse deps: {:?}", reverse_deps);
 
         Ok(DepGraph {
             ready_nodes,
@@ -105,16 +114,66 @@ where
         })
     }
 
-    fn parse_nodes(nodes: &[Dependency<I>]) -> (Vec<I>, InnerGraph<I>, InnerGraph<I>) {
+    pub fn reacheable(&self, node: &I) -> HashSet<I> {
+        let mut seen = HashSet::<I>::new();
+        let mut stack = Vec::<I>::new();
+        stack.push(node.clone());
+        while !stack.is_empty() {
+            let cur = stack.pop().unwrap();
+            seen.insert(cur.clone());
+            if let Some(deps) = self
+                .deps
+                .read()
+                .ok()
+                .as_ref()
+                .and_then(|deps| deps.get(&cur))
+            {
+                for dep in deps.iter() {
+                    if !seen.contains(dep) {
+                        stack.push(dep.clone());
+                    }
+                }
+            }
+        }
+        seen
+    }
+
+    pub fn shake(&mut self, nodes: Vec<I>) {
+        let mut all_reacheable = HashSet::<I>::new();
+        for node in nodes {
+            all_reacheable.extend(self.reacheable(&node));
+        }
+        let remove: HashSet<I> = HashSet::from_iter(
+            self.deps
+                .read()
+                .unwrap()
+                .keys()
+                .filter(|dep| !all_reacheable.contains(dep))
+                .map(|dep| dep.to_owned()),
+        );
+        for dep in &remove {
+            self.ready_nodes.remove(&dep);
+            self.deps.write().unwrap().remove(&dep);
+            self.reverse_deps.write().unwrap().remove(&dep);
+            for (_, deps) in self.deps.write().unwrap().iter_mut() {
+                deps.remove(dep);
+            }
+            for (_, deps) in self.reverse_deps.write().unwrap().iter_mut() {
+                deps.remove(dep);
+            }
+        }
+    }
+
+    fn parse_nodes(nodes: Vec<Dependency<I>>) -> (HashSet<I>, InnerGraph<I>, InnerGraph<I>) {
         let mut deps = InnerGraph::<I>::default();
         let mut reverse_deps = InnerGraph::<I>::default();
-        let mut ready_nodes = Vec::<I>::default();
+        let mut ready_nodes = HashSet::<I>::default();
 
         for node in nodes {
             deps.insert(node.id().clone(), node.deps().clone());
 
             if node.deps().is_empty() {
-                ready_nodes.push(node.id().clone());
+                ready_nodes.insert(node.id().clone());
             }
 
             for node_dep in node.deps() {
@@ -154,7 +213,7 @@ pub struct DepGraphIter<I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
-    ready_nodes: Vec<I>,
+    ready_nodes: HashSet<I>,
     deps: Graph<I>,
     reverse_deps: Graph<I>,
 }
@@ -163,7 +222,7 @@ impl<I> DepGraphIter<I>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
-    pub fn new(ready_nodes: Vec<I>, deps: Graph<I>, reverse_deps: Graph<I>) -> Self {
+    pub fn new(ready_nodes: HashSet<I>, deps: Graph<I>, reverse_deps: Graph<I>) -> Self {
         Self {
             ready_nodes,
             deps,
@@ -172,11 +231,7 @@ where
     }
 }
 
-fn remove_node_id<I>(
-    id: I,
-    deps: &Graph<I>,
-    reverse_deps: &Graph<I>,
-) -> Result<Vec<I>, DepGraphError>
+pub fn remove_node_id<I>(id: I, deps: &Graph<I>, reverse_deps: &Graph<I>) -> Result<Vec<I>>
 where
     I: Clone + fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
 {
@@ -221,19 +276,15 @@ where
     type Item = I;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(id) = self.ready_nodes.pop() {
-            // Remove dependencies and retrieve next available nodes, if any.
+        if let Some(id) = self.ready_nodes.iter().next().cloned() {
+            self.ready_nodes.remove(&id);
+            // remove dependencies and retrieve next available nodes, if any
             let next_nodes =
-                remove_node_id::<I>(id.clone(), &self.deps, &self.reverse_deps).unwrap();
-
-            // Push ready nodes
-            self.ready_nodes.extend_from_slice(&next_nodes);
-
-            // Return the node ID
-            Some(id)
-        } else {
-            // No available node
-            None
+                remove_node_id::<I>(id.clone(), &self.deps, &self.reverse_deps).ok()?;
+            // push ready nodes
+            self.ready_nodes.extend(next_nodes);
+            return Some(id);
         }
+        None
     }
 }

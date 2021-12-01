@@ -4,8 +4,10 @@ set -o errexit
 
 # brew install git doxygen asciidoc wget cmake autoconf automake nasm libtool ninja meson pkg-config rtmpdump
 
-sudo apt-get update
-sudo apt-get upgrade -y git docbook2x asciidoc autopoint wget cmake autoconf automake nasm libtool ninja-build meson pkg-config rtmpdump gperf ragel gtk-doc-tools
+if false; then
+  sudo apt-get update
+  sudo apt-get upgrade -y git docbook2x asciidoc autopoint wget cmake autoconf automake nasm libtool ninja-build meson pkg-config rtmpdump gperf ragel gtk-doc-tools
+fi
 
 # THREADS=$(sysctl -n hw.ncpu)
 THREADS=16
@@ -15,9 +17,12 @@ mkdir -p "$CMPL"
 # rm -fr $CMPL/*
 export PATH="${TARGET}/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/include:/usr/local/opt:/usr/local/Cellar:/usr/local/lib:/usr/local/share:/usr/local/etc"
 
-export LDFLAGS="-L${TARGET}/lib,-Wl"
+export LDFLAGS="-L${TARGET}/lib"
+export PKG_CONFIG_PATH="${TARGET}/lib/pkgconfig"
 export CPPFLAGS="-I${TARGET}/include,-Wl"
-export CFLAGS="-I${TARGET}/include,-Wl,-fno-stack-check"
+export CFLAGS="-I${TARGET}/include  $LDFLAGS" # -Wl,-fno-stack-check"
+sudo ldconfig
+hash -r
 
 if false; then
   # xz
@@ -39,7 +44,9 @@ if false; then
   ./configure --prefix=${TARGET} CPPFLAGS=-DXML_LARGE_SIZE --enable-static
   make -j "$THREADS" && make install DESTDIR=/
   rm -fr $CMPL/*
+fi
 
+if false; then
   # iconv
   cd ${CMPL}
   rm -f libiconv*
@@ -149,7 +156,7 @@ if false; then
   rm -fr $CMPL/*
 fi
 
-if true; then
+if false; then
   # harfbuzz
   cd ${CMPL}
   rm -rf harfbuzz
@@ -311,16 +318,21 @@ if true; then
   ./configure --prefix=${TARGET} --with-ogg-libraries=${TARGET}/lib --with-ogg-includes=${TARGET}/include/ --enable-static --disable-shared
   make -j "$THREADS" && make install
   rm -fr $CMPL/*
+fi
 
+if false; then
   # lame
   cd ${CMPL}
-  rm -rf lam*
-  git clone https://github.com/rbrito/lame.git
-  cd lam*/
+  rm -rf LAM*
+  git clone --depth 1 -b "lame3_100" https://github.com/despoa/LAME.git
+  # git clone --depth 1 https://github.com/rbrito/lame.git
+  cd LAME*/
   ./configure --prefix=${TARGET} --disable-shared --enable-static
   make -j "$THREADS" && make install
   rm -fr $CMPL/*
+fi
 
+if false; then
   # TwoLame - optimised MPEG Audio Layer 2
   cd ${CMPL}
   # LastVersion=$(wget --no-check-certificate 'http://www.twolame.org' -O- -q | grep -Eo 'twolame-[0-9\.]+\.tar.gz' | tail -1)
@@ -333,7 +345,9 @@ if true; then
   ./configure --prefix=${TARGET} --enable-static --enable-shared=no
   make -j "$THREADS" && make install
   rm -fr $CMPL/*
+fi
 
+if false; then
   # fdk-aac
   cd ${CMPL}
   rm -f fdk-aac-*
@@ -344,7 +358,9 @@ if true; then
   ./configure --disable-dependency-tracking --prefix=${TARGET} --enable-static --enable-shared=no
   make -j "$THREADS" && make install
   rm -fr $CMPL/*
+fi
 
+if false; then
   # gsm
   cd ${CMPL}
   rm -f gsm*
@@ -504,39 +520,84 @@ fi
 # export CPPFLAGS="-I${TARGET}/include -Wl,-framework,OpenAL"
 # export CFLAGS="-I${TARGET}/include -Wl,-framework,OpenAL,-fno-stack-check"
 
+# export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${TARGET}/lib"
+# --extra-ldflags="-L${TARGET}/lib" \
+# --extra-cflags="-I${TARGET}/include -Wl,-fno-stack-check" \
+
 # Minimal ffmpeg
 cd ${CMPL}
-rm -fr ffmpe*
-git clone git://git.ffmpeg.org/ffmpeg.git
-cd ffmpe*/
+rm -fr FFmpe*
+# git clone --depth 1 git://git.ffmpeg.org/ffmpeg.git
+git clone --depth 1 -b "release/4.4" https://github.com/FFmpeg/FFmpeg.git
+cd FFmpe*/
 ./configure \
   --prefix=${TARGET} \
-  --pkg_config='pkg-config --static' \
-  --extra-cflags="-fno-stack-check" \
-  --cc=/usr/bin/clang \
-  --disable-everything \
+  --pkg-config-flags="--static" \
+  --extra-cflags="-I${TARGET}/include" \
+  --extra-ldflags="-L${TARGET}/lib" \
+  --extra-libs="-lpthread -lm -lz" \
+  --extra-ldexeflags="-static" \
   --disable-network \
   --disable-autodetect \
-  --enable-pthreads \
+  --disable-shared \
+  --enable-static \
   --enable-small \
-  --enable-nonfree \
-  --enable-libfdk-aac \
-  --enable-decoder=aac*,ac3*,opus,vorbis \
-  --enable-demuxer=mov,m4v,matroska \
-  --enable-muxer=mp3,mp4 \
-  --enable-protocol=file \
-  --enable-libmp3lame \
-  --enable-encoder=aac \
-  --enable-filter=aresample
+  --enable-libmp3lame
+
+# --enable-gpl \
+# --enable-version3 \
+# --enable-nonfree \
+# --enable-libfdk-aac \
+# --enable-libvorbis
+# --enable-libtheora \
+# --enable-libopencore-amrwb \
+# --enable-libopencore-amrnb \
+# --enable-libfaac \
+# --enable-postproc \
+
+# --disable-everything \
+# --enable-small \
+# --enable-protocol=file \
+# --enable-libmp3lame \
+# --enable-libfdk-aac \
+# --enable-decoder=aac*,ac3*,pcm*,mp3*,opus,vorbis \
+# --enable-demuxer=mov,m4v,wav,mp3,matroska \
+# --enable-muxer=segment,mp3,mp4,flac \
+# --enable-filter=aresample \
+# --enable-parser=mpegaudio \
+# --enable-encoder=acc,mp3,flac
+
+# --enable-iconv \
+# --enable-nonfree \
+# -Wl,-fno-stack-check" \
+# --pkg_config='pkg-config --static' \
+# --extra-ldflags="-L${TARGET}/lib" \
+# --extra-cflags="-I${TARGET}/include -Wl,-fno-stack-check" \
+# --disable-everything \
+# --cc=/usr/bin/clang \
+# --disable-network \
+# --disable-autodetect \
+# --enable-pthreads \
+# --enable-small \
+# --pkg_config='pkg-config --static' \
+# --enable-libfdk-aac \
+# --enable-decoder=aac*,ac3*,opus,vorbis \
+# --enable-demuxer=mov,m4v,matroska \
+# --enable-muxer=mp3,mp4 \
+# --enable-protocol=file \
+# --enable-encoder=aac \
+# --enable-filter=aresample
 
 make -j "$THREADS" && make install
-otool -L $TARGET/bin/ffmpeg
+ldd $TARGET/bin/ffmpeg || (echo "" > /dev/null)
+$TARGET/bin/ffmpeg -encoders
+# otool -L $TARGET/bin/ffmpeg
 exit 0
 
 # FFmpeg
 cd ${CMPL}
 rm -fr ${CMPL}/ffmpeg
-git clone git://git.ffmpeg.org/ffmpeg.git
+git clone --depth 1 git://git.ffmpeg.org/ffmpeg.git
 cd ffmpe*/
 ./configure --extra-version=adam-"$(date +"%Y-%m-%d")" --extra-cflags="-fno-stack-check" --arch=x86_64 --cc=/usr/bin/clang \
   --enable-pthreads --enable-postproc --enable-runtime-cpudetect \
@@ -554,9 +615,10 @@ cd ffmpe*/
 make -j "$THREADS" && make install
 
 # Check Static
-otool -L $TARGET/bin/ffmpeg
-if otool -L $TARGET/bin/ffmpeg | grep /usr/local; then
-  echo FFmpeg build Not Static, Please Report
-else
-  echo FFmpeg build Static, Have Fun
-fi
+ldd $TARGET/bin/ffmpeg
+# otool -L $TARGET/bin/ffmpeg
+# if otool -L $TARGET/bin/ffmpeg | grep /usr/local; then
+#   echo FFmpeg build Not Static, Please Report
+# else
+#   echo FFmpeg build Static, Have Fun
+# fi

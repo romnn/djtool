@@ -1,27 +1,21 @@
 use crate::utils;
 use anyhow::Result;
 use boa;
-// use futures::future::join_all;
 use futures_util::{stream, StreamExt};
+use http::header::HeaderMap;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use regex::Regex;
-// use regex::RegexSet;
-use http::header::HeaderMap;
-use num::cast::NumCast;
 use reqwest;
 use serde::{Deserialize, Serialize};
-use std::cmp::{min, Ordering};
+use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::env;
-use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-// use std::sync::{Arc, Mutex};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tempdir::TempDir;
-use tokio::io::{copy, AsyncSeek, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task;
 use url::Url;
@@ -162,6 +156,7 @@ impl From<Vec<Format>> for FormatList {
 }
 
 impl FormatList {
+    #[allow(dead_code)]
     fn sort(&mut self) {
         self.formats.sort_by(Self::cmp_format);
     }
@@ -182,6 +177,7 @@ impl FormatList {
         self.with_mime_type("audio")
     }
 
+    #[allow(dead_code)]
     fn video(&self) -> Vec<&Format> {
         self.with_mime_type("video")
     }
@@ -501,7 +497,9 @@ impl Video {
 
 struct PreflightDownloadInfo {
     content_length: u64,
+    #[allow(dead_code)]
     content_disposition_name: Option<String>,
+    #[allow(dead_code)]
     rangeable: bool,
 }
 
@@ -567,6 +565,7 @@ struct Download {
     output_path: PathBuf,
     chunk_size: u64,
     info: PreflightDownloadInfo,
+    #[allow(dead_code)]
     downloaded: u64,
     chunks: Arc<Mutex<Vec<Chunk>>>,
     started_at: Instant,
@@ -601,6 +600,7 @@ impl Download {
         Ok(download)
     }
 
+    #[allow(dead_code)]
     fn set_chunk_size(&mut self, chunk_size: u64) {
         self.chunk_size = chunk_size;
         // we do not worry about too much concurrency for too little chunks, as this wont create
@@ -608,6 +608,7 @@ impl Download {
         self.compute_chunks();
     }
 
+    #[allow(dead_code)]
     fn set_concurrency(&mut self, concurrency: usize, min: Option<u64>, max: Option<u64>) {
         self.chunk_size = Self::default_chunk_size(&self.info, concurrency, min, max);
         self.compute_chunks();

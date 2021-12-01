@@ -1,12 +1,12 @@
 // extern crate ffmpeg_next as ffmpeg;
-#![deny(warnings)]
+// #![deny(warnings)]
 
-use std::env;
-use std::path::Path;
 use tokio;
 mod download;
 // mod transcode;
 // mod transcode2;
+mod ffmpeg_sys;
+mod ffmpeg;
 mod utils;
 
 use anyhow::Result;
@@ -58,7 +58,7 @@ impl DjTool {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // ffmpeg::init()?;
+    ffmpeg::init()?;
     // https://www.youtube.com/watch?v=KUyJFHgrrZc
     // https://www.youtube.com/watch?v=_Q8ELKOLudE
     // Hb5ZXUeGPHc

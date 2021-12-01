@@ -5,10 +5,20 @@ extern crate pkg_config;
 mod buildtools;
 
 use anyhow::Result;
+#[cfg(feature = "parallel-build")]
+use buildtools::dep_graph::parallel::*;
 use buildtools::dep_graph::{DepGraph, Dependency};
+use buildtools::git::GitRepository;
+use buildtools::libs::{Library, LibraryId, LIBRARIES};
+use buildtools::{feature_env_set, output, search};
+#[cfg(feature = "parallel-build")]
+use rayon::prelude::*;
+use std::collections::HashMap;
 use std::env;
+use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Write};
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str;
@@ -16,113 +26,6 @@ use std::str;
 use bindgen::callbacks::{
     EnumVariantCustomBehavior, EnumVariantValue, IntKind, MacroParsingBehavior, ParseCallbacks,
 };
-
-#[derive(Debug)]
-struct Library {
-    name: &'static str,
-    is_feature: bool,
-    // libraries: &[Library],
-}
-
-impl Library {
-    fn feature_name(&self) -> Option<String> {
-        if self.is_feature {
-            Some("CARGO_FEATURE_".to_string() + &self.name.to_uppercase())
-        } else {
-            None
-        }
-    }
-}
-
-// static LIBRARIES: &[Library] = &[Library {
-//     name: "ffmpeg",
-//     is_feature: false,
-//     libraries: &[
-//         Library {
-//             name: "avcodec",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "avdevice",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "avfilter",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "avformat",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "avresample",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "avutil",
-//             is_feature: false,
-//         },
-//         Library {
-//             name: "postproc",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "swresample",
-//             is_feature: true,
-//         },
-//         Library {
-//             name: "swscale",
-//             is_feature: true,
-//         },
-//     ],
-// }];
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-struct BuildDependency {
-    name: String,
-    // build: Box<dyn Fn() -> Result<()> + Send + Sync>,
-}
-
-impl BuildDependency {}
-
-static LIBRARIES: &[Library] = &[
-    Library {
-        name: "avcodec",
-        is_feature: true,
-    },
-    Library {
-        name: "avdevice",
-        is_feature: true,
-    },
-    Library {
-        name: "avfilter",
-        is_feature: true,
-    },
-    Library {
-        name: "avformat",
-        is_feature: true,
-    },
-    Library {
-        name: "avresample",
-        is_feature: true,
-    },
-    Library {
-        name: "avutil",
-        is_feature: false,
-    },
-    Library {
-        name: "postproc",
-        is_feature: true,
-    },
-    Library {
-        name: "swresample",
-        is_feature: true,
-    },
-    Library {
-        name: "swscale",
-        is_feature: true,
-    },
-];
 
 #[derive(Debug)]
 struct Callbacks;
@@ -185,270 +88,6 @@ impl ParseCallbacks for Callbacks {
     }
 }
 
-const FFMPEG_VERSION: &str = "4.4";
-// fn version() -> String {
-//     // let major: u8 = env::var("CARGO_PKG_VERSION_MAJOR")
-//     //     .unwrap()
-//     //     .parse()
-//     //     .unwrap();
-//     // let minor: u8 = env::var("CARGO_PKG_VERSION_MINOR")
-//     //     .unwrap()
-//     //     .parse()
-//     //     .unwrap();
-//     // format!("{}.{}", major, minor)
-// }
-
-fn output() -> PathBuf {
-    PathBuf::from(env::var("OUT_DIR").unwrap())
-        .canonicalize()
-        .unwrap()
-}
-
-fn source() -> PathBuf {
-    output().join(format!("ffmpeg-{}", FFMPEG_VERSION))
-}
-
-fn search() -> PathBuf {
-    let mut absolute = env::current_dir().unwrap();
-    absolute.push(&output());
-    absolute.push("dist");
-    absolute
-}
-
-struct GitRepository<'a> {
-    url: &'a str,
-    path: PathBuf,
-    branch: Option<String>,
-}
-
-impl GitRepository<'_> {
-    pub fn clone(&self) -> Result<()> {
-        let _ = std::fs::remove_dir_all(&self.path);
-        let mut cmd = Command::new("git");
-        cmd.arg("clone").arg("--depth=1");
-        if let Some(branch) = &self.branch {
-            cmd.arg("-b").arg(branch);
-        }
-
-        cmd.arg(self.url).arg(self.path.to_str().unwrap());
-        println!(
-            "cargo:warning=Cloning {} into {}",
-            self.url,
-            self.path.display()
-        );
-
-        if cmd.status()?.success() {
-            Ok(())
-        } else {
-            Err(io::Error::new(io::ErrorKind::Other, "fetch failed").into())
-        }
-    }
-}
-
-fn fetch() -> Result<()> {
-    let output_base_path = output();
-    let repo = GitRepository {
-        url: "https://github.com/FFmpeg/FFmpeg",
-        path: output_base_path.join(format!("ffmpeg-{}", FFMPEG_VERSION)),
-        branch: Some(format!("release/{}", FFMPEG_VERSION)),
-    };
-    repo.clone()?;
-    Ok(())
-}
-
-fn build_ffmpeg() -> Result<()> {
-    let configure_path = source().join("configure");
-    assert!(configure_path.exists());
-    let mut configure = Command::new(&configure_path);
-    configure.current_dir(&source());
-    configure.arg(format!("--prefix={}", search().to_string_lossy()));
-
-    if env::var("TARGET").unwrap() != env::var("HOST").unwrap() {
-        // Rust targets are subtly different than naming scheme for compiler prefixes.
-        // The cc crate has the messy logic of guessing a working prefix,
-        // and this is a messy way of reusing that logic.
-        let cc = cc::Build::new();
-        let compiler = cc.get_compiler();
-        let compiler = compiler.path().file_stem().unwrap().to_str().unwrap();
-        let suffix_pos = compiler.rfind('-').unwrap(); // cut off "-gcc"
-        let prefix = compiler[0..suffix_pos].trim_end_matches("-wr"); // "wr-c++" compiler
-
-        configure.arg(format!("--cross-prefix={}-", prefix));
-        configure.arg(format!(
-            "--arch={}",
-            env::var("CARGO_CFG_TARGET_ARCH").unwrap()
-        ));
-        configure.arg(format!(
-            "--target_os={}",
-            env::var("CARGO_CFG_TARGET_OS").unwrap()
-        ));
-    }
-
-    // control debug build
-    if env::var("DEBUG").is_ok() {
-        configure.arg("--enable-debug");
-        configure.arg("--disable-stripping");
-    } else {
-        configure.arg("--disable-debug");
-        configure.arg("--enable-stripping");
-    }
-
-    // make it static
-    configure.arg("--enable-static");
-    configure.arg("--disable-shared");
-
-    configure.arg("--enable-pic");
-
-    // disable all features and only used what is explicitely enabled
-    configure.arg("--disable-everything");
-
-    // stop autodetected libraries enabling themselves, causing linking errors
-    configure.arg("--disable-autodetect");
-
-    // do not build programs since we don't need them
-    configure.arg("--disable-programs");
-
-    macro_rules! enable {
-        ($conf:expr, $feat:expr, $name:expr) => {
-            if env::var(concat!("CARGO_FEATURE_", $feat)).is_ok() {
-                $conf.arg(format!("--enable-{}", $name));
-            }
-        };
-    }
-    macro_rules! switch {
-        ($conf:expr, $feat:expr, $name:expr) => {
-            let arg = if env::var(format!("CARGO_FEATURE_{}", $feat)).is_ok() {
-                "enable"
-            } else {
-                "disable"
-            };
-            $conf.arg(format!("--{}-{}", arg, $name));
-        };
-    }
-
-    // the binary using ffmpeg-sys must comply with (L)GPLv3
-    switch!(configure, "BUILD_LICENSE_VERSION3", "version3");
-
-    // the binary using ffmpeg-sys cannot be redistributed
-    switch!(configure, "BUILD_LICENSE_NONFREE", "nonfree");
-
-    // configure building libraries based on features
-    switch!(configure, "BUILD_LICENSE_NONFREE", "nonfree");
-
-    for lib in LIBRARIES.iter().filter(|lib| lib.is_feature) {
-        switch!(configure, &lib.name.to_uppercase(), lib.name);
-    }
-    // enable!(configure, "BUILD_LIB_AVCODEC", "avcodec");
-    // enable!(configure, "BUILD_LIB_AVDEVICE", "avdevice");
-    // enable!(configure, "BUILD_LIB_AVFILTER", "avfilter");
-    // enable!(configure, "BUILD_LIB_AVFORMAT", "avformat");
-
-    // configure external SSL libraries
-    enable!(configure, "BUILD_LIB_GNUTLS", "gnutls");
-    enable!(configure, "BUILD_LIB_OPENSSL", "openssl");
-
-    // configure external filters
-    enable!(configure, "BUILD_LIB_FONTCONFIG", "fontconfig");
-    enable!(configure, "BUILD_LIB_FREI0R", "frei0r");
-    enable!(configure, "BUILD_LIB_LADSPA", "ladspa");
-    enable!(configure, "BUILD_LIB_ASS", "libass");
-    enable!(configure, "BUILD_LIB_FREETYPE", "libfreetype");
-    enable!(configure, "BUILD_LIB_FRIBIDI", "libfribidi");
-    enable!(configure, "BUILD_LIB_OPENCV", "libopencv");
-    enable!(configure, "BUILD_LIB_VMAF", "libvmaf");
-
-    // configure external encoders/decoders
-    enable!(configure, "BUILD_LIB_AACPLUS", "libaacplus");
-    enable!(configure, "BUILD_LIB_CELT", "libcelt");
-    enable!(configure, "BUILD_LIB_DCADEC", "libdcadec");
-    enable!(configure, "BUILD_LIB_DAV1D", "libdav1d");
-    enable!(configure, "BUILD_LIB_FAAC", "libfaac");
-    enable!(configure, "BUILD_LIB_FDK_AAC", "libfdk-aac");
-    enable!(configure, "BUILD_LIB_GSM", "libgsm");
-    enable!(configure, "BUILD_LIB_ILBC", "libilbc");
-    enable!(configure, "BUILD_LIB_VAZAAR", "libvazaar");
-    enable!(configure, "BUILD_LIB_MP3LAME", "libmp3lame");
-    enable!(configure, "BUILD_LIB_OPENCORE_AMRNB", "libopencore-amrnb");
-    enable!(configure, "BUILD_LIB_OPENCORE_AMRWB", "libopencore-amrwb");
-    enable!(configure, "BUILD_LIB_OPENH264", "libopenh264");
-    enable!(configure, "BUILD_LIB_OPENH265", "libopenh265");
-    enable!(configure, "BUILD_LIB_OPENJPEG", "libopenjpeg");
-    enable!(configure, "BUILD_LIB_OPUS", "libopus");
-    enable!(configure, "BUILD_LIB_SCHROEDINGER", "libschroedinger");
-    enable!(configure, "BUILD_LIB_SHINE", "libshine");
-    enable!(configure, "BUILD_LIB_SNAPPY", "libsnappy");
-    enable!(configure, "BUILD_LIB_SPEEX", "libspeex");
-    enable!(
-        configure,
-        "BUILD_LIB_STAGEFRIGHT_H264",
-        "libstagefright-h264"
-    );
-    enable!(configure, "BUILD_LIB_THEORA", "libtheora");
-    enable!(configure, "BUILD_LIB_TWOLAME", "libtwolame");
-    enable!(configure, "BUILD_LIB_UTVIDEO", "libutvideo");
-    enable!(configure, "BUILD_LIB_VO_AACENC", "libvo-aacenc");
-    enable!(configure, "BUILD_LIB_VO_AMRWBENC", "libvo-amrwbenc");
-    enable!(configure, "BUILD_LIB_VORBIS", "libvorbis");
-    enable!(configure, "BUILD_LIB_VPX", "libvpx");
-    enable!(configure, "BUILD_LIB_WAVPACK", "libwavpack");
-    enable!(configure, "BUILD_LIB_WEBP", "libwebp");
-    enable!(configure, "BUILD_LIB_X264", "libx264");
-    enable!(configure, "BUILD_LIB_X265", "libx265");
-    enable!(configure, "BUILD_LIB_AVS", "libavs");
-    enable!(configure, "BUILD_LIB_XVID", "libxvid");
-
-    // other external libraries
-    enable!(configure, "BUILD_LIB_DRM", "libdrm");
-    enable!(configure, "BUILD_NVENC", "nvenc");
-
-    // configure external protocols
-    enable!(configure, "BUILD_LIB_SMBCLIENT", "libsmbclient");
-    enable!(configure, "BUILD_LIB_SSH", "libssh");
-
-    // configure misc build options
-    enable!(configure, "BUILD_PIC", "pic");
-
-    // run ./configure
-    let output = configure
-        .output()
-        .unwrap_or_else(|_| panic!("{:?} failed", configure));
-    if !output.status.success() {
-        println!("configure: {}", String::from_utf8_lossy(&output.stdout));
-
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "configure failed {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        )
-        .into());
-    }
-
-    // run make
-    if !Command::new("make")
-        .arg("-j")
-        .arg(num_cpus::get().to_string())
-        .current_dir(&source())
-        .status()?
-        .success()
-    {
-        return Err(io::Error::new(io::ErrorKind::Other, "make failed").into());
-    }
-
-    // run make install
-    if !Command::new("make")
-        .current_dir(&source())
-        .arg("install")
-        .status()?
-        .success()
-    {
-        return Err(io::Error::new(io::ErrorKind::Other, "make install failed").into());
-    }
-
-    Ok(())
-}
-
 #[cfg(not(target_env = "msvc"))]
 fn try_vcpkg(_statik: bool) -> Option<Vec<PathBuf>> {
     None
@@ -470,13 +109,17 @@ fn check_features(
 ) {
     let mut includes_code = String::new();
     let mut main_code = String::new();
+    let infos: Vec<_> = infos
+        .iter()
+        .filter(|(_, feature, _)| feature.map(|feat| feature_env_set(feat)).unwrap_or(true))
+        .collect();
 
-    for &(header, feature, var) in infos {
-        if let Some(feature) = feature {
-            if env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_err() {
-                continue;
-            }
-        }
+    for &(header, feature, var) in &infos {
+        // if let Some(feature) = feature {
+        //     if !feature_env_set(feature) {
+        //         continue;
+        //     }
+        // }
 
         let include = format!("#include <{}>", header);
         if !includes_code.contains(&include) {
@@ -504,22 +147,22 @@ fn check_features(
         ));
     }
 
-    let version_check_info = [("avcodec", 56, 60, 0, 108)];
-    for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
-        version_check_info.iter()
-    {
-        for version_major in begin_version_major..end_version_major {
-            for version_minor in begin_version_minor..end_version_minor {
-                main_code.push_str(&format!(
-                    r#"printf("[{lib}_version_greater_than_{version_major}_{version_minor}]%d\n", LIB{lib_uppercase}_VERSION_MAJOR > {version_major} || (LIB{lib_uppercase}_VERSION_MAJOR == {version_major} && LIB{lib_uppercase}_VERSION_MINOR > {version_minor}));
-                    "#, lib = lib,
-                    lib_uppercase = lib.to_uppercase(),
-                    version_major = version_major,
-                    version_minor = version_minor
-                ));
-            }
-        }
-    }
+    // let version_check_info = [("avcodec", 56, 60, 0, 108)];
+    // for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
+    //     version_check_info.iter()
+    // {
+    //     for version_major in begin_version_major..end_version_major {
+    //         for version_minor in begin_version_minor..end_version_minor {
+    //             main_code.push_str(&format!(
+    //                 r#"printf("[{lib}_version_greater_than_{version_major}_{version_minor}]%d\n", LIB{lib_uppercase}_VERSION_MAJOR > {version_major} || (LIB{lib_uppercase}_VERSION_MAJOR == {version_major} && LIB{lib_uppercase}_VERSION_MINOR > {version_minor}));
+    //                 "#, lib = lib,
+    //                 lib_uppercase = lib.to_uppercase(),
+    //                 version_major = version_major,
+    //                 version_minor = version_minor
+    //             ));
+    //         }
+    //     }
+    // }
 
     let out_dir = output();
 
@@ -576,14 +219,18 @@ fn check_features(
 
     let stdout = str::from_utf8(&check_output.stdout).unwrap();
 
-    println!("stdout of {}={}", executable.display(), stdout);
+    println!(
+        "cargo:warning=stdout of {}={}",
+        executable.display(),
+        stdout
+    );
 
-    for &(_, feature, var) in infos {
-        if let Some(feature) = feature {
-            if env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_err() {
-                continue;
-            }
-        }
+    for &(_, feature, var) in &infos {
+        // if let Some(feature) = feature {
+        //     if env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_err() {
+        //         continue;
+        //     }
+        // }
 
         let var_str = format!("[{var}]", var = var);
         let pos = var_str.len()
@@ -606,62 +253,62 @@ fn check_features(
         }
     }
 
-    for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
-        version_check_info.iter()
-    {
-        for version_major in begin_version_major..end_version_major {
-            for version_minor in begin_version_minor..end_version_minor {
-                let search_str = format!(
-                    "[{lib}_version_greater_than_{version_major}_{version_minor}]",
-                    version_major = version_major,
-                    version_minor = version_minor,
-                    lib = lib
-                );
-                let pos = stdout
-                    .find(&search_str)
-                    .expect("Variable not found in output")
-                    + search_str.len();
+    // for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
+    //     version_check_info.iter()
+    // {
+    //     for version_major in begin_version_major..end_version_major {
+    //         for version_minor in begin_version_minor..end_version_minor {
+    //             let search_str = format!(
+    //                 "[{lib}_version_greater_than_{version_major}_{version_minor}]",
+    //                 version_major = version_major,
+    //                 version_minor = version_minor,
+    //                 lib = lib
+    //             );
+    //             let pos = stdout
+    //                 .find(&search_str)
+    //                 .expect("Variable not found in output")
+    //                 + search_str.len();
 
-                if &stdout[pos..pos + 1] == "1" {
-                    println!(
-                        r#"cargo:rustc-cfg=feature="{}""#,
-                        &search_str[1..(search_str.len() - 1)]
-                    );
-                    println!(r#"cargo:{}=true"#, &search_str[1..(search_str.len() - 1)]);
-                }
-            }
-        }
-    }
+    //             if &stdout[pos..pos + 1] == "1" {
+    //                 println!(
+    //                     r#"cargo:rustc-cfg=feature="{}""#,
+    //                     &search_str[1..(search_str.len() - 1)]
+    //                 );
+    //                 println!(r#"cargo:{}=true"#, &search_str[1..(search_str.len() - 1)]);
+    //             }
+    //         }
+    //     }
+    // }
 
-    let ffmpeg_lavc_versions = [
-        ("ffmpeg_3_0", 57, 24),
-        ("ffmpeg_3_1", 57, 48),
-        ("ffmpeg_3_2", 57, 64),
-        ("ffmpeg_3_3", 57, 89),
-        ("ffmpeg_3_1", 57, 107),
-        ("ffmpeg_4_0", 58, 18),
-        ("ffmpeg_4_1", 58, 35),
-        ("ffmpeg_4_2", 58, 54),
-        ("ffmpeg_4_3", 58, 91),
-        ("ffmpeg_4_4", 58, 100),
-    ];
-    for &(ffmpeg_version_flag, lavc_version_major, lavc_version_minor) in
-        ffmpeg_lavc_versions.iter()
-    {
-        let search_str = format!(
-            "[avcodec_version_greater_than_{lavc_version_major}_{lavc_version_minor}]",
-            lavc_version_major = lavc_version_major,
-            lavc_version_minor = lavc_version_minor - 1
-        );
-        let pos = stdout
-            .find(&search_str)
-            .expect("Variable not found in output")
-            + search_str.len();
-        if &stdout[pos..pos + 1] == "1" {
-            println!(r#"cargo:rustc-cfg=feature="{}""#, ffmpeg_version_flag);
-            println!(r#"cargo:{}=true"#, ffmpeg_version_flag);
-        }
-    }
+    // let ffmpeg_lavc_versions = [
+    //     ("ffmpeg_3_0", 57, 24),
+    //     ("ffmpeg_3_1", 57, 48),
+    //     ("ffmpeg_3_2", 57, 64),
+    //     ("ffmpeg_3_3", 57, 89),
+    //     ("ffmpeg_3_1", 57, 107),
+    //     ("ffmpeg_4_0", 58, 18),
+    //     ("ffmpeg_4_1", 58, 35),
+    //     ("ffmpeg_4_2", 58, 54),
+    //     ("ffmpeg_4_3", 58, 91),
+    //     ("ffmpeg_4_4", 58, 100),
+    // ];
+    // for &(ffmpeg_version_flag, lavc_version_major, lavc_version_minor) in
+    //     ffmpeg_lavc_versions.iter()
+    // {
+    //     let search_str = format!(
+    //         "[avcodec_version_greater_than_{lavc_version_major}_{lavc_version_minor}]",
+    //         lavc_version_major = lavc_version_major,
+    //         lavc_version_minor = lavc_version_minor - 1
+    //     );
+    //     let pos = stdout
+    //         .find(&search_str)
+    //         .expect("Variable not found in output")
+    //         + search_str.len();
+    //     if &stdout[pos..pos + 1] == "1" {
+    //         println!(r#"cargo:rustc-cfg=feature="{}""#, ffmpeg_version_flag);
+    //         println!(r#"cargo:{}=true"#, ffmpeg_version_flag);
+    //     }
+    // }
 }
 
 fn search_include(include_paths: &[PathBuf], header: &str) -> String {
@@ -684,73 +331,83 @@ fn maybe_search_include(include_paths: &[PathBuf], header: &str) -> Option<Strin
 }
 
 fn main() {
-    println!("cargo:warning={}", source().display());
+    println!("cargo:warning={}", output().display());
 
-    let ffmpeg_dep = Dependency::new(BuildDependency {
-        name: "ffmpeg".to_string(),
-        // build: Box::new(build_ffmpeg),
-    });
+    let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
 
-    let dependencies = DepGraph::new(&[ffmpeg_dep]).unwrap();
-    for dep in dependencies {
-        println!("cargo:warning={:?}", dep);
-    }
-    return ();
+    println!("cargo:warning=need rebuild: {:?}", need_build);
 
-    let include_paths: Vec<PathBuf> = {
-        println!(
-            "cargo:rustc-link-search=native={}",
-            search().join("lib").to_string_lossy()
-        );
-        let enabled_libraries: Vec<_> = LIBRARIES
+    let mut dependencies = DepGraph::new(
+        LIBRARIES
             .iter()
-            .filter(|lib| {
-                !lib.is_feature || lib.feature_name().and_then(|f| env::var(&f).ok()).is_some()
+            .filter_map(|(id, lib)| {
+                let mut dep = Dependency::new(id.clone());
+                for subdep in lib.requires {
+                    if !subdep.optional || feature_env_set(LIBRARIES[&subdep.id].name) {
+                        dep.add_dep(subdep.id.clone());
+                    }
+                }
+                Some(dep)
             })
-            .collect();
+            .collect(),
+    )
+    .unwrap();
+    dependencies.shake(vec![LibraryId::FFMPEG]);
 
-        for lib in &enabled_libraries {
-            println!("cargo:rustc-link-lib=static={}", lib.name);
-        }
-        if env::var("CARGO_FEATURE_BUILD_ZLIB").is_ok() && cfg!(target_os = "linux") {
-            println!("cargo:rustc-link-lib=z");
-        }
+    println!(
+        "cargo:rustc-link-search=native={}",
+        search().join("lib").to_string_lossy()
+    );
 
-        let needs_rebuild = enabled_libraries
-            .iter()
-            .map(|lib| search().join("lib").join(format!("lib{}.a", lib.name)))
-            .any(|lib| lib.metadata().is_err());
+    if need_build {
+        let _ = std::fs::remove_dir_all(&search());
 
-        if false || needs_rebuild {
-            fs::create_dir_all(&output()).expect("failed to create build directory");
-            fetch().unwrap();
-            build_ffmpeg().unwrap();
-        }
-
-        // Check additional required libraries.
-        {
-            let config_mak = source().join("ffbuild/config.mak");
-            let file = File::open(config_mak).unwrap();
-            let reader = BufReader::new(file);
-            let extra_libs = reader
-                .lines()
-                .find(|line| line.as_ref().unwrap().starts_with("EXTRALIBS"))
-                .map(|line| line.unwrap())
-                .unwrap();
-
-            // TODO: could use regex here
-            let linker_args = extra_libs.split('=').last().unwrap().split(' ');
-            let include_libs = linker_args
-                .filter(|v| v.starts_with("-l"))
-                .map(|flag| &flag[2..]);
-
-            for lib in include_libs {
-                println!("cargo:rustc-link-lib={}", lib);
-            }
+        for inner in dependencies.into_iter() {
+            println!("cargo:warning={:?}", inner);
+            let lib = LIBRARIES.get(&inner).unwrap();
+            (lib.build)(lib.version).unwrap();
         }
 
-        vec![search().join("include")]
-    };
+        // dependencies.into_par_iter().for_each(|dep| {
+        //     let inner = dep.deref();
+        //     println!("cargo:warning={:?}", inner);
+        //     let lib = LIBRARIES.get(&inner).unwrap();
+        //     (lib.build)(lib.version).unwrap();
+        // });
+    }
+
+    // make sure the need_build flag works
+    assert!(!LIBRARIES.values().any(|lib| lib.needs_rebuild()));
+
+    let include_paths = vec![search().join("include")];
+    // let include_paths: Vec<PathBuf> = {
+    // let enabled_libraries: Vec<_> = LIBRARIES
+    //     .iter()
+    //     .filter(|lib| {
+    //         !lib.is_feature || lib.feature_name().and_then(|f| env::var(&f).ok()).is_some()
+    //     })
+    //     .collect();
+
+    // for lib in &enabled_libraries {
+    //     println!("cargo:rustc-link-lib=static={}", lib.name);
+    // }
+    // if env::var("CARGO_FEATURE_BUILD_ZLIB").is_ok() && cfg!(target_os = "linux") {
+    //     println!("cargo:rustc-link-lib=z");
+    // }
+
+    // let needs_rebuild = enabled_libraries
+    //     .iter()
+    //     .map(|lib| search().join("lib").join(format!("lib{}.a", lib.name)))
+    //     .any(|lib| lib.metadata().is_err());
+
+    // if false || needs_rebuild {
+    //     fs::create_dir_all(&output()).expect("failed to create build directory");
+    //     fetch().unwrap();
+    //     build_ffmpeg().unwrap();
+    // }
+
+    // vec![search().join("include")]
+    // };
     // else if let Some(paths) = try_vcpkg(statik) {
     //     // vcpkg doesn't detect the "system" dependencies
     //     if statik {
@@ -826,8 +483,6 @@ fn main() {
             println!("cargo:rustc-link-lib=framework={}", f);
         }
     }
-
-    return ();
 
     check_features(
         include_paths.clone(),
@@ -1236,7 +891,8 @@ fn main() {
 
     // The input headers we would like to generate
     // bindings for.
-    if env::var("CARGO_FEATURE_AVCODEC").is_ok() {
+    if feature_env_set("avcodec") {
+        // if env::var("CARGO_FEATURE_AVCODEC").is_ok() {
         builder = builder
             .header(search_include(&include_paths, "libavcodec/avcodec.h"))
             .header(search_include(&include_paths, "libavcodec/dv_profile.h"))
@@ -1245,24 +901,28 @@ fn main() {
             .header(search_include(&include_paths, "libavcodec/vorbis_parser.h"));
     }
 
-    if env::var("CARGO_FEATURE_AVDEVICE").is_ok() {
+    if feature_env_set("avdevice") {
+        // if env::var("CARGO_FEATURE_AVDEVICE").is_ok() {
         builder = builder.header(search_include(&include_paths, "libavdevice/avdevice.h"));
     }
 
-    if env::var("CARGO_FEATURE_AVFILTER").is_ok() {
+    if feature_env_set("avfilter") {
+        // if env::var("CARGO_FEATURE_AVFILTER").is_ok() {
         builder = builder
             .header(search_include(&include_paths, "libavfilter/buffersink.h"))
             .header(search_include(&include_paths, "libavfilter/buffersrc.h"))
             .header(search_include(&include_paths, "libavfilter/avfilter.h"));
     }
 
-    if env::var("CARGO_FEATURE_AVFORMAT").is_ok() {
+    if feature_env_set("avformat") {
+        // if env::var("CARGO_FEATURE_AVFORMAT").is_ok() {
         builder = builder
             .header(search_include(&include_paths, "libavformat/avformat.h"))
             .header(search_include(&include_paths, "libavformat/avio.h"));
     }
 
-    if env::var("CARGO_FEATURE_AVRESAMPLE").is_ok() {
+    if feature_env_set("avresample") {
+        // if env::var("CARGO_FEATURE_AVRESAMPLE").is_ok() {
         builder = builder.header(search_include(&include_paths, "libavresample/avresample.h"));
     }
 
@@ -1320,15 +980,18 @@ fn main() {
         .header(search_include(&include_paths, "libavutil/avutil.h"))
         .header(search_include(&include_paths, "libavutil/xtea.h"));
 
-    if env::var("CARGO_FEATURE_POSTPROC").is_ok() {
+    if feature_env_set("postproc") {
+        // if env::var("CARGO_FEATURE_POSTPROC").is_ok() {
         builder = builder.header(search_include(&include_paths, "libpostproc/postprocess.h"));
     }
 
-    if env::var("CARGO_FEATURE_SWRESAMPLE").is_ok() {
+    if feature_env_set("swresample") {
+        // if env::var("CARGO_FEATURE_SWRESAMPLE").is_ok() {
         builder = builder.header(search_include(&include_paths, "libswresample/swresample.h"));
     }
 
-    if env::var("CARGO_FEATURE_SWSCALE").is_ok() {
+    if feature_env_set("swscale") {
+        // if env::var("CARGO_FEATURE_SWSCALE").is_ok() {
         builder = builder.header(search_include(&include_paths, "libswscale/swscale.h"));
     }
 
