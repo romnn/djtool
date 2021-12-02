@@ -245,6 +245,8 @@ fn maybe_search_include(include_paths: &[PathBuf], header: &str) -> Option<Strin
 }
 
 fn main() {
+    tauri_build::build();
+
     println!("cargo:warning={}", output().display());
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());

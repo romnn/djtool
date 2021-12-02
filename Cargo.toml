@@ -36,6 +36,7 @@ thiserror = "1.0.30"
 sha2 = "0.9.6"
 webbrowser = "0.5.5"
 warp = "0.3.2"
+tauri = { version = "1.0.0-beta.8" }
 
 [build-dependencies]
 anyhow = "1.0"
@@ -44,6 +45,7 @@ cc         = "1.0"
 pkg-config = "0.3"
 lazy_static = "1.4.0"
 bindgen    = { version = "0.59", default-features = false, features = ["runtime"] }
+tauri-build = { version = "1.0.0-beta.4" }
 
 rayon = { version = "1.5.1", optional=true }
 crossbeam-channel = { version = "0.4", optional = true }
@@ -66,10 +68,15 @@ default  = [
   "ffmpeg-mp3lame",
   # miscelanious
   "ffmpeg-license-nonfree",
+  # tauri frontend
+  "custom-protocol",
 ]
 
 force-build = []
 parallel-build = ["rayon", "crossbeam-channel"]
+
+# tauri
+custom-protocol = [ "tauri/custom-protocol" ]
 
 # licensing
 ffmpeg-license-gpl      = []

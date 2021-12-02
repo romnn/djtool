@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
 use tokio;
 mod download;
 // mod transcode;
@@ -8,10 +13,10 @@ mod spotify;
 mod transcode2;
 mod utils;
 
-// use crate::ffmpeg::scopes;
 use anyhow::Result;
 use download::Downloader;
 use std::path::PathBuf;
+use std::thread;
 use tempdir::TempDir;
 use warp::Filter;
 // use transcode::Transcoder;
@@ -62,36 +67,52 @@ impl DjTool {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+// #[tokio::main]
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
     // https://www.youtube.com/watch?v=KUyJFHgrrZc
     // https://www.youtube.com/watch?v=_Q8ELKOLudE
     // Hb5ZXUeGPHc
 
-    // spin up a webserver
-    tokio::spawn(async move {
-        let examples = warp::path("static").and(warp::fs::dir("./examples/"));
-        // let routes = readme.or(examples);
-        warp::serve(examples).run(([127, 0, 0, 1], 21011)).await;
+    let _ = thread::spawn(|| {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            // spin up a webserver
+            tokio::spawn(async move {
+                let examples = warp::path("static").and(warp::fs::dir("./examples/"));
+                // let routes = readme.or(examples);
+                warp::serve(examples).run(([127, 0, 0, 1], 21011)).await;
+            });
+
+            let tool = DjTool::new().unwrap();
+            tool.download_youtube("_Q8ELKOLudE".to_string())
+                .await
+                .unwrap();
+        });
     });
 
-    let creds = spotify::Credentials::new_pkce("todo");
-    let oauth = spotify::OAuth {
-        redirect_uri: "http://localhost:8888/callback".to_string(),
-        scopes: scopes!("playlist-read-private"),
-        ..Default::default()
-    };
-    let mut spotify = spotify::AuthCodePkceSpotify::new(creds.clone(), oauth.clone());
-    let url = spotify.get_authorize_url(None).unwrap();
-    println!("auth url: {}", url);
-    spotify.load_token(&url).await.unwrap();
+    tauri::Builder::default()
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+    // });
+
+    // let creds = spotify::Credentials::new_pkce("todo");
+    // let oauth = spotify::OAuth {
+    //     redirect_uri: "http://localhost:8888/callback".to_string(),
+    //     scopes: scopes!("playlist-read-private"),
+    //     ..Default::default()
+    // };
+    // let mut spotify = spotify::AuthCodePkceSpotify::new(creds.clone(), oauth.clone());
+    // let url = spotify.get_authorize_url(None).unwrap();
+    // println!("auth url: {}", url);
+    // spotify.load_token(&url).await.unwrap();
 
     // let history = spotify.current_playback(None, None::<Vec<_>>).await;
     // println!("Response: {:?}", history);
 
-    // let tool = DjTool::new()?;
-    // tool.download_youtube("_Q8ELKOLudE".to_string()).await?;
+    // ui.join().unwrap();
+    println!("exiting");
     Ok(())
 }
 

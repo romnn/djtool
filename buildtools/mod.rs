@@ -9,19 +9,21 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
-#[macro_export]
-macro_rules! enable {
-    ($conf:expr, $feat:expr, $name:expr) => {
-        if env::var(format!("CARGO_FEATURE_{}", $feat.to_uppercase())).is_ok() {
-            $conf.arg(format!("--enable-{}", $name));
-        }
-    };
-}
+// #[macro_export]
+// macro_rules! enable {
+//     ($conf:expr, $feat:expr, $name:expr) => {
+//         if env::var(format!("CARGO_FEATURE_{}", $feat.to_uppercase())).is_ok() {
+//             $conf.arg(format!("--enable-{}", $name));
+//         }
+//     };
+// }
+
+// let arg = if env::var(format!("CARGO_FEATURE_FFMPEG_{}", $feat.to_uppercase())).is_ok() {
 
 #[macro_export]
 macro_rules! switch {
     ($conf:expr, $feat:expr, $name:expr) => {
-        let arg = if env::var(format!("CARGO_FEATURE_{}", $feat.to_uppercase())).is_ok() {
+        let arg = if $feat {
             "enable"
         } else {
             "disable"
@@ -45,7 +47,6 @@ pub fn search() -> PathBuf {
 
 pub fn build_env() -> HashMap<&'static str, String> {
     let ld_flags = format!(
-        // "-L{},-Wl",
         "-L{}",
         search().join("lib").into_os_string().into_string().unwrap()
     );
@@ -69,20 +70,16 @@ pub fn build_env() -> HashMap<&'static str, String> {
                     .into_string()
                     .unwrap()
             ),
-            // format!("-I{}, -Wl", search().join("include").to_string_lossy()),
         ),
         (
             "CFLAGS",
             format!(
-                // "-I{} -Wl,-fno-stack-check",
-                // "-I{} {}",
                 "-I{}",
                 search()
                     .join("include")
                     .into_os_string()
                     .into_string()
                     .unwrap(),
-                // ld_flags,
             ),
         ),
     ])

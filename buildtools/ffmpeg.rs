@@ -1,7 +1,7 @@
 use super::git::GitRepository;
 use super::libs::{LibraryFeature, LIBRARIES};
-use super::{build_env, is_debug_build, output, search, CrossBuildConfig};
-use crate::{enable, switch};
+use super::{build_env, feature_env_set, is_debug_build, output, search, CrossBuildConfig};
+use crate::switch;
 use anyhow::Result;
 use std::env;
 use std::fs::File;
@@ -68,21 +68,21 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
         configure.arg("--enable-small");
 
         // the binary must comply with GPL
-        switch!(configure, "FFMPEG_LICENSE_GPL", "gpl");
+        switch!(configure, feature_env_set("LICENSE_GPL"), "gpl");
 
         // the binary must comply with (L)GPLv3
-        switch!(configure, "FFMPEG_LICENSE_VERSION3", "version3");
+        switch!(configure, feature_env_set("LICENSE_VERSION3"), "version3");
 
         // the binary cannot be redistributed
-        switch!(configure, "FFMPEG_LICENSE_NONFREE", "nonfree");
+        switch!(configure, feature_env_set("LICENSE_NONFREE"), "nonfree");
 
         for (_, dep) in LIBRARIES.iter() {
             for feat in dep.artifacts.iter() {
-                if !feat.is_enabled() {
-                    continue;
-                }
+                // if !feat.is_enabled() {
+                //     continue;
+                // }
                 if let Some(flag) = feat.ffmpeg_flag {
-                    switch!(configure, feat.name, flag);
+                    switch!(configure, feat.is_enabled(), flag);
                 }
                 // println!("cargo:rustc-link-lib=static={}", feat.name);
                 // println!("cargo:warning={}", feat.name);

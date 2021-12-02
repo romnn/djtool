@@ -189,9 +189,9 @@ impl Transcoder {
         while self.decoder.receive_frame(&mut decoded).is_ok() {
             let timestamp = decoded.timestamp();
             self.frame_count += 1;
-            self.log_progress(f64::from(
-                Rational(timestamp.unwrap_or(0) as i32, 1) * self.decoder.time_base(),
-            ));
+            // self.log_progress(f64::from(
+            //     Rational(timestamp.unwrap_or(0) as i32, 1) * self.decoder.time_base(),
+            // ));
             decoded.set_pts(timestamp);
             self.add_frame_to_filter(&decoded);
             self.get_and_process_filtered_frames(octx);
