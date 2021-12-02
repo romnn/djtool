@@ -1,9 +1,9 @@
 use super::Disposition;
-use codec::{self, packet};
+use crate::ffmpeg::codec::{self, packet};
 use crate::ffmpeg::ffi::*;
-use format::context::common::Context;
+use crate::ffmpeg::format::context::common::Context;
+use crate::ffmpeg::{DictionaryRef, Discard, Rational};
 use libc::c_int;
-use {DictionaryRef, Discard, Rational};
 
 #[derive(Debug)]
 pub struct Stream<'a> {

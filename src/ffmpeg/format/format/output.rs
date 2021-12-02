@@ -6,7 +6,7 @@ use std::str::from_utf8_unchecked;
 
 use super::Flags;
 use crate::ffmpeg::ffi::*;
-use {codec, media};
+use crate::ffmpeg::{codec, media};
 
 pub struct Output {
     ptr: *mut AVOutputFormat,

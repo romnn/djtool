@@ -68,7 +68,7 @@ pub struct Library {
     pub version: &'static str,
     pub requires: &'static [LibraryDependency],
     pub artifacts: &'static [LibraryArtifact],
-    pub build: Box<dyn Fn(&'static str) -> Result<()> + Send + Sync>,
+    pub build: Box<dyn Fn(bool, &'static str) -> Result<()> + Send + Sync>,
 }
 
 impl fmt::Debug for Library {

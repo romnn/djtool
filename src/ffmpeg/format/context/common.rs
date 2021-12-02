@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 use super::destructor::{self, Destructor};
 use crate::ffmpeg::ffi::*;
+use crate::ffmpeg::{media, Chapter, ChapterMut, DictionaryRef, Stream, StreamMut};
 use libc::{c_int, c_uint};
-use {media, Chapter, ChapterMut, DictionaryRef, Stream, StreamMut};
 
 pub struct Context {
     ptr: *mut AVFormatContext,

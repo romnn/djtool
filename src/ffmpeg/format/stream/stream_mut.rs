@@ -3,8 +3,8 @@ use std::ops::Deref;
 
 use super::Stream;
 use crate::ffmpeg::ffi::*;
-use format::context::common::Context;
-use {codec, Dictionary, Rational};
+use crate::ffmpeg::format::context::common::Context;
+use crate::ffmpeg::{codec, Dictionary, Rational};
 
 pub struct StreamMut<'a> {
     context: &'a mut Context,

@@ -696,7 +696,7 @@ impl Download {
 
     fn compute_chunks(&mut self) {
         let num_chunks =
-            (0..(self.info.content_length as f32 / self.chunk_size as f32).ceil() as usize);
+            0..(self.info.content_length as f32 / self.chunk_size as f32).ceil() as usize;
         // let (tx, _) = &self.progress;
         self.chunks = Arc::new(Mutex::new(
             num_chunks

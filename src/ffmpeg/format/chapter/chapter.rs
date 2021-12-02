@@ -1,7 +1,7 @@
 use crate::ffmpeg::ffi::*;
-use {DictionaryRef, Rational};
+use crate::ffmpeg::{DictionaryRef, Rational};
 
-use format::context::common::Context;
+use crate::ffmpeg::format::context::common::Context;
 
 // WARNING: index refers to the offset in the chapters array (starting from 0)
 // it is not necessarly equal to the id (which may start at 1)

@@ -61,16 +61,28 @@ pub fn build_env() -> HashMap<&'static str, String> {
         ),
         (
             "CPPFLAGS",
-            format!("-I{}", search().join("include").to_string_lossy()),
+            format!(
+                "-I{}",
+                search()
+                    .join("include")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap()
+            ),
             // format!("-I{}, -Wl", search().join("include").to_string_lossy()),
         ),
         (
             "CFLAGS",
             format!(
                 // "-I{} -Wl,-fno-stack-check",
-                "-I{} {}",
-                search().join("include").to_string_lossy(),
-                ld_flags,
+                // "-I{} {}",
+                "-I{}",
+                search()
+                    .join("include")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap(),
+                // ld_flags,
             ),
         ),
     ])

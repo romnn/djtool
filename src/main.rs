@@ -1,12 +1,9 @@
-// extern crate ffmpeg_next as ffmpeg;
-// #![deny(warnings)]
-
 use tokio;
 mod download;
 // mod transcode;
-// mod transcode2;
-mod ffmpeg_sys;
 mod ffmpeg;
+mod ffmpeg_sys;
+// mod transcode2;
 mod utils;
 
 use anyhow::Result;
@@ -32,22 +29,27 @@ impl DjTool {
     async fn download_youtube(&self, video_id: String) -> Result<()> {
         let temp_dir = TempDir::new("djtool")?;
         // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
+        let downloaded_audio = temp_dir.path().join(video_id);
         let audio = self
             .downloader
             // .download_audio(video_id, temp_dir.path().to_path_buf())
             .download_audio(
                 video_id,
-                PathBuf::from("/home/roman/dev/djtool/Touchpad.webm"),
+                // PathBuf::from("/home/roman/dev/djtool/Touchpad.webm"),
+                &downloaded_audio,
+                // temp_dir.join(video_id),
+                // PathBuf::from(format!("/home/roman/dev/djtool/Touchpad.webm"),
             )
             .await?;
 
         // transcode to MP3
-        println!("temp dir: {}", temp_dir.path().display());
-        println!("audio output: {}", audio.audio_file.display());
-        let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-        let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
+        // println!("temp dir: {}", temp_dir.path().display());
+        // println!("audio output: {}", audio.audio_file.display());
+        // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
+        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
+        let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
         let res = tokio::task::spawn_blocking(move || {
-            // transcode2::test(input_file, output_file);
+            // transcode2::test(downloaded_audio, output_file);
             // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
             // transcoder.start().unwrap();
         })

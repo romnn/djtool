@@ -5,8 +5,8 @@ use std::ops::{Deref, DerefMut};
 use super::common::Context;
 use super::destructor;
 use crate::ffmpeg::ffi::*;
-use util::range::Range;
-use {format, Codec, Error, Packet, Stream};
+use crate::ffmpeg::util::range::Range;
+use crate::ffmpeg::{format, Codec, Error, Packet, Stream};
 
 pub struct Input {
     ptr: *mut AVFormatContext,

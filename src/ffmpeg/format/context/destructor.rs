@@ -1,4 +1,4 @@
-use ffi::*;
+use crate::ffmpeg::ffi::*;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Mode {

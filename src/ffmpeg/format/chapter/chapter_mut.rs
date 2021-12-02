@@ -2,9 +2,9 @@ use std::mem;
 use std::ops::Deref;
 
 use super::Chapter;
-use ffi::*;
-use format::context::common::Context;
-use {Dictionary, DictionaryMut, Rational};
+use crate::ffmpeg::ffi::*;
+use crate::ffmpeg::format::context::common::Context;
+use crate::ffmpeg::{Dictionary, DictionaryMut, Rational};
 
 // WARNING: index refers to the offset in the chapters array (starting from 0)
 // it is not necessarly equal to the id (which may start at 1)

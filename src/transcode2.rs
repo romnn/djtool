@@ -1,11 +1,10 @@
-extern crate ffmpeg_next as ffmpeg;
-
 use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 
-use ffmpeg::{codec, filter, format, frame, media};
-use ffmpeg::{rescale, Rescale};
+use crate::ffmpeg;
+use crate::ffmpeg::{codec, filter, format, frame, media};
+use crate::ffmpeg::{rescale, Rescale};
 
 fn filter(
     spec: &str,
@@ -74,7 +73,9 @@ fn transcoder<P: AsRef<Path>>(
         .best(media::Type::Audio)
         .expect("could not find best audio stream");
     let mut decoder = input.codec().decoder().audio()?;
-    let codec = ffmpeg::encoder::find(octx.format().codec(path, media::Type::Audio))
+
+    let codec = ffmpeg::encoder::find(codec::id::Id::MP3)
+        // let codec = ffmpeg::encoder::find(octx.format().codec(path, media::Type::Audio))
         .expect("failed to find encoder")
         .audio()?;
     let global = octx

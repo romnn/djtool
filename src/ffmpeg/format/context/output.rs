@@ -7,9 +7,9 @@ use libc;
 
 use super::common::Context;
 use super::destructor;
-use codec::traits;
+use crate::ffmpeg::codec::traits;
 use crate::ffmpeg::ffi::*;
-use {format, ChapterMut, Dictionary, Error, Rational, StreamMut};
+use crate::ffmpeg::{format, ChapterMut, Dictionary, Error, Rational, StreamMut};
 
 pub struct Output {
     ptr: *mut AVFormatContext,

@@ -1,8 +1,8 @@
 pub mod disposition;
-pub use self::disposition::Disposition;
+pub use disposition::Disposition;
 
 mod stream;
-pub use self::stream::Stream;
+pub use stream::Stream;
 
 mod stream_mut;
-pub use self::stream_mut::StreamMut;
+pub use stream_mut::StreamMut;

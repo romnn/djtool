@@ -1,17 +1,17 @@
-pub use util::format::{pixel, Pixel};
-pub use util::format::{sample, Sample};
-use util::interrupt;
+pub use crate::ffmpeg::util::format::{pixel, Pixel};
+pub use crate::ffmpeg::util::format::{sample, Sample};
+use crate::ffmpeg::util::interrupt;
 
 pub mod stream;
 
 pub mod chapter;
 
 pub mod context;
-pub use self::context::Context;
+pub use context::Context;
 
 pub mod format;
-pub use self::format::{flag, Flags};
-pub use self::format::{list, Input, Output};
+pub use format::{flag, Flags};
+pub use format::{list, Input, Output};
 
 pub mod network;
 
@@ -21,7 +21,7 @@ use std::ptr;
 use std::str::from_utf8_unchecked;
 
 use crate::ffmpeg::ffi::*;
-use {Dictionary, Error, Format};
+use crate::ffmpeg::{Dictionary, Error, Format};
 
 pub fn register_all() {
     unsafe {

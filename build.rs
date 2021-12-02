@@ -115,12 +115,6 @@ fn check_features(
         .collect();
 
     for &(header, feature, var) in &infos {
-        // if let Some(feature) = feature {
-        //     if !feature_env_set(feature) {
-        //         continue;
-        //     }
-        // }
-
         let include = format!("#include <{}>", header);
         if !includes_code.contains(&include) {
             includes_code.push_str(&include);
@@ -146,23 +140,6 @@ fn check_features(
             var = var
         ));
     }
-
-    // let version_check_info = [("avcodec", 56, 60, 0, 108)];
-    // for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
-    //     version_check_info.iter()
-    // {
-    //     for version_major in begin_version_major..end_version_major {
-    //         for version_minor in begin_version_minor..end_version_minor {
-    //             main_code.push_str(&format!(
-    //                 r#"printf("[{lib}_version_greater_than_{version_major}_{version_minor}]%d\n", LIB{lib_uppercase}_VERSION_MAJOR > {version_major} || (LIB{lib_uppercase}_VERSION_MAJOR == {version_major} && LIB{lib_uppercase}_VERSION_MINOR > {version_minor}));
-    //                 "#, lib = lib,
-    //                 lib_uppercase = lib.to_uppercase(),
-    //                 version_major = version_major,
-    //                 version_minor = version_minor
-    //             ));
-    //         }
-    //     }
-    // }
 
     let out_dir = output();
 
@@ -226,12 +203,6 @@ fn check_features(
     );
 
     for &(_, feature, var) in &infos {
-        // if let Some(feature) = feature {
-        //     if env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_err() {
-        //         continue;
-        //     }
-        // }
-
         let var_str = format!("[{var}]", var = var);
         let pos = var_str.len()
             + stdout
@@ -253,63 +224,7 @@ fn check_features(
         }
     }
 
-    // for &(lib, begin_version_major, end_version_major, begin_version_minor, end_version_minor) in
-    //     version_check_info.iter()
-    // {
-    //     for version_major in begin_version_major..end_version_major {
-    //         for version_minor in begin_version_minor..end_version_minor {
-    //             let search_str = format!(
-    //                 "[{lib}_version_greater_than_{version_major}_{version_minor}]",
-    //                 version_major = version_major,
-    //                 version_minor = version_minor,
-    //                 lib = lib
-    //             );
-    //             let pos = stdout
-    //                 .find(&search_str)
-    //                 .expect("Variable not found in output")
-    //                 + search_str.len();
-
-    //             if &stdout[pos..pos + 1] == "1" {
-    //                 println!(
-    //                     r#"cargo:rustc-cfg=feature="{}""#,
-    //                     &search_str[1..(search_str.len() - 1)]
-    //                 );
-    //                 println!(r#"cargo:{}=true"#, &search_str[1..(search_str.len() - 1)]);
-    //             }
-    //         }
-    //     }
-    // }
-
-    // let ffmpeg_lavc_versions = [
-    //     ("ffmpeg_3_0", 57, 24),
-    //     ("ffmpeg_3_1", 57, 48),
-    //     ("ffmpeg_3_2", 57, 64),
-    //     ("ffmpeg_3_3", 57, 89),
-    //     ("ffmpeg_3_1", 57, 107),
-    //     ("ffmpeg_4_0", 58, 18),
-    //     ("ffmpeg_4_1", 58, 35),
-    //     ("ffmpeg_4_2", 58, 54),
-    //     ("ffmpeg_4_3", 58, 91),
-    //     ("ffmpeg_4_4", 58, 100),
-    // ];
-    // for &(ffmpeg_version_flag, lavc_version_major, lavc_version_minor) in
-    //     ffmpeg_lavc_versions.iter()
-    // {
-    //     let search_str = format!(
-    //         "[avcodec_version_greater_than_{lavc_version_major}_{lavc_version_minor}]",
-    //         lavc_version_major = lavc_version_major,
-    //         lavc_version_minor = lavc_version_minor - 1
-    //     );
-    //     let pos = stdout
-    //         .find(&search_str)
-    //         .expect("Variable not found in output")
-    //         + search_str.len();
-    //     if &stdout[pos..pos + 1] == "1" {
-    //         println!(r#"cargo:rustc-cfg=feature="{}""#, ffmpeg_version_flag);
-    //         println!(r#"cargo:{}=true"#, ffmpeg_version_flag);
-    //     }
-    // }
-}
+    }
 
 fn search_include(include_paths: &[PathBuf], header: &str) -> String {
     for dir in include_paths {
@@ -361,20 +276,20 @@ fn main() {
 
     if need_build || feature_env_set("force-build") {
         let _ = std::fs::remove_dir_all(&search());
-
-        for inner in dependencies.into_iter() {
-            println!("cargo:warning={:?}", inner);
-            let lib = LIBRARIES.get(&inner).unwrap();
-            (lib.build)(lib.version).unwrap();
-        }
-
-        // dependencies.into_par_iter().for_each(|dep| {
-        //     let inner = dep.deref();
-        //     println!("cargo:warning={:?}", inner);
-        //     let lib = LIBRARIES.get(&inner).unwrap();
-        //     (lib.build)(lib.version).unwrap();
-        // });
     }
+
+    for inner in dependencies.into_iter() {
+        println!("cargo:warning={:?}", inner);
+        let lib = LIBRARIES.get(&inner).unwrap();
+        (lib.build)(need_build, lib.version).unwrap();
+    }
+
+    // dependencies.into_par_iter().for_each(|dep| {
+    //     let inner = dep.deref();
+    //     println!("cargo:warning={:?}", inner);
+    //     let lib = LIBRARIES.get(&inner).unwrap();
+    //     (lib.build)(need_build, lib.version).unwrap();
+    // });
 
     // make sure the need_build flag works
     assert!(!LIBRARIES.values().any(|lib| lib.needs_rebuild()));
@@ -459,30 +374,6 @@ fn main() {
     //        .unwrap()
     //        .include_paths
     //};
-
-    if cfg!(target_os = "macos") {
-        let frameworks = vec![
-            "AppKit",
-            "AudioToolbox",
-            "AVFoundation",
-            "CoreFoundation",
-            "CoreGraphics",
-            "CoreMedia",
-            "CoreServices",
-            "CoreVideo",
-            "Foundation",
-            "OpenCL",
-            "OpenGL",
-            "QTKit",
-            "QuartzCore",
-            "Security",
-            "VideoDecodeAcceleration",
-            "VideoToolbox",
-        ];
-        for f in frameworks {
-            println!("cargo:rustc-link-lib=framework={}", f);
-        }
-    }
 
     check_features(
         include_paths.clone(),
