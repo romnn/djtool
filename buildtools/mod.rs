@@ -12,7 +12,7 @@ use std::path::PathBuf;
 #[macro_export]
 macro_rules! enable {
     ($conf:expr, $feat:expr, $name:expr) => {
-        if env::var(concat!("CARGO_FEATURE_", $feat)).is_ok() {
+        if env::var(format!("CARGO_FEATURE_{}", $feat.to_uppercase())).is_ok() {
             $conf.arg(format!("--enable-{}", $name));
         }
     };
@@ -21,7 +21,7 @@ macro_rules! enable {
 #[macro_export]
 macro_rules! switch {
     ($conf:expr, $feat:expr, $name:expr) => {
-        let arg = if env::var(format!("CARGO_FEATURE_{}", $feat)).is_ok() {
+        let arg = if env::var(format!("CARGO_FEATURE_{}", $feat.to_uppercase())).is_ok() {
             "enable"
         } else {
             "disable"

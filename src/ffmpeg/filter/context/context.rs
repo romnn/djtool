@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use super::{Sink, Source};
 use crate::ffmpeg::ffi::*;
 use libc::c_void;
-use {format, option, ChannelLayout};
+use crate::ffmpeg::{format, option, ChannelLayout};
 
 pub struct Context<'a> {
     ptr: *mut AVFilterContext,

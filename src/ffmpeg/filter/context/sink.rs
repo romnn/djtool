@@ -1,7 +1,7 @@
 use super::Context;
 use crate::ffmpeg::ffi::*;
 use libc::c_int;
-use {Error, Frame};
+use crate::ffmpeg::{Error, Frame};
 
 pub struct Sink<'a> {
     ctx: &'a mut Context<'a>,

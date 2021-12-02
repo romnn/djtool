@@ -5,8 +5,8 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::Encoder as Super;
-use codec::{traits, Context};
-use {Dictionary, Error};
+use crate::ffmpeg::codec::{traits, Context};
+use crate::ffmpeg::{self, Dictionary, Error};
 
 pub struct Subtitle(pub Super);
 
@@ -85,7 +85,7 @@ impl AsMut<Context> for Subtitle {
 pub struct Encoder(pub Subtitle);
 
 impl Encoder {
-    pub fn encode(&mut self, subtitle: &::Subtitle, out: &mut [u8]) -> Result<bool, Error> {
+    pub fn encode(&mut self, subtitle: &ffmpeg::Subtitle, out: &mut [u8]) -> Result<bool, Error> {
         unsafe {
             match avcodec_encode_subtitle(
                 self.0.as_mut_ptr(),

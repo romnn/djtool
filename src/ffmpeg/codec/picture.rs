@@ -3,9 +3,9 @@ use std::mem;
 use std::slice;
 
 use crate::ffmpeg::ffi::*;
-use format;
+use crate::ffmpeg::format;
+use crate::ffmpeg::Error;
 use libc::{c_int, size_t};
-use Error;
 
 pub struct Picture<'a> {
     ptr: *mut AVPicture,

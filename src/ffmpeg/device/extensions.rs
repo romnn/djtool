@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 use std::ptr;
 
-use device;
+use crate::ffmpeg::device;
 use crate::ffmpeg::ffi::*;
-use format::context::common::Context;
+use crate::ffmpeg::format::context::common::Context;
+use crate::ffmpeg::Error;
 use libc::c_int;
-use Error;
 
 impl Context {
     pub fn devices(&self) -> Result<DeviceIter, Error> {

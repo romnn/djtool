@@ -4,8 +4,8 @@ use std::str::from_utf8_unchecked;
 
 use super::{Context, Filter};
 use crate::ffmpeg::ffi::*;
+use crate::ffmpeg::Error;
 use libc::c_int;
-use Error;
 
 pub struct Graph {
     ptr: *mut AVFilterGraph,

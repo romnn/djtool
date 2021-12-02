@@ -42,6 +42,7 @@ pub struct LibraryDependency {
 pub struct LibraryArtifact {
     pub name: &'static str,
     pub lib: &'static str,
+    pub ffmpeg_flag: Option<&'static str>,
     pub is_feature: bool,
 }
 
@@ -99,6 +100,7 @@ lazy_static! {
                 artifacts: &[LibraryArtifact {
                     name: "mp3lame",
                     lib: "libmp3lame",
+                    ffmpeg_flag: Some("libmp3lame"),
                     is_feature: true,
                 }],
             },
@@ -121,46 +123,55 @@ lazy_static! {
                     LibraryArtifact {
                         name: "avcodec",
                         lib: "libavcodec",
+                        ffmpeg_flag: Some("avcodec"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "avdevice",
                         lib: "libavdevice",
+                        ffmpeg_flag: Some("avdevice"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "avfilter",
                         lib: "libavfilter",
+                        ffmpeg_flag: Some("avfilter"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "avformat",
                         lib: "libavformat",
+                        ffmpeg_flag: Some("avformat"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "avresample",
                         lib: "libavresample",
+                        ffmpeg_flag: Some("avresample"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "avutil",
                         lib: "libavutil",
+                        ffmpeg_flag: Some("avutil"),
                         is_feature: false,
                     },
                     LibraryArtifact {
-                        name: "libpostproc",
-                        lib: "postproc",
+                        name: "postproc",
+                        lib: "libpostproc",
+                        ffmpeg_flag: Some("postproc"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "swresample",
                         lib: "libswresample",
+                        ffmpeg_flag: Some("swresample"),
                         is_feature: true,
                     },
                     LibraryArtifact {
                         name: "swscale",
                         lib: "libswscale",
+                        ffmpeg_flag: Some("swscale"),
                         is_feature: true,
                     },
                 ],

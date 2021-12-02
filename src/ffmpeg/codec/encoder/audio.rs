@@ -5,9 +5,9 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::Encoder as Super;
-use codec::{traits, Context};
-use util::format;
-use {frame, packet, ChannelLayout, Dictionary, Error};
+use crate::ffmpeg::codec::{traits, Context};
+use crate::ffmpeg::util::format;
+use crate::ffmpeg::{frame, packet, ChannelLayout, Dictionary, Error};
 
 pub struct Audio(pub Super);
 

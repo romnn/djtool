@@ -4,12 +4,12 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::{slice, Opened};
-use codec::Context;
-use color;
-use frame;
-use util::chroma;
-use util::format;
-use {packet, Error, FieldOrder, Rational};
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::color;
+use crate::ffmpeg::frame;
+use crate::ffmpeg::util::chroma;
+use crate::ffmpeg::util::format;
+use crate::ffmpeg::{packet, Error, FieldOrder, Rational};
 
 pub struct Video(pub Opened);
 

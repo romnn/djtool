@@ -5,7 +5,7 @@ use std::slice;
 use super::{Borrow, Flags, Mut, Ref, SideData};
 use crate::ffmpeg::ffi::*;
 use libc::c_int;
-use {format, Error, Rational};
+use crate::ffmpeg::{format, Error, Rational};
 
 pub struct Packet(AVPacket);
 

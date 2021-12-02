@@ -4,10 +4,10 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::Opened;
-use codec::Context;
-use frame;
-use util::format;
-use {packet, AudioService, ChannelLayout, Error};
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::frame;
+use crate::ffmpeg::util::format;
+use crate::ffmpeg::{packet, AudioService, ChannelLayout, Error};
 
 pub struct Audio(pub Opened);
 

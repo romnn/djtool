@@ -1,16 +1,14 @@
 [package]
 name = "djtool"
 version = "0.1.0"
-# edition = "2021"
-edition = "2018"
+edition = "2021"
+# edition = "2018"
 
 [profile.release]
 # opt-level = 's'  # Optimize for size.
 lto = true # Link Time Optimization (LTO)
 
 [dependencies]
-# ffmpeg-next = { version = "4.4.0-next.2", features = ["build"] }
-# , "avcodec", "avdevice", "avfilter", "avformat", "swresample", "swscale"] }
 reqwest = { version = "0.11.6", features = ["json", "blocking", "default-tls", "stream"] }
 anyhow = "1.0"
 async-trait = "0.1.51"
@@ -32,6 +30,12 @@ http = "0.2.5"
 tempdir = "0.3.7"
 libc = "0.2"
 bitflags = "1.2"
+base64 = "0.13.0"
+chrono = { version = "0.4.19", features = ["serde", "rustc-serialize"] }
+thiserror = "1.0.30"
+sha2 = "0.9.6"
+webbrowser = "0.5.5"
+warp = "0.3.2"
 
 [build-dependencies]
 anyhow = "1.0"

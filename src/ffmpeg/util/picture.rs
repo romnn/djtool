@@ -1,4 +1,3 @@
-// use ffi::AVPictureType::*;
 use crate::ffmpeg::ffi::*;
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]

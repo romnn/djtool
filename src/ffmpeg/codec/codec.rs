@@ -3,7 +3,7 @@ use std::str::from_utf8_unchecked;
 
 use super::{Audio, Capabilities, Id, Profile, Video};
 use crate::ffmpeg::ffi::*;
-use {media, Error};
+use crate::ffmpeg::{media, Error};
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Codec {

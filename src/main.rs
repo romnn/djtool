@@ -3,13 +3,17 @@ mod download;
 // mod transcode;
 mod ffmpeg;
 mod ffmpeg_sys;
-// mod transcode2;
+mod serialization;
+mod spotify;
+mod transcode2;
 mod utils;
 
+// use crate::ffmpeg::scopes;
 use anyhow::Result;
 use download::Downloader;
 use std::path::PathBuf;
 use tempdir::TempDir;
+use warp::Filter;
 // use transcode::Transcoder;
 
 struct DjTool {
@@ -29,7 +33,7 @@ impl DjTool {
     async fn download_youtube(&self, video_id: String) -> Result<()> {
         let temp_dir = TempDir::new("djtool")?;
         // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
-        let downloaded_audio = temp_dir.path().join(video_id);
+        let downloaded_audio = temp_dir.path().join(&video_id);
         let audio = self
             .downloader
             // .download_audio(video_id, temp_dir.path().to_path_buf())
@@ -46,10 +50,10 @@ impl DjTool {
         // println!("temp dir: {}", temp_dir.path().display());
         // println!("audio output: {}", audio.audio_file.display());
         // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
-        let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
+        let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
+        // let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
         let res = tokio::task::spawn_blocking(move || {
-            // transcode2::test(downloaded_audio, output_file);
+            transcode2::test(audio.audio_file, output_file);
             // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
             // transcoder.start().unwrap();
         })
@@ -64,8 +68,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // https://www.youtube.com/watch?v=KUyJFHgrrZc
     // https://www.youtube.com/watch?v=_Q8ELKOLudE
     // Hb5ZXUeGPHc
-    let tool = DjTool::new()?;
-    tool.download_youtube("_Q8ELKOLudE".to_string()).await?;
+
+    // spin up a webserver
+    tokio::spawn(async move {
+        let examples = warp::path("static").and(warp::fs::dir("./examples/"));
+        // let routes = readme.or(examples);
+        warp::serve(examples).run(([127, 0, 0, 1], 21011)).await;
+    });
+
+    let creds = spotify::Credentials::new_pkce("todo");
+    let oauth = spotify::OAuth {
+        redirect_uri: "http://localhost:8888/callback".to_string(),
+        scopes: scopes!("playlist-read-private"),
+        ..Default::default()
+    };
+    let mut spotify = spotify::AuthCodePkceSpotify::new(creds.clone(), oauth.clone());
+    let url = spotify.get_authorize_url(None).unwrap();
+    println!("auth url: {}", url);
+    spotify.load_token(&url).await.unwrap();
+
+    // let history = spotify.current_playback(None, None::<Vec<_>>).await;
+    // println!("Response: {:?}", history);
+
+    // let tool = DjTool::new()?;
+    // tool.download_youtube("_Q8ELKOLudE".to_string()).await?;
     Ok(())
 }
 

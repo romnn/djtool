@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use super::{Context, Id};
 use crate::ffmpeg::ffi::*;
-use media;
+use crate::ffmpeg::media;
 
 pub struct Parameters {
     ptr: *mut AVCodecParameters,

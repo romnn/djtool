@@ -10,7 +10,6 @@ pub use self::rect_mut::{AssMut, BitmapMut, RectMut, TextMut};
 use std::marker::PhantomData;
 use std::mem;
 
-// use ffi::AVSubtitleType::*;
 use crate::ffmpeg::ffi::*;
 use libc::{c_uint, size_t};
 

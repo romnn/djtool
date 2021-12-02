@@ -4,8 +4,8 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::Opened;
-use codec::Context;
-use {packet, Error};
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::{self, packet, Error};
 
 pub struct Subtitle(pub Opened);
 
@@ -13,7 +13,7 @@ impl Subtitle {
     pub fn decode<P: packet::Ref>(
         &mut self,
         packet: &P,
-        out: &mut ::Subtitle,
+        out: &mut ffmpeg::Subtitle,
     ) -> Result<bool, Error> {
         unsafe {
             let mut got: c_int = 0;

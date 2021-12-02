@@ -1,32 +1,32 @@
 pub mod decoder;
-pub use self::decoder::Decoder;
+pub use decoder::Decoder;
 
 pub mod video;
-pub use self::video::Video;
+pub use video::Video;
 
 pub mod audio;
-pub use self::audio::Audio;
+pub use audio::Audio;
 
 pub mod subtitle;
-pub use self::subtitle::Subtitle;
+pub use subtitle::Subtitle;
 
 pub mod slice;
 
 pub mod conceal;
-pub use self::conceal::Conceal;
+pub use conceal::Conceal;
 
 pub mod check;
-pub use self::check::Check;
+pub use check::Check;
 
 pub mod opened;
-pub use self::opened::Opened;
+pub use opened::Opened;
 
 use std::ffi::CString;
 
-use codec::Context;
-use codec::Id;
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::codec::Id;
 use crate::ffmpeg::ffi::*;
-use Codec;
+use crate::ffmpeg::Codec;
 
 pub fn new() -> Decoder {
     Context::new().decoder()

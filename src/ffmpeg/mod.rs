@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![allow(non_camel_case_types)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::module_inception)]
@@ -58,12 +59,12 @@ pub use codec::threading;
 pub use codec::{decoder, encoder};
 
 // #[cfg(feature = "device")]
-// pub mod device;
+pub mod device;
 
 // #[cfg(feature = "filter")]
-// pub mod filter;
+pub mod filter;
 // #[cfg(feature = "filter")]
-// pub use filter::Filter;
+pub use filter::Filter;
 
 pub mod software;
 
@@ -80,16 +81,16 @@ fn init_format() {
 // fn init_format() {}
 
 // #[cfg(feature = "device")]
-// fn init_device() {
-//     device::register_all();
-// }
+fn init_device() {
+    device::register_all();
+}
 
 // #[cfg(not(feature = "device"))]
 // fn init_device() {}
 
 // #[cfg(feature = "filter")]
 fn init_filter() {
-    // filter::register_all();
+    filter::register_all();
 }
 
 // #[cfg(not(feature = "filter"))]
@@ -105,7 +106,7 @@ fn init_filter() {
 pub fn init() -> Result<(), Error> {
     init_error();
     init_format();
-    // init_device();
+    init_device();
     init_filter();
     Ok(())
 }

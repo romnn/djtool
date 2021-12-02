@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::ffmpeg;
 use crate::ffmpeg::{codec, filter, format, frame, media};
-use crate::ffmpeg::{rescale, Rescale};
+use crate::ffmpeg::{rescale, Rational, Rescale};
 
 fn filter(
     spec: &str,
@@ -14,7 +14,7 @@ fn filter(
     let mut filter = filter::Graph::new();
 
     let args = format!(
-        "time_base={}:sample_rate={}:sample_fmt={}:channel_layout=0x{:x}",
+        "time_base={}:sample_rate={}:sample_fmt={}:channel_layout=0x{:x}", //:-b:a 320k",
         decoder.time_base(),
         decoder.rate(),
         decoder.format().name(),
@@ -60,78 +60,82 @@ struct Transcoder {
     encoder: codec::encoder::Audio,
     in_time_base: ffmpeg::Rational,
     out_time_base: ffmpeg::Rational,
-}
-
-fn transcoder<P: AsRef<Path>>(
-    ictx: &mut format::context::Input,
-    octx: &mut format::context::Output,
-    path: &P,
-    filter_spec: &str,
-) -> Result<Transcoder, ffmpeg::Error> {
-    let input = ictx
-        .streams()
-        .best(media::Type::Audio)
-        .expect("could not find best audio stream");
-    let mut decoder = input.codec().decoder().audio()?;
-
-    let codec = ffmpeg::encoder::find(codec::id::Id::MP3)
-        // let codec = ffmpeg::encoder::find(octx.format().codec(path, media::Type::Audio))
-        .expect("failed to find encoder")
-        .audio()?;
-    let global = octx
-        .format()
-        .flags()
-        .contains(ffmpeg::format::flag::Flags::GLOBAL_HEADER);
-
-    decoder.set_parameters(input.parameters())?;
-
-    let mut output = octx.add_stream(codec)?;
-    let mut encoder = output.codec().encoder().audio()?;
-
-    let channel_layout = codec
-        .channel_layouts()
-        .map(|cls| cls.best(decoder.channel_layout().channels()))
-        .unwrap_or(ffmpeg::channel_layout::ChannelLayout::STEREO);
-
-    if global {
-        encoder.set_flags(ffmpeg::codec::flag::Flags::GLOBAL_HEADER);
-    }
-
-    encoder.set_rate(decoder.rate() as i32);
-    encoder.set_channel_layout(channel_layout);
-    encoder.set_channels(channel_layout.channels());
-    encoder.set_format(
-        codec
-            .formats()
-            .expect("unknown supported formats")
-            .next()
-            .unwrap(),
-    );
-    encoder.set_bit_rate(decoder.bit_rate());
-    encoder.set_max_bit_rate(decoder.max_bit_rate());
-
-    encoder.set_time_base((1, decoder.rate() as i32));
-    output.set_time_base((1, decoder.rate() as i32));
-
-    let encoder = encoder.open_as(codec)?;
-    output.set_parameters(&encoder);
-
-    let filter = filter(filter_spec, &decoder, &encoder)?;
-
-    let in_time_base = decoder.time_base();
-    let out_time_base = output.time_base();
-
-    Ok(Transcoder {
-        stream: input.index(),
-        filter,
-        decoder,
-        encoder,
-        in_time_base,
-        out_time_base,
-    })
+    frame_count: usize,
 }
 
 impl Transcoder {
+    pub fn new<P: AsRef<Path>>(
+        ictx: &mut format::context::Input,
+        octx: &mut format::context::Output,
+        path: &P,
+        filter_spec: &str,
+    ) -> Result<Self, ffmpeg::Error> {
+        let input = ictx
+            .streams()
+            .best(media::Type::Audio)
+            .expect("could not find best audio stream");
+        let mut decoder = input.codec().decoder().audio()?;
+
+        // let codec = ffmpeg::encoder::find(octx.format().codec(path, media::Type::Audio))
+        let codec = ffmpeg::encoder::find(codec::id::Id::MP3)
+            .expect("failed to find encoder")
+            .audio()?;
+        let global = octx
+            .format()
+            .flags()
+            .contains(ffmpeg::format::flag::Flags::GLOBAL_HEADER);
+
+        decoder.set_parameters(input.parameters())?;
+
+        let mut output = octx.add_stream(codec)?;
+        let mut encoder = output.codec().encoder().audio()?;
+
+        let channel_layout = codec
+            .channel_layouts()
+            .map(|cls| cls.best(decoder.channel_layout().channels()))
+            .unwrap_or(ffmpeg::channel_layout::ChannelLayout::STEREO);
+
+        if global {
+            encoder.set_flags(ffmpeg::codec::flag::Flags::GLOBAL_HEADER);
+        }
+
+        encoder.set_rate(decoder.rate() as i32);
+        encoder.set_channel_layout(channel_layout);
+        encoder.set_channels(channel_layout.channels());
+        encoder.set_format(
+            codec
+                .formats()
+                .expect("unknown supported formats")
+                .next()
+                .unwrap(),
+        );
+        encoder.set_bit_rate(320 * 1024);
+        encoder.set_max_bit_rate(320 * 1024);
+        // encoder.set_bit_rate(decoder.bit_rate());
+        // encoder.set_max_bit_rate(decoder.max_bit_rate());
+
+        encoder.set_time_base((1, decoder.rate() as i32));
+        output.set_time_base((1, decoder.rate() as i32));
+
+        let encoder = encoder.open_as(codec)?;
+        output.set_parameters(&encoder);
+
+        let filter = filter(filter_spec, &decoder, &encoder)?;
+
+        let in_time_base = decoder.time_base();
+        let out_time_base = output.time_base();
+
+        Ok(Self {
+            stream: input.index(),
+            filter,
+            decoder,
+            encoder,
+            in_time_base,
+            out_time_base,
+            frame_count: 0,
+        })
+    }
+
     fn send_frame_to_encoder(&mut self, frame: &ffmpeg::Frame) {
         self.encoder.send_frame(frame).unwrap();
     }
@@ -184,10 +188,32 @@ impl Transcoder {
         let mut decoded = frame::Audio::empty();
         while self.decoder.receive_frame(&mut decoded).is_ok() {
             let timestamp = decoded.timestamp();
+            self.frame_count += 1;
+            self.log_progress(f64::from(
+                Rational(timestamp.unwrap_or(0) as i32, 1) * self.decoder.time_base(),
+            ));
             decoded.set_pts(timestamp);
             self.add_frame_to_filter(&decoded);
             self.get_and_process_filtered_frames(octx);
         }
+    }
+
+    fn log_progress(&mut self, timestamp: f64) {
+        // if !self.logging_enabled
+        //     || (self.frame_count - self.last_log_frame_count < 100
+        //         && self.last_log_time.elapsed().as_secs_f64() < 1.0)
+        // {
+        //     return;
+        // }
+        println!(
+            // "time elpased: \t{:8.2}\tframe count: {:8}\ttimestamp: {:8.2}",
+            "frame count: {:8}\ttimestamp: {:8.2}",
+            // self.starting_time.elapsed().as_secs_f64(),
+            self.frame_count,
+            timestamp
+        );
+        // self.last_log_frame_count = self.frame_count;
+        // self.last_log_time = Instant::now();
     }
 }
 
@@ -201,7 +227,7 @@ pub fn test(input: PathBuf, output: PathBuf) {
 
     let mut ictx = format::input(&input).unwrap();
     let mut octx = format::output(&output).unwrap();
-    let mut transcoder = transcoder(&mut ictx, &mut octx, &output, &"anull").unwrap();
+    let mut transcoder = Transcoder::new(&mut ictx, &mut octx, &output, &"anull").unwrap();
 
     octx.set_metadata(ictx.metadata().to_owned());
     octx.write_header().unwrap();

@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use super::codec::Codec;
 use crate::ffmpeg::ffi::*;
-use {format, ChannelLayout};
+use crate::ffmpeg::{format, ChannelLayout};
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Audio {

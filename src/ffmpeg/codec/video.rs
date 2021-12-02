@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use super::codec::Codec;
 use crate::ffmpeg::ffi::*;
-use {format, Rational};
+use crate::ffmpeg::{format, Rational};
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Video {

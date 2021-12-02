@@ -2,7 +2,7 @@ use std::ptr;
 
 use super::Context;
 use crate::ffmpeg::ffi::*;
-use {Error, Frame};
+use crate::ffmpeg::{Error, Frame};
 
 pub struct Source<'a> {
     ctx: &'a mut Context<'a>,

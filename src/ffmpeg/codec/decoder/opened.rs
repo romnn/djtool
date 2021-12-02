@@ -2,9 +2,9 @@ use std::ops::{Deref, DerefMut};
 use std::ptr;
 
 use super::{Audio, Decoder, Subtitle, Video};
-use codec::{Context, Profile};
+use crate::ffmpeg::codec::{Context, Profile};
 use crate::ffmpeg::ffi::*;
-use {media, packet, Error, Frame, Rational};
+use crate::ffmpeg::{media, packet, Error, Frame, Rational};
 
 pub struct Opened(pub Decoder);
 

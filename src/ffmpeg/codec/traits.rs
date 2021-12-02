@@ -1,6 +1,6 @@
 use super::{decoder, encoder};
-use codec::{Audio, Id, Video};
-use Codec;
+use crate::ffmpeg::codec::{Audio, Id, Video};
+use crate::ffmpeg::Codec;
 
 pub trait Decoder {
     fn decoder(self) -> Option<Codec>;

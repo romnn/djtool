@@ -1,5 +1,5 @@
 use super::git::GitRepository;
-use super::libs::LIBRARIES;
+use super::libs::{LibraryFeature, LIBRARIES};
 use super::{build_env, is_debug_build, output, search, CrossBuildConfig};
 use crate::{enable, switch};
 use anyhow::Result;
@@ -76,86 +76,90 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
         // the binary cannot be redistributed
         switch!(configure, "FFMPEG_LICENSE_NONFREE", "nonfree");
 
-        for dep in LIBRARIES.iter() {
-            // .filter(|lib| lib.is_feature) {
-            // switch!(configure, &lib.name.to_uppercase(), lib.name);
+        for (_, dep) in LIBRARIES.iter() {
+            for feat in dep.artifacts.iter() {
+                if !feat.is_enabled() {
+                    continue;
+                }
+                if let Some(flag) = feat.ffmpeg_flag {
+                    switch!(configure, feat.name, flag);
+                }
+                // println!("cargo:rustc-link-lib=static={}", feat.name);
+                // println!("cargo:warning={}", feat.name);
+            }
         }
-        // enable!(configure, "FFMPEG_AVCODEC", "avcodec");
-        // enable!(configure, "FFMPEG_AVDEVICE", "avdevice");
-        // enable!(configure, "FFMPEG_AVFILTER", "avfilter");
-        // enable!(configure, "FFMPEG_AVFORMAT", "avformat");
 
         // configure external SSL libraries
-        enable!(configure, "FFMPEG_GNUTLS", "gnutls");
-        enable!(configure, "FFMPEG_OPENSSL", "openssl");
+        // enable!(configure, "FFMPEG_GNUTLS", "gnutls");
+        // enable!(configure, "FFMPEG_OPENSSL", "openssl");
 
         // configure external filters
-        enable!(configure, "FFMPEG_FONTCONFIG", "fontconfig");
-        enable!(configure, "FFMPEG_FREI0R", "frei0r");
-        enable!(configure, "FFMPEG_LADSPA", "ladspa");
-        enable!(configure, "FFMPEG_ASS", "libass");
-        enable!(configure, "FFMPEG_FREETYPE", "libfreetype");
-        enable!(configure, "FFMPEG_FRIBIDI", "libfribidi");
-        enable!(configure, "FFMPEG_OPENCV", "libopencv");
-        enable!(configure, "FFMPEG_VMAF", "libvmaf");
+        // enable!(configure, "FFMPEG_FONTCONFIG", "fontconfig");
+        // enable!(configure, "FFMPEG_FREI0R", "frei0r");
+        // enable!(configure, "FFMPEG_LADSPA", "ladspa");
+        // enable!(configure, "FFMPEG_ASS", "libass");
+        // enable!(configure, "FFMPEG_FREETYPE", "libfreetype");
+        // enable!(configure, "FFMPEG_FRIBIDI", "libfribidi");
+        // enable!(configure, "FFMPEG_OPENCV", "libopencv");
+        // enable!(configure, "FFMPEG_VMAF", "libvmaf");
 
         // configure external encoders/decoders
-        enable!(configure, "FFMPEG_AACPLUS", "libaacplus");
-        enable!(configure, "FFMPEG_CELT", "libcelt");
-        enable!(configure, "FFMPEG_DCADEC", "libdcadec");
-        enable!(configure, "FFMPEG_DAV1D", "libdav1d");
-        enable!(configure, "FFMPEG_FAAC", "libfaac");
-        enable!(configure, "FFMPEG_FDK_AAC", "libfdk-aac");
-        enable!(configure, "FFMPEG_GSM", "libgsm");
-        enable!(configure, "FFMPEG_ILBC", "libilbc");
-        enable!(configure, "FFMPEG_VAZAAR", "libvazaar");
-        enable!(configure, "FFMPEG_MP3LAME", "libmp3lame");
-        enable!(configure, "FFMPEG_OPENCORE_AMRNB", "libopencore-amrnb");
-        enable!(configure, "FFMPEG_OPENCORE_AMRWB", "libopencore-amrwb");
-        enable!(configure, "FFMPEG_OPENH264", "libopenh264");
-        enable!(configure, "FFMPEG_OPENH265", "libopenh265");
-        enable!(configure, "FFMPEG_OPENJPEG", "libopenjpeg");
-        enable!(configure, "FFMPEG_OPUS", "libopus");
-        enable!(configure, "FFMPEG_SCHROEDINGER", "libschroedinger");
-        enable!(configure, "FFMPEG_SHINE", "libshine");
-        enable!(configure, "FFMPEG_SNAPPY", "libsnappy");
-        enable!(configure, "FFMPEG_SPEEX", "libspeex");
-        enable!(configure, "FFMPEG_STAGEFRIGHT_H264", "libstagefright-h264");
-        enable!(configure, "FFMPEG_THEORA", "libtheora");
-        enable!(configure, "FFMPEG_TWOLAME", "libtwolame");
-        enable!(configure, "FFMPEG_UTVIDEO", "libutvideo");
-        enable!(configure, "FFMPEG_VO_AACENC", "libvo-aacenc");
-        enable!(configure, "FFMPEG_VO_AMRWBENC", "libvo-amrwbenc");
-        enable!(configure, "FFMPEG_VORBIS", "libvorbis");
-        enable!(configure, "FFMPEG_VPX", "libvpx");
-        enable!(configure, "FFMPEG_WAVPACK", "libwavpack");
-        enable!(configure, "FFMPEG_WEBP", "libwebp");
-        enable!(configure, "FFMPEG_X264", "libx264");
-        enable!(configure, "FFMPEG_X265", "libx265");
-        enable!(configure, "FFMPEG_AVS", "libavs");
-        enable!(configure, "FFMPEG_XVID", "libxvid");
+        // enable!(configure, "FFMPEG_AACPLUS", "libaacplus");
+        // enable!(configure, "FFMPEG_CELT", "libcelt");
+        // enable!(configure, "FFMPEG_DCADEC", "libdcadec");
+        // enable!(configure, "FFMPEG_DAV1D", "libdav1d");
+        // enable!(configure, "FFMPEG_FAAC", "libfaac");
+        // enable!(configure, "FFMPEG_FDK_AAC", "libfdk-aac");
+        // enable!(configure, "FFMPEG_GSM", "libgsm");
+        // enable!(configure, "FFMPEG_ILBC", "libilbc");
+        // enable!(configure, "FFMPEG_VAZAAR", "libvazaar");
+        // enable!(configure, "FFMPEG_MP3LAME", "libmp3lame");
+        // enable!(configure, "FFMPEG_OPENCORE_AMRNB", "libopencore-amrnb");
+        // enable!(configure, "FFMPEG_OPENCORE_AMRWB", "libopencore-amrwb");
+        // enable!(configure, "FFMPEG_OPENH264", "libopenh264");
+        // enable!(configure, "FFMPEG_OPENH265", "libopenh265");
+        // enable!(configure, "FFMPEG_OPENJPEG", "libopenjpeg");
+        // enable!(configure, "FFMPEG_OPUS", "libopus");
+        // enable!(configure, "FFMPEG_SCHROEDINGER", "libschroedinger");
+        // enable!(configure, "FFMPEG_SHINE", "libshine");
+        // enable!(configure, "FFMPEG_SNAPPY", "libsnappy");
+        // enable!(configure, "FFMPEG_SPEEX", "libspeex");
+        // enable!(configure, "FFMPEG_STAGEFRIGHT_H264", "libstagefright-h264");
+        // enable!(configure, "FFMPEG_THEORA", "libtheora");
+        // enable!(configure, "FFMPEG_TWOLAME", "libtwolame");
+        // enable!(configure, "FFMPEG_UTVIDEO", "libutvideo");
+        // enable!(configure, "FFMPEG_VO_AACENC", "libvo-aacenc");
+        // enable!(configure, "FFMPEG_VO_AMRWBENC", "libvo-amrwbenc");
+        // enable!(configure, "FFMPEG_VORBIS", "libvorbis");
+        // enable!(configure, "FFMPEG_VPX", "libvpx");
+        // enable!(configure, "FFMPEG_WAVPACK", "libwavpack");
+        // enable!(configure, "FFMPEG_WEBP", "libwebp");
+        // enable!(configure, "FFMPEG_X264", "libx264");
+        // enable!(configure, "FFMPEG_X265", "libx265");
+        // enable!(configure, "FFMPEG_AVS", "libavs");
+        // enable!(configure, "FFMPEG_XVID", "libxvid");
 
         // other external libraries
-        enable!(configure, "FFMPEG_DRM", "libdrm");
-        enable!(configure, "FFMPEG_NVENC", "nvenc");
+        // enable!(configure, "FFMPEG_DRM", "libdrm");
+        // enable!(configure, "FFMPEG_NVENC", "nvenc");
 
         // configure external protocols
-        enable!(configure, "FFMPEG_SMBCLIENT", "libsmbclient");
-        enable!(configure, "FFMPEG_SSH", "libssh");
+        // enable!(configure, "FFMPEG_SMBCLIENT", "libsmbclient");
+        // enable!(configure, "FFMPEG_SSH", "libssh");
 
         // configure misc build options
         // enable!(configure, "FFMPEG_PIC", "pic");
 
         // run ./configure
-        let cmd_str: Vec<_> = configure.get_args().collect();
-        let cmd_str = cmd_str
-            .into_iter()
-            .map(|arg| arg.to_owned().into_string().unwrap())
-            .collect::<Vec<String>>()
-            .join(" ");
+        // let cmd_str: Vec<_> = configure.get_args().collect();
+        // let cmd_str = cmd_str
+        //     .into_iter()
+        //     .map(|arg| arg.to_owned().into_string().unwrap())
+        //     .collect::<Vec<String>>()
+        //     .join(" ");
         println!("cargo:warning={:?}", build_env());
         println!("cargo:warning={:?}", configure);
-        println!("cargo:warning={}", cmd_str);
+        // println!("cargo:warning={}", cmd_str);
 
         // let output = configure
         if !configure.envs(&build_envs).status()?.success() {
@@ -198,6 +202,19 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
             .success()
         {
             return Err(io::Error::new(io::ErrorKind::Other, "make install failed").into());
+        }
+    }
+
+    for (_, dep) in LIBRARIES.iter() {
+        for feat in dep.artifacts.iter() {
+            if !feat.is_enabled() {
+                continue;
+            }
+            // if let Some(flag) = feat.ffmpeg_flag {
+            //     switch!(configure, feat.name, flag);
+            // }
+            println!("cargo:rustc-link-lib=static={}", feat.name);
+            println!("cargo:warning={}", feat.name);
         }
     }
 

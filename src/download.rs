@@ -1217,7 +1217,7 @@ impl Downloader {
         Ok(download.info.content_length)
     }
 
-    pub async fn download_audio(&self, id: String, dest: PathBuf) -> Result<OutputVideo> {
+    pub async fn download_audio(&self, id: String, dest: &PathBuf) -> Result<OutputVideo> {
         let video = self.get_video(&id).await?;
         // if video.formats.len() < 1 {
         // todo: raise error here
@@ -1248,12 +1248,13 @@ impl Downloader {
         println!("sanitized filename: {}", sanitized_filename);
 
         // let output_path = self.temp_dir.path().join(sanitized_filename);
-        let output_path = if dest.extension().is_some() {
-            dest
-        } else {
-            let _ = tokio::fs::create_dir_all(&dest).await;
-            dest.join(sanitized_filename)
-        };
+        // let output_path = if dest.extension().is_some() {
+        //     dest.to_owned()
+        // } else {
+        //     let _ = tokio::fs::create_dir_all(dest).await;
+        //     dest.join(sanitized_filename)
+        // };
+        let output_path = dest.to_owned();
         println!("output path: {}", output_path.display());
 
         // create the directory if it does not already exist

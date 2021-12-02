@@ -7,8 +7,8 @@ use super::encoder::Encoder;
 use super::{threading, Compliance, Debug, Flags, Id, Parameters};
 use crate::ffmpeg::ffi::*;
 use libc::c_int;
-use media;
-use {Codec, Error};
+use crate::ffmpeg::media;
+use crate::ffmpeg::{Codec, Error};
 
 pub struct Context {
     ptr: *mut AVCodecContext,

@@ -1,8 +1,7 @@
 use std::ptr;
 
 use crate::ffmpeg::ffi::*;
-use format;
-use Format;
+use crate::ffmpeg::{format, Format};
 
 pub struct AudioIter(*mut AVInputFormat);
 

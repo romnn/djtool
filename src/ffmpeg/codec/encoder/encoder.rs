@@ -5,8 +5,8 @@ use crate::ffmpeg::ffi::*;
 use libc::c_int;
 
 use super::{audio, subtitle, video};
-use codec::Context;
-use {media, packet, Error, Frame, Rational};
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::{media, packet, Error, Frame, Rational};
 
 pub struct Encoder(pub Context);
 

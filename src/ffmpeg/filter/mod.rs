@@ -1,23 +1,23 @@
 pub mod flag;
-pub use self::flag::Flags;
+pub use flag::Flags;
 
 pub mod pad;
-pub use self::pad::Pad;
+pub use pad::Pad;
 
 pub mod filter;
-pub use self::filter::Filter;
+pub use filter::Filter;
 
 pub mod context;
-pub use self::context::{Context, Sink, Source};
+pub use context::{Context, Sink, Source};
 
 pub mod graph;
-pub use self::graph::Graph;
+pub use graph::Graph;
 
 use std::ffi::{CStr, CString};
 use std::str::from_utf8_unchecked;
 
 use crate::ffmpeg::ffi::*;
-use Error;
+use crate::ffmpeg::Error;
 
 pub fn register_all() {
     unsafe {

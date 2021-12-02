@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::str::from_utf8_unchecked;
 
 use crate::ffmpeg::ffi::*;
-use media;
+use crate::ffmpeg::media;
 
 pub struct Pad<'a> {
     ptr: *const AVFilterPad,

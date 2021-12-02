@@ -1,33 +1,33 @@
 pub mod encoder;
-pub use self::encoder::Encoder;
+pub use encoder::Encoder;
 
 pub mod video;
-pub use self::video::Encoder as Video;
+pub use video::Encoder as Video;
 
 pub mod audio;
-pub use self::audio::Encoder as Audio;
+pub use audio::Encoder as Audio;
 
 pub mod subtitle;
-pub use self::subtitle::Encoder as Subtitle;
+pub use subtitle::Encoder as Subtitle;
 
 pub mod motion_estimation;
-pub use self::motion_estimation::MotionEstimation;
+pub use motion_estimation::MotionEstimation;
 
 pub mod prediction;
-pub use self::prediction::Prediction;
+pub use prediction::Prediction;
 
 pub mod comparison;
-pub use self::comparison::Comparison;
+pub use comparison::Comparison;
 
 pub mod decision;
-pub use self::decision::Decision;
+pub use decision::Decision;
 
 use std::ffi::CString;
 
-use codec::Context;
-use codec::Id;
+use crate::ffmpeg::codec::Context;
+use crate::ffmpeg::codec::Id;
 use crate::ffmpeg::ffi::*;
-use Codec;
+use crate::ffmpeg::Codec;
 
 pub fn new() -> Encoder {
     Context::new().encoder()

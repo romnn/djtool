@@ -6,8 +6,8 @@ use libc::{c_float, c_int};
 
 use super::Encoder as Super;
 use super::{Comparison, Decision, MotionEstimation, Prediction};
-use codec::{traits, Context};
-use {color, format, frame, packet, Dictionary, Error, Rational};
+use crate::ffmpeg::codec::{traits, Context};
+use crate::ffmpeg::{color, format, frame, packet, Dictionary, Error, Rational};
 
 pub struct Video(pub Super);
 
