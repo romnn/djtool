@@ -10,14 +10,12 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tempdir::TempDir;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Mutex};
-use tokio::task;
 use url::Url;
 
 #[derive(Debug)]
@@ -797,7 +795,7 @@ impl Download {
         // output_file.set_len(self.info.content_length).await?;
 
         // recombine the chunk files into final file sequentially
-        let mut chunks = self.chunks.lock().await;
+        let chunks = self.chunks.lock().await;
         // let chunk_stream = stream::iter(chunks.iter())
         // chunks.iter()
         // .for_each(|chunk| async move {

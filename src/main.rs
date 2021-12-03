@@ -6,6 +6,7 @@
 use tokio;
 mod download;
 // mod transcode;
+mod config;
 mod ffmpeg;
 mod ffmpeg_sys;
 mod serialization;
@@ -14,23 +15,47 @@ mod transcode2;
 mod utils;
 
 use anyhow::Result;
+use config::Persist;
+use dirs;
 use download::Downloader;
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread;
+use tauri::Event;
 use tempdir::TempDir;
+use tokio::sync::RwLock;
 use warp::Filter;
 // use transcode::Transcoder;
+
+const DEFAULT_PORT: u16 = 21011;
 
 struct DjTool {
     downloader: Downloader,
     // transcoder: Transcoder,
+    config: Arc<RwLock<config::Config>>,
+    spotify: Arc<RwLock<spotify::AuthCodePkceSpotify>>,
 }
 
 impl DjTool {
-    pub fn new() -> Result<Self> {
+    pub async fn new(config_dir: &PathBuf) -> Result<Self> {
         let downloader = Downloader::new()?;
+        let config = config::Config::load(&config_dir).await?;
+
+        // if config
+        let creds = spotify::Credentials::new_pkce("893474f878934ae89fff417e4722e147");
+        let oauth = spotify::OAuth {
+            redirect_uri: format!("http://localhost:{}/spotify/callback", DEFAULT_PORT),
+            scopes: scopes!("playlist-read-private"),
+            ..Default::default()
+        };
+        let client =
+            spotify::AuthCodePkceSpotify::new(&config_dir, creds.clone(), oauth.clone()).await?;
+
         Ok(Self {
             downloader,
+            config: Arc::new(RwLock::new(config)),
+            spotify: Arc::new(RwLock::new(client)),
             // transcoder,
         })
     }
@@ -78,41 +103,82 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = thread::spawn(|| {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
+            let config_dir = dirs::home_dir().unwrap().join(".djtool");
+            println!("config dir: {}", config_dir.display());
+            let _ = tokio::fs::create_dir_all(&config_dir).await;
+
+            let tool = DjTool::new(&config_dir).await.unwrap();
+
             // spin up a webserver
-            tokio::spawn(async move {
-                let examples = warp::path("static").and(warp::fs::dir("./examples/"));
-                // let routes = readme.or(examples);
-                warp::serve(examples).run(([127, 0, 0, 1], 21011)).await;
+            let server = tokio::spawn(async move {
+                // error, state
+                // code, state
+                let library = warp::path("static").and(warp::fs::dir("/home/roman/dev/djtool"));
+                let spotify_callback = warp::get()
+                    .and(warp::path!("spotify" / "callback"))
+                    .and(warp::query::<HashMap<String, String>>())
+                    .map(|map: HashMap<String, String>| {
+                        // let mut response: Vec<String> = Vec::new();
+                        for (key, value) in map.into_iter() {
+                            println!("{}={}", key, value);
+                        }
+                        // for (key, value) in map.into_iter() {
+                        //     response.push(format!("{}={}", key, value))
+                        // }
+                        // todo: set secret of spotify client of config
+                        // signal the ui that we got the token
+                        let body = r#"
+                        <html>
+                            <head>
+                                <title>HTML with warp!</title>
+                            </head>
+                            <body>
+                                <h1>warp + HTML = &hearts;</h1>
+                            </body>
+                        </html>
+                        "#;
+                        warp::reply::html(body)
+                    });
+                let routes = spotify_callback.or(library);
+                warp::serve(routes)
+                    // .try_bind_with_graceful_shutdown(([127, 0, 0, 1], DEFAULT_PORT), )
+                    .run(([127, 0, 0, 1], DEFAULT_PORT))
+                    .await;
             });
 
-            let tool = DjTool::new().unwrap();
-            tool.download_youtube("_Q8ELKOLudE".to_string())
-                .await
-                .unwrap();
+            // tool.download_youtube("_Q8ELKOLudE".to_string())
+            //     .await
+            //     .unwrap();
+
+            // let url = spotify.get_authorize_url(None).unwrap();
+            // println!("auth url: {}", url);
+            // spotify.load_token(&url).await.unwrap();
+
+            // let history = spotify.current_playback(None, None::<Vec<_>>).await;
+            // println!("Response: {:?}", history);
+            server.await;
         });
     });
 
-    tauri::Builder::default()
-        .run(tauri::generate_context!())
+    let mut app = tauri::Builder::default()
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
-    // });
 
-    // let creds = spotify::Credentials::new_pkce("todo");
-    // let oauth = spotify::OAuth {
-    //     redirect_uri: "http://localhost:8888/callback".to_string(),
-    //     scopes: scopes!("playlist-read-private"),
-    //     ..Default::default()
-    // };
-    // let mut spotify = spotify::AuthCodePkceSpotify::new(creds.clone(), oauth.clone());
-    // let url = spotify.get_authorize_url(None).unwrap();
-    // println!("auth url: {}", url);
-    // spotify.load_token(&url).await.unwrap();
-
-    // let history = spotify.current_playback(None, None::<Vec<_>>).await;
-    // println!("Response: {:?}", history);
+    app.run(|handle, event| {
+        match event {
+            Event::ExitRequested { api, .. } => {
+                println!("exiting");
+                // thread::sleep(std::time::Duration::from_secs(10));
+                // println!("exiting for real");
+                // api.prevent_exit();
+            }
+            _ => {}
+        }
+    });
 
     // ui.join().unwrap();
-    println!("exiting");
+    // println!("exiting");
+    // println!("exiting bye");
     Ok(())
 }
 

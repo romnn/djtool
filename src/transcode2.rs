@@ -1,10 +1,9 @@
-use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 
 use crate::ffmpeg;
 use crate::ffmpeg::{codec, filter, format, frame, media};
-use crate::ffmpeg::{rescale, Rational, Rescale};
+// use crate::ffmpeg::{rescale, Rational, Rescale};
 
 fn filter(
     spec: &str,
@@ -14,7 +13,7 @@ fn filter(
     let mut filter = filter::Graph::new();
 
     let args = format!(
-        "time_base={}:sample_rate={}:sample_fmt={}:channel_layout=0x{:x}", //:-b:a 320k",
+        "time_base={}:sample_rate={}:sample_fmt={}:channel_layout=0x{:x}",
         decoder.time_base(),
         decoder.rate(),
         decoder.format().name(),

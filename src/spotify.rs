@@ -1,5 +1,7 @@
+use super::config::Persist;
 use super::serialization::{duration_second, space_separated_scopes};
 use super::utils::{random_string, Alphanumeric, PKCECodeVerifier};
+use anyhow::Result;
 use base64;
 use chrono::{DateTime, Duration, Utc};
 use reqwest;
@@ -7,14 +9,13 @@ use reqwest::{header::HeaderMap, Error as HttpError};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use url::Url;
 use webbrowser;
 
@@ -54,16 +55,21 @@ macro_rules! scopes {
     }};
 }
 
-/// Matches errors that are returned from the Spotfiy
-/// API as part of the JSON response object.
+#[inline]
+fn join_scopes(scopes: &HashSet<String>) -> String {
+    scopes
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[derive(Debug, Error, Deserialize)]
 pub enum ApiError {
-    /// See [Error Object](https://developer.spotify.com/documentation/web-api/reference/#object-errorobject)
     #[error("{status}: {message}")]
     #[serde(alias = "error")]
     Regular { status: u16, message: String },
 
-    /// See [Play Error Object](https://developer.spotify.com/documentation/web-api/reference/#object-playererrorobject)
     #[error("{status} ({reason}): {message}")]
     #[serde(alias = "error")]
     Player {
@@ -73,7 +79,6 @@ pub enum ApiError {
     },
 }
 
-/// Groups up the kinds of errors that may happen in this crate.
 #[derive(Debug, Error)]
 pub enum ModelError {
     #[error("json parse error: {0}")]
@@ -120,71 +125,61 @@ pub type ApiResult<T> = Result<T, ApiError>;
 pub type ModelResult<T> = Result<T, ModelError>;
 pub type ClientResult<T> = Result<T, ClientError>;
 
-pub const DEFAULT_API_PREFIX: &str = "https://api.spotify.com/v1/";
-pub const DEFAULT_CACHE_PATH: &str = ".spotify_token_cache.json";
+// pub const DEFAULT_API_PREFIX: &str = "https://api.spotify.com/v1/";
+// pub const DEFAULT_CACHE_PATH: &str = ".spotify_token_cache.json";
 pub const DEFAULT_PAGINATION_CHUNKS: u32 = 50;
 
-// pub const ALPHANUM: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-// pub const PKCE_CODE_VERIFIER: &[u8] =
-//     b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~";
-
-/// Struct to configure the Spotify client.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// The Spotify API prefix, [FAULT_API_PREFIX by default.
-    pub prefix: String,
-
-    /// The cache file path, in case it's used. By default it's
-    /// [FAULT_CACHE_PATH
-    pub cache_path: PathBuf,
-
-    /// The pagination chunk size used when performing automatically paginated
-    /// requests, like [rtist_albums(crate::clients::BaseClient). This
-    /// means that a request will be performed every items.
-    /// By default this is [FAULT_PAGINATION_CHUNKS.
-    ///
-    /// Note that most endpoints set a maximum to the number of items per
-    /// request, which most times is 50.
-    pub pagination_chunks: u32,
-
-    /// Whether or not to save the authentication token into a JSON file,
-    /// then reread the token from JSON file when launching the program without
-    /// following the full auth process again
-    pub token_cached: bool,
-
-    /// Whether or not to check if the token has expired when sending a
-    /// request with credentials, and in that case, automatically refresh it.
-    pub token_refreshing: bool,
+    // pub token: Arc<Mutex<Option<Option<Token>>>>,
+    pub token: Option<Token>,
+    pub app_client_id: Option<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            prefix: String::from(DEFAULT_API_PREFIX),
-            cache_path: PathBuf::from(DEFAULT_CACHE_PATH),
-            pagination_chunks: DEFAULT_PAGINATION_CHUNKS,
-            token_cached: false,
-            token_refreshing: false,
-        }
-    }
+impl Persist for Config {
+    // fn config_file_name() -> String {
+    //     "spotify-config.json"
+    // }
 }
+
+// impl Config {
+//     pub fn from_cache<T: AsRef<Path>>(path: T) -> ModelResult<Self> {
+//         let mut file = fs::File::open(path)?;
+//         let mut tok_str = String::new();
+//         file.read_to_string(&mut tok_str)?;
+//         let tok = serde_json::from_str::<Token>(&tok_str)?;
+
+//         Ok(tok)
+//     }
+
+//     pub fn write_cache<T: AsRef<Path>>(&self, path: T) -> ModelResult<()> {
+//         let token_info = serde_json::to_string(&self)?;
+
+//         let mut file = fs::OpenOptions::new().write(true).create(true).open(path)?;
+//         file.set_len(0)?;
+//         file.write_all(token_info.as_bytes())?;
+
+//         Ok(())
+//     }
+// }
+
+// impl Default for Config {
+//     fn default() -> Self {
+//         Config {
+//             token: None,
+//             app_client_id: None,
+//             cache_dir: None,
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Token {
-    /// An access token that can be provided in subsequent calls
     pub access_token: String,
-    /// The time period for which the access token is valid.
     #[serde(with = "duration_second")]
     pub expires_in: Duration,
-    /// The valid time for which the access token is available represented
-    /// in ISO 8601 combined date and time.
     pub expires_at: Option<DateTime<Utc>>,
-    /// A token that can be sent to the Spotify Accounts service
-    /// in place of an authorization code
     pub refresh_token: Option<String>,
-    /// A list of [scopes](https://developer.spotify.com/documentation/general/guides/authorization/scopes/)
-    /// which have been granted for this access token
-    /// The token response from spotify is singular, hence the rename to scope
     #[serde(default, with = "space_separated_scopes", rename = "scope")]
     pub scopes: HashSet<String>,
 }
@@ -202,36 +197,31 @@ impl Default for Token {
 }
 
 impl Token {
-    /// Tries to initialize the token from a cache file.
-    pub fn from_cache<T: AsRef<Path>>(path: T) -> ModelResult<Self> {
-        let mut file = fs::File::open(path)?;
-        let mut tok_str = String::new();
-        file.read_to_string(&mut tok_str)?;
-        let tok = serde_json::from_str::<Token>(&tok_str)?;
+    // pub fn from_cache<T: AsRef<Path>>(path: T) -> ModelResult<Self> {
+    //     let mut file = fs::File::open(path)?;
+    //     let mut tok_str = String::new();
+    //     file.read_to_string(&mut tok_str)?;
+    //     let tok = serde_json::from_str::<Token>(&tok_str)?;
 
-        Ok(tok)
-    }
+    //     Ok(tok)
+    // }
 
-    /// Saves the token information into its cache file.
-    pub fn write_cache<T: AsRef<Path>>(&self, path: T) -> ModelResult<()> {
-        let token_info = serde_json::to_string(&self)?;
+    // pub fn write_cache<T: AsRef<Path>>(&self, path: T) -> ModelResult<()> {
+    //     let token_info = serde_json::to_string(&self)?;
 
-        let mut file = fs::OpenOptions::new().write(true).create(true).open(path)?;
-        file.set_len(0)?;
-        file.write_all(token_info.as_bytes())?;
+    //     let mut file = fs::OpenOptions::new().write(true).create(true).open(path)?;
+    //     file.set_len(0)?;
+    //     file.write_all(token_info.as_bytes())?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    /// Check if the token is expired. It includes a margin of 10 seconds (which
-    /// is how much a request would take in the worst case scenario).
     pub fn is_expired(&self) -> bool {
         self.expires_at.map_or(true, |expiration| {
             Utc::now() + Duration::seconds(10) >= expiration
         })
     }
 
-    /// Generates an HTTP token authorization header with proper formatting
     pub fn auth_headers(&self) -> HashMap<String, String> {
         let auth = "authorization".to_owned();
         let value = format!("Bearer {}", self.access_token);
@@ -242,51 +232,30 @@ impl Token {
     }
 }
 
-/// Simple client credentials object for Spotify.
 #[derive(Debug, Clone, Default)]
 pub struct Credentials {
     pub id: String,
-    /// PKCE doesn't require a client secret
-    pub secret: Option<String>,
+    // pub secret: Option<String>,
 }
 
 impl Credentials {
-    /// Initialization with both the client ID and the client secret
-    pub fn new(id: &str, secret: &str) -> Self {
-        Credentials {
-            id: id.to_owned(),
-            secret: Some(secret.to_owned()),
-        }
-    }
+    // pub fn new(id: &str, secret: &str) -> Self {
+    //     Credentials {
+    //         id: id.to_owned(),
+    //         secret: Some(secret.to_owned()),
+    //     }
+    // }
 
-    /// Initialization with just the client ID
     pub fn new_pkce(id: &str) -> Self {
         Credentials {
             id: id.to_owned(),
-            secret: None,
+            // secret: None,
         }
     }
 
-    /// Parses the credentials from the environment variables
-    /// SPOTIFY_CLIENT_IDfile.
-    // pub fn from_env() -> Option<Self> {
-    //     #[cfg(feature = "env-file")]
-    //     {
-    //         dotenv::dotenv().ok();
-    //     }
-
-    //     Some(Credentials {
-    //         id: env::var("RSPOTIFY_CLIENT_ID").ok()?,
-    //         secret: env::var("RSPOTIFY_CLIENT_SECRET").ok(),
-    //     })
-    // }
-
-    /// Generates an HTTP basic authorization header with proper formatting
-    ///
-    /// This will only work when the client secret is set to ption::Some
     pub fn auth_headers(&self) -> Option<HashMap<String, String>> {
         let auth = "authorization".to_owned();
-        let value = format!("{}:{}", self.id, self.secret.as_ref()?);
+        let value = format!("{}:{}", self.id, ""); // self.secret.as_ref()?);
         let value = format!("Basic {}", base64::encode(value));
 
         let mut headers = HashMap::new();
@@ -295,14 +264,12 @@ impl Credentials {
     }
 }
 
-/// Structure that holds the required information for requests with OAuth.
 #[derive(Debug, Clone)]
 pub struct OAuth {
     pub redirect_uri: String,
     /// The state is generated by default, as suggested by the OAuth2 spec:
     /// [Cross-Site Request Forgery](https://tools.ietf.org/html/rfc6749#section-10.12)
     pub state: String,
-    /// You could use macro [scopes!](crate::scopes) to build it at compile time easily
     pub scopes: HashSet<String>,
     pub proxies: Option<String>,
 }
@@ -311,57 +278,44 @@ impl Default for OAuth {
     fn default() -> Self {
         OAuth {
             redirect_uri: String::new(),
-            state: random_string(16, Alphanumeric), // ALPHANUM
+            state: random_string(16, Alphanumeric),
             scopes: HashSet::new(),
             proxies: None,
         }
     }
 }
 
-// impl OAuth {
-//     pub fn from_env(scopes: HashSet<String>) -> Option<Self> {
-//         #[cfg(feature = "env-file")]
-//         {
-//             dotenv::dotenv().ok();
-//         }
-
-//         Some(OAuth {
-//             scopes,
-//             redirect_uri: env::var("RSPOTIFY_REDIRECT_URI").ok()?,
-//             ..Default::default()
-//         })
-//     }
-// }
-
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AuthCodePkceSpotify {
     pub creds: Credentials,
     pub oauth: OAuth,
-    pub config: Config,
-    pub token: Arc<Mutex<Option<Token>>>,
     /// The code verifier for the authentication process
     pub verifier: Option<String>,
-    // pub(in crate) http: HttpClient,
+    // pub config_file: Option<PathBuf>,
+    pub config_file: PathBuf,
+    pub config: Arc<RwLock<Config>>,
     pub client: Arc<reqwest::Client>,
-    // pub http: HttpClient,
-}
-
-#[inline]
-fn join_scopes(scopes: &HashSet<String>) -> String {
-    scopes
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 impl AuthCodePkceSpotify {
-    pub fn new(creds: Credentials, oauth: OAuth) -> Self {
-        AuthCodePkceSpotify {
+    pub async fn new<P: AsRef<Path> + Send + Sync>(
+        config_dir: P,
+        creds: Credentials,
+        oauth: OAuth,
+    ) -> Result<Self> {
+        let config_file = config_dir.as_ref().join("spotify-config.json");
+        let config = Config::load(&config_file).await?;
+        let client = Self {
             creds,
             oauth,
-            ..Default::default()
-        }
+            config_file,
+            verifier: None,
+            // config: Arc::new(RwLock::new(Config::default())),
+            config: Arc::new(RwLock::new(config)),
+            client: Arc::new(reqwest::Client::new()),
+        };
+        client.read_config().await?;
+        Ok(client)
     }
 
     /// Generate the verifier code and the challenge code.
@@ -414,47 +368,42 @@ impl AuthCodePkceSpotify {
         Ok(parsed.into())
     }
 
-    async fn read_token_cache(&mut self, allow_expired: bool) -> ClientResult<Option<Token>> {
-        if !self.config.token_cached {
-            println!("Auth token cache read ignored (not configured)");
-            return Ok(None);
-        }
+    // async fn read_token_cache(&mut self, allow_expired: bool) -> ClientResult<Option<Token>> {
+    //     println!("Reading auth token cache");
+    //     let token = Token::from_cache(&self.config.cache_path)?;
+    //     if !self.oauth.scopes.is_subset(&token.scopes) || (!allow_expired && token.is_expired()) {
+    //         // Invalid token, since it doesn't have at least the currently
+    //         // required scopes or it's expired.
+    //         Ok(None)
+    //     } else {
+    //         Ok(Some(token))
+    //     }
+    // }
 
-        println!("Reading auth token cache");
-        let token = Token::from_cache(&self.config.cache_path)?;
-        if !self.oauth.scopes.is_subset(&token.scopes) || (!allow_expired && token.is_expired()) {
-            // Invalid token, since it doesn't have at least the currently
-            // required scopes or it's expired.
-            Ok(None)
-        } else {
-            Ok(Some(token))
-        }
-    }
-
-    async fn write_token_cache(&self) -> ClientResult<()> {
-        if !self.config.token_cached {
-            println!("Token cache write ignored (not configured)");
-            return Ok(());
-        }
-
-        println!("Writing token cache");
-        if let Some(token) = self.token.lock().await.as_ref() {
-            token.write_cache(&self.config.cache_path)?;
-        }
-
+    async fn read_config(&self) -> Result<()> {
+        let new_config = Config::load(&self.config_file).await?;
+        let mut config = self.config.write().await; // .deref();
+        *config = new_config;
         Ok(())
     }
 
-    async fn request_token(&mut self, code: &str) -> ClientResult<()> {
+    async fn write_config(&self) -> Result<()> {
+        let config = self.config.read().await;
+        config.save(&self.config_file).await
+    }
+    // async fn write_token_cache(&self) -> ClientResult<()> {
+    //     println!("Writing token cache");
+    //     if let Some(token) = self.config.token.lock().await.as_ref() {
+    //         token.write_cache(&self.config.cache_path)?;
+    //     }
+
+    //     Ok(())
+    // }
+
+    async fn request_token(&mut self, code: &str) -> Result<()> {
         println!("Requesting PKCE Auth Code token");
 
         let verifier = self.verifier.as_ref().expect("Unknown code verifier");
-        // let mut data = Form::new();
-        // data.insert(params::CLIENT_ID, &self.creds.id);
-        // data.insert(params::GRANT_TYPE, params::GRANT_TYPE_AUTH_CODE);
-        // data.insert(params::CODE, code);
-        // data.insert(params::REDIRECT_URI, &self.oauth.redirect_uri);
-        // data.insert(params::CODE_VERIFIER, verifier);
 
         let mut data = HashMap::new();
         // todo: convert to serde struct
@@ -466,10 +415,10 @@ impl AuthCodePkceSpotify {
 
         let new_token = self.fetch_access_token(&data).await?;
         // *self.token.lock().await.unwrap() = Some(token);
-        let mut token = self.token.lock().await.as_ref();
-        token = Some(&new_token);
+        let mut config = self.config.write().await;
+        config.token = Some(new_token);
 
-        self.write_token_cache().await
+        self.write_config().await
     }
 
     fn get_code_from_user(&self, auth_url: &str) -> ClientResult<String> {
@@ -494,45 +443,72 @@ impl AuthCodePkceSpotify {
         Ok("test".to_string())
     }
 
-    pub async fn load_token(&mut self, auth_url: &str) -> ClientResult<()> {
-        match self.read_token_cache(true).await {
-            Ok(Some(new_token)) => {
-                let expired = new_token.is_expired();
+    pub async fn check_token(&mut self, auth_url: &str) -> Result<()> {
+        if let Some(cached_token) = &self.config.read().await.token {
+            let sufficient = self.oauth.scopes.is_subset(&cached_token.scopes);
+            let expired = cached_token.is_expired();
 
-                // Load token into client regardless of whether it's expired o
-                // not, since it will be refreshed later anyway.
-                // *self.token.lock().await.unwrap() = Some(new_token);
-                let mut token = self.token.lock().await.as_ref();
-                token = Some(&new_token);
-
-                if expired {
-                    // Ensure that we actually got a token from the refetch
-                    match self.refetch_token().await? {
-                        Some(refreshed_token) => {
-                            println!("Successfully refreshed expired token from token cache");
-                            let mut token = self.token.lock().await.as_ref();
-                            token = Some(&refreshed_token);
-                            // *self.token.lock().await.unwrap() = Some(refreshed_token)
-                        }
-                        // If not, prompt the user for it
-                        None => {
-                            println!("Unable to refresh expired token from token cache");
-                            let code = self.get_code_from_user(auth_url)?;
-                            // let code = "test";
-                            self.request_token(&code).await?;
-                        }
+            if sufficient && !expired {
+                return Ok(());
+            }
+            if expired {
+                match self.refetch_token().await? {
+                    Some(refreshed_token) => {
+                        println!("Successfully refreshed expired token from token cache");
+                        let mut config = self.config.write().await;
+                        config.token = Some(refreshed_token);
+                        return self.write_config().await;
+                    }
+                    None => {
+                        println!("Unable to refresh expired token from token cache");
                     }
                 }
             }
-            // Otherwise following the usual procedure to get the token.
-            _ => {
-                let code = self.get_code_from_user(auth_url)?;
-                // let code = "test";
-                self.request_token(&code).await?;
-            }
         }
+        let code = self.get_code_from_user(auth_url)?;
+        self.request_token(&code).await?;
+        self.write_config().await
 
-        self.write_token_cache().await
+        // if sufficient && !expired {
+        //     token =
+        // }
+        // if ! || ) {
+        // match self.read_token_cache(true).await {
+        //     Ok(Some(new_token)) => {
+        //         let expired = new_token.is_expired();
+
+        //         // Load token into client regardless of whether it's expired o
+        //         // not, since it will be refreshed later anyway.
+        //         // *self.token.lock().await.unwrap() = Some(new_token);
+        //         let mut token = self.config.token.lock().await.as_ref();
+        //         token = Some(&new_token);
+
+        //         if expired {
+        //             // Ensure that we actually got a token from the refetch
+        //             match self.refetch_token().await? {
+        //                 Some(refreshed_token) => {
+        //                     println!("Successfully refreshed expired token from token cache");
+        //                     let mut token = self.config.token.lock().await.as_ref();
+        //                     token = Some(&refreshed_token);
+        //                     // *self.token.lock().await.unwrap() = Some(refreshed_token)
+        //                 }
+        //                 // If not, prompt the user for it
+        //                 None => {
+        //                     println!("Unable to refresh expired token from token cache");
+        //                     let code = self.get_code_from_user(auth_url)?;
+        //                     // let code = "test";
+        //                     self.request_token(&code).await?;
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     // Otherwise following the usual procedure to get the token.
+        //     _ => {
+        //         let code = self.get_code_from_user(auth_url)?;
+        //         // let code = "test";
+        //         self.request_token(&code).await?;
+        //     }
+        // }
     }
 
     // fn get_token(&self) -> Arc<Mutex<Option<Token>>> {
@@ -571,17 +547,13 @@ impl AuthCodePkceSpotify {
     }
 
     async fn refetch_token(&self) -> ClientResult<Option<Token>> {
-        match self.token.lock().await.as_ref() {
+        match self.config.read().await.token.as_ref() {
             // .deref() {
             // .as_ref() {
             Some(Token {
                 refresh_token: Some(refresh_token),
                 ..
             }) => {
-                // let mut data = Form::new();
-                // data.insert(params::GRANT_TYPE, params::GRANT_TYPE_REFRESH_TOKEN);
-                // data.insert(params::REFRESH_TOKEN, refresh_token);
-                // data.insert(params::CLIENT_ID, &self.creds.id);
                 let mut data = HashMap::new();
                 data.insert(
                     param::GRANT_TYPE,
@@ -590,11 +562,9 @@ impl AuthCodePkceSpotify {
                 data.insert(param::REFRESH_TOKEN, refresh_token.to_string());
                 data.insert(param::CLIENT_ID, self.creds.id.to_owned());
 
-                // let mut token = self.fetch_access_token(&data, None).await?;
                 let mut token = self.fetch_access_token(&data).await?;
                 token.refresh_token = Some(refresh_token.to_string());
                 Ok(Some(token))
-                // Ok(None)
             }
             _ => Ok(None),
         }

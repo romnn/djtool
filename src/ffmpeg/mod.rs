@@ -8,7 +8,6 @@
 // use image;
 
 use crate::ffmpeg_sys as ffi;
-use libc;
 
 pub mod util;
 pub use util::channel_layout::{self, ChannelLayout};
