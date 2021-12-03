@@ -909,6 +909,10 @@ fn main() {
             .write_to_file(output().join("bindings.rs"))
             .expect("Couldn't write bindings!");
     }
+    if cfg!(target_os = "macos") {
+        // required to make tao (from tauri) link
+        println!("cargo:rustc-link-lib=framework=ColorSync");
+    }
 }
 
 // println!("cargo:rerun-if-changed=build.rs");

@@ -210,9 +210,6 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
             if !feat.is_enabled() {
                 continue;
             }
-            // if let Some(flag) = feat.ffmpeg_flag {
-            //     switch!(configure, feat.name, flag);
-            // }
             println!("cargo:rustc-link-lib=static={}", feat.name);
             println!("cargo:warning={}", feat.name);
         }

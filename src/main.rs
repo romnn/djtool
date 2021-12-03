@@ -55,8 +55,8 @@ impl DjTool {
         // println!("temp dir: {}", temp_dir.path().display());
         // println!("audio output: {}", audio.audio_file.display());
         // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-        let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
-        // let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
+        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
+        let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
         let res = tokio::task::spawn_blocking(move || {
             transcode2::test(audio.audio_file, output_file);
             // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
