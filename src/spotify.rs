@@ -5,6 +5,7 @@ use anyhow::Result;
 use base64;
 use chrono::{DateTime, Duration, Utc};
 use reqwest;
+use reqwest::Url;
 use reqwest::{header::HeaderMap, Error as HttpError};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
-use url::Url;
 use webbrowser;
 
 pub mod api {
@@ -304,7 +304,15 @@ impl AuthCodePkceSpotify {
         oauth: OAuth,
     ) -> Result<Self> {
         let config_file = config_dir.as_ref().join("spotify-config.json");
-        let config = Config::load(&config_file).await?;
+        let config = Config::load(&config_file).await;
+        let config = match config {
+            Err(_) => {
+                let empty = Config::default();
+                empty.save(&config_file).await?;
+                empty
+            }
+            Ok(config) => config,
+        };
         let client = Self {
             creds,
             oauth,
@@ -343,8 +351,6 @@ impl AuthCodePkceSpotify {
     }
 
     pub fn get_authorize_url(&mut self, verifier_bytes: Option<usize>) -> ClientResult<String> {
-        println!("Building auth URL");
-
         let scopes = join_scopes(&self.oauth.scopes);
         let verifier_bytes = verifier_bytes.unwrap_or(43);
         let (verifier, challenge) = self.generate_codes(verifier_bytes);
@@ -382,8 +388,9 @@ impl AuthCodePkceSpotify {
 
     async fn read_config(&self) -> Result<()> {
         let new_config = Config::load(&self.config_file).await?;
-        let mut config = self.config.write().await; // .deref();
+        let mut config = self.config.write().await;
         *config = new_config;
+        println!("read the config");
         Ok(())
     }
 
@@ -415,36 +422,34 @@ impl AuthCodePkceSpotify {
 
         let new_token = self.fetch_access_token(&data).await?;
         // *self.token.lock().await.unwrap() = Some(token);
-        let mut config = self.config.write().await;
-        config.token = Some(new_token);
+        {
+            let mut config = self.config.write().await;
+            config.token = Some(new_token);
+        }
 
+        println!("writing config");
         self.write_config().await
     }
 
-    fn get_code_from_user(&self, auth_url: &str) -> ClientResult<String> {
-        println!("Opening brower with auth URL");
-        match webbrowser::open(auth_url) {
-            Ok(_) => println!("Opened {} in your browser.", auth_url),
-            Err(why) => eprintln!(
-                "Error when trying to open an URL in your browser: {:?}. \
-                 Please navigate here manually: {}",
-                why, auth_url
-            ),
-        }
+    // fn request_user_login(&self, auth_url: &str) -> ClientResult<()> {
+    //     // println!("Opening brower with auth URL");
+    //     // match webbrowser::open(auth_url) {
+    //     //     Ok(_) => println!("Opened {} in your browser.", auth_url),
+    //     //     Err(why) => eprintln!(
+    //     //         "Error when trying to open an URL in your browser: {:?}. \
+    //     //          Please navigate here manually: {}",
+    //     //         why, auth_url
+    //     //     ),
+    //     // }
+    // }
 
-        println!("Prompting user for code");
-        println!("Please enter the URL you were redirected to: ");
-        // let mut input = String::new();
-        // std::io::stdin().read_line(&mut input)?;
-        // let code = self
-        //     .parse_response_code(&input)
-        //     .ok_or_else(|| ClientError::Cli("unable to parse the response code".to_string()))?;
-
-        Ok("test".to_string())
-    }
-
-    pub async fn check_token(&mut self, auth_url: &str) -> Result<()> {
-        if let Some(cached_token) = &self.config.read().await.token {
+    pub async fn check_token(&mut self) -> Result<()> {
+        let cached_token = {
+            let config = self.config.read().await;
+            println!("got the read lock");
+            config.token.to_owned()
+        };
+        if let Some(cached_token) = cached_token {
             let sufficient = self.oauth.scopes.is_subset(&cached_token.scopes);
             let expired = cached_token.is_expired();
 
@@ -465,50 +470,23 @@ impl AuthCodePkceSpotify {
                 }
             }
         }
-        let code = self.get_code_from_user(auth_url)?;
+        let mut auth_url = Url::parse(&self.get_authorize_url(None)?)?;
+        // open the page in a new window
+        auth_url.query_pairs_mut().append_pair("target", "_blank");
+        println!("auth url: {}", auth_url);
+        // todo: create custom error here so that the UI could show the link for copy and paste!
+        match webbrowser::open(auth_url.as_str()) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+        // self.request_user_login(&auth_url)
+    }
+
+    pub async fn handle_code_received(&mut self, code: &String) -> Result<()> {
+        println!("handling received code: {}", code);
         self.request_token(&code).await?;
-        self.write_config().await
-
-        // if sufficient && !expired {
-        //     token =
-        // }
-        // if ! || ) {
-        // match self.read_token_cache(true).await {
-        //     Ok(Some(new_token)) => {
-        //         let expired = new_token.is_expired();
-
-        //         // Load token into client regardless of whether it's expired o
-        //         // not, since it will be refreshed later anyway.
-        //         // *self.token.lock().await.unwrap() = Some(new_token);
-        //         let mut token = self.config.token.lock().await.as_ref();
-        //         token = Some(&new_token);
-
-        //         if expired {
-        //             // Ensure that we actually got a token from the refetch
-        //             match self.refetch_token().await? {
-        //                 Some(refreshed_token) => {
-        //                     println!("Successfully refreshed expired token from token cache");
-        //                     let mut token = self.config.token.lock().await.as_ref();
-        //                     token = Some(&refreshed_token);
-        //                     // *self.token.lock().await.unwrap() = Some(refreshed_token)
-        //                 }
-        //                 // If not, prompt the user for it
-        //                 None => {
-        //                     println!("Unable to refresh expired token from token cache");
-        //                     let code = self.get_code_from_user(auth_url)?;
-        //                     // let code = "test";
-        //                     self.request_token(&code).await?;
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     // Otherwise following the usual procedure to get the token.
-        //     _ => {
-        //         let code = self.get_code_from_user(auth_url)?;
-        //         // let code = "test";
-        //         self.request_token(&code).await?;
-        //     }
-        // }
+        println!("handled");
+        Ok(())
     }
 
     // fn get_token(&self) -> Arc<Mutex<Option<Token>>> {
