@@ -9,7 +9,6 @@ mod download;
 mod config;
 mod ffmpeg;
 mod ffmpeg_sys;
-mod serialization;
 mod spotify;
 mod transcode2;
 mod utils;
@@ -18,6 +17,9 @@ use anyhow::Result;
 use config::Persist;
 use dirs;
 use download::Downloader;
+use futures_util::pin_mut;
+use futures_util::{StreamExt, TryStreamExt};
+use rspotify_model::{Id, PlaylistId, UserId};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -26,14 +28,14 @@ use std::sync::Arc;
 use std::thread;
 use tauri::Event;
 use tempdir::TempDir;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use warp::{Filter, Rejection, Reply};
 // use transcode::Transcoder;
 use reqwest::Url;
 
 const DEFAULT_PORT: u16 = 21011;
 
-type SpotifyClient = Arc<RwLock<spotify::AuthCodePkceSpotify>>;
+type SpotifyClient = Arc<spotify::Spotify>;
 
 struct DjTool {
     downloader: Downloader,
@@ -42,27 +44,44 @@ struct DjTool {
     spotify: SpotifyClient,
 }
 
+fn request_user_login() {}
+
 impl DjTool {
     pub async fn new(config_dir: &PathBuf) -> Result<Self> {
         let downloader = Downloader::new()?;
         let config = config::Config::open(&config_dir).await?;
 
-        let creds = spotify::Credentials::new_pkce("893474f878934ae89fff417e4722e147");
-        let oauth = spotify::OAuth {
-            redirect_uri: format!("http://localhost:{}/spotify/callback", DEFAULT_PORT),
+        // todo: store the credentials in the spotify config
+        let creds = spotify::auth::Credentials::pkce("893474f878934ae89fff417e4722e147");
+        let oauth = spotify::auth::OAuth {
+            redirect_uri: format!("http://localhost:{}/spotify/pkce/callback", DEFAULT_PORT),
             scopes: scopes!("playlist-read-private"),
             ..Default::default()
         };
-        println!("creating spotify client");
-        let mut client =
-            spotify::AuthCodePkceSpotify::new(&config_dir, creds.clone(), oauth.clone()).await?;
-        println!("checking spotify client token");
-        client.check_token().await?;
+        // let mut client =
+        //     spotify::auth::PKCE::new(&config_dir, creds.clone(), oauth.clone()).await?;
+        let client = spotify::Spotify::pkce(&config_dir, creds.clone(), oauth.clone()).await?;
+        println!("created spotify client");
+
+        // authenticate client proactively
+        match client.authenticator.reauthenticate().await {
+            Err(spotify::error::Error::Auth(spotify::error::AuthError::RequireUserLogin {
+                auth_url,
+            })) => {
+                webbrowser::open(auth_url.as_str());
+                // match webbrowser::open(auth_url.as_str()) {
+                //     Ok(_) => Ok(()),
+                //     Err(err) => Err(err.into()),
+                // };
+            }
+            Err(err) => panic!("{}", err),
+            Ok(_) => {}
+        };
 
         Ok(Self {
             downloader,
             config: Arc::new(RwLock::new(config)),
-            spotify: Arc::new(RwLock::new(client)),
+            spotify: Arc::new(client),
             // transcoder,
         })
     }
@@ -101,25 +120,65 @@ impl DjTool {
 
 fn with_spotify(
     sp: SpotifyClient,
-) -> impl Filter<Extract = (SpotifyClient,), Error = Infallible> + Clone {
+) -> impl Filter<Extract = (SpotifyClient,), Error = Infallible> + Send + Clone {
     warp::any().map(move || sp.clone())
 }
 
-#[derive(Deserialize)]
-pub struct SpotifyCallbackQuery {
-    error: Option<String>,
-    state: Option<String>,
-    code: Option<String>,
+#[derive(Deserialize, Clone, Debug)]
+pub struct DebugQuery {
+    user_id: Option<String>,
 }
 
-pub async fn spotify_callback_handler(
-    query: SpotifyCallbackQuery,
+pub async fn debug_handler(
+    query: DebugQuery,
+    sp: SpotifyClient,
+) -> std::result::Result<impl Reply, Infallible> {
+    let user_id = UserId::from_id(&query.user_id.unwrap_or(String::new())).unwrap();
+    // let playlist_id = PlaylistId::from_id(&query.user_id.unwrap_or(String::new())).unwrap();
+    // println!("user id: {}", user_id);
+    // let playlist_item_stream = sp.user_playlists_items(user_id, None, None);
+    // let playlist_item_stream = sp.playlist_items(&playlist_id, None, None).await;
+    // pin_mut!(playlist_item_stream);
+
+    // let count = Arc::new(Mutex::new(0usize))
+    println!("getting user playlists");
+    sp.user_playlists_items_stream(&user_id, None, None)
+        .take(1)
+        .try_for_each_concurrent(10, |item| {
+            // let cc = count.clone();
+            async move {
+                // let mut c = cc.lock().await;
+                // *c += 1
+                println!("{:?}", item);
+                Ok(())
+            }
+        })
+        .await;
+    //
+    // todo: map the playlist for each playlist item
+    // create library manager to check if items are already downloaded
+    // check if static server works
+
+    // let playlist_items = sp.user_playlists_items(&user_id, None, None).await;
+    // println!("total items: {}", playlist_items.len());
+
+    let test = HashMap::<String, String>::new();
+    Ok(warp::reply::json(&test))
+}
+
+pub async fn spotify_pkce_callback_handler(
+    query: spotify::auth::pkce::CallbackQuery,
     sp: SpotifyClient,
 ) -> std::result::Result<impl Reply, Infallible> {
     let redirect_url = match query.code {
         Some(code) => {
-            let mut guard = sp.write().await;
-            guard.handle_code_received(&code).await.unwrap();
+            sp.authenticator
+                .handle_user_login_callback(spotify::auth::SpotifyLoginCallback::Pkce {
+                    code,
+                    state: query.state.unwrap_or(String::new()),
+                })
+                .await
+                .unwrap();
             Url::parse("https://spotify.com/").unwrap()
         }
         None => {
@@ -144,7 +203,6 @@ pub async fn spotify_callback_handler(
         r#"</head></html>"#.to_string(),
     ]
     .join("");
-    println!("{}", body);
     Ok(warp::reply::html(body))
 }
 
@@ -167,19 +225,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // spin up a webserver
             println!("getting lock on the library path");
             let library_path = tool.config.read().await.library.library_path.to_owned();
-            println!("got library path");
             let server = tokio::spawn(async move {
-                // error, state
-                // code, state
                 let library = warp::path("static").and(warp::fs::dir(library_path));
+                let debug = warp::get()
+                    .and(warp::path!("debug"))
+                    .and(warp::query::<DebugQuery>())
+                    .and(with_spotify(sp_client.clone()))
+                    .and_then(debug_handler);
+
                 let spotify_callback = warp::get()
-                    .and(warp::path!("spotify" / "callback"))
-                    .and(warp::query::<SpotifyCallbackQuery>())
+                    .and(warp::path!("spotify" / "pkce" / "callback"))
+                    .and(warp::query::<spotify::auth::pkce::CallbackQuery>())
                     .and(with_spotify(sp_client))
-                    .and_then(spotify_callback_handler);
-                // .and_then(|map: HashMap<String, String>| -> std::result::Result<impl Reply, Rejection> async {
-                // });
-                let routes = spotify_callback.or(library);
+                    .and_then(spotify_pkce_callback_handler);
+
+                let routes = spotify_callback.or(debug).or(library);
                 println!("starting server now ...");
                 warp::serve(routes)
                     // .try_bind_with_graceful_shutdown(([127, 0, 0, 1], DEFAULT_PORT), )

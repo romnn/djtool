@@ -2,6 +2,13 @@
 
 TODO:
 
+- credentials shall be used by any mean of authentication
+- use a notification channel from spotify to djtool, which handles the user interface
+- need separate api endpoints per auth flow
+- the authentication methods should be traits
+- the spotify client should be a struct
+- depending on which the suitable auth method trait should be loaded
+
 - add config struct that manages all the local assets in a persisted database
   - need a reindex method that builds the config from scratch!
   - needs to be run whenever the version changes
@@ -16,7 +23,6 @@ Done:
 - implement a async webserver that runs in the background
 - add tauri
 
-
 #### Big issues to address
 
 - Connect with the spotify API to read out the playlists
@@ -28,9 +34,10 @@ Done:
 - build and upload release executables for linux and macos first
 
 #### Notes
+
 - to avoid checking if all files exist, maybe use a hash in the config? or maybe not
 
-
 #### Refactor ideas
+
 - split into youtube extractor and more general downloader
 - build higher level AudioTranscoder and InternalAudioTranscoder

@@ -38,6 +38,8 @@ webbrowser = "0.5.5"
 warp = "0.3.2"
 tauri = { version = "1.0.0-beta.8" }
 dirs = "4.0.0"
+rspotify-model = "0.11.3"
+async-stream = "0.3.2"
 
 [build-dependencies]
 anyhow = "1.0"

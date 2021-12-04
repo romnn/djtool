@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
+use std::io;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 // use tokio::io::{BufReader, BufWriter};
@@ -10,7 +11,6 @@ use std::marker::{Send, Sync};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Library {
     pub library_path: PathBuf,
-    // spotify_app_client_id
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
