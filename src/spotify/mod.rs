@@ -1,22 +1,19 @@
 pub mod auth;
 pub mod config;
 pub mod error;
-pub mod iter;
+pub mod stream;
 
 use super::config::Persist;
 use super::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
-use async_stream::stream;
+use stream::{paginate, Paginator};
+// use async_stream::stream;
 use async_trait::async_trait;
 use base64;
 use chrono::{DateTime, Duration, Utc};
-use futures::stream::{self, Stream};
+use futures::stream::Stream;
 use futures_util::pin_mut;
 use futures_util::stream::{StreamExt, TryStreamExt};
-// use futures::stream::{StreamExt, TryStreamExt};
-use std::iter::Iterator;
-// use futures_util::StreamExt;
-use iter::{paginate, Paginator};
 use reqwest;
 use reqwest::Url;
 use reqwest::{header::HeaderMap, Error as HttpError};
