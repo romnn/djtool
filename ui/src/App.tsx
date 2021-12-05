@@ -10,7 +10,7 @@ function App() {
         <p>
           Edit <code>src/App.tsx</code> and save to reload.
         </p>
-        <audio src="/static/audio.mp3" controls autoPlay></audio>
+        <audio src="http://localhost:21011/static/audio.mp3" controls autoPlay></audio>
         <a
           className="App-link"
           href="https://reactjs.org"
