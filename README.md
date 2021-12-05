@@ -2,20 +2,22 @@
 
 TODO:
 
-- convert the youtube resutls via an impl
-- implement the stream interface for youtube
+- implement a basic audio player in the UI and check if this works
+- refactor the transcoder
+- convert the full youtube results via an impl
 
 - add config struct that manages all the local assets in a persisted database
   - need a reindex method that builds the config from scratch!
   - needs to be run whenever the version changes
 - use main config to initialize spotify config path
-- implement full auth flow with webbrowser externally (not using tauri)
-  - needs callback handler in warp
-- cache the spotify auth key so that subsequent uses do not need to get it again
 - use spotify api to get the playlists, with preview url and thumbnail that need to be downloaded
 
 Done:
 
+- implement full auth flow with webbrowser externally (not using tauri)
+  - needs callback handler in warp
+- cache the spotify auth key so that subsequent uses do not need to get it again
+- implement the stream interface for youtube
 - create a more sophisticated debug API for spotify and youtube query endpoints
 - use macros for nicer path handling of js parsed values
 - implement a async webserver that runs in the background
@@ -44,5 +46,6 @@ Done:
 
 #### Refactor ideas
 
+- replace collect and first with next()
 - split into youtube extractor and more general downloader
 - build higher level AudioTranscoder and InternalAudioTranscoder

@@ -1,13 +1,17 @@
 mod extractor;
 pub mod model;
 mod search;
+mod stream;
 
 use crate::backend::{ExtractorBackend, Method, TrackDescription};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::stream::Stream;
+use futures_util::stream::{StreamExt, TryStreamExt};
 use reqwest;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use stream::paginate;
 
 #[derive(Debug, Clone)]
 pub struct Youtube {
@@ -22,6 +26,47 @@ impl Youtube {
             // debug_dir: debug_dir.as_ref().to_owned(),
             client: Arc::new(reqwest::Client::new()),
         })
+    }
+
+    // pub async fn search_page(
+    //     &self,
+    //     user_id: &UserId,
+    //     limit: Option<u32>,
+    //     offset: Option<u32>,
+    // ) -> Result<Page<SimplifiedPlaylist>> {
+    //     let params = HashMap::<&str, Value>::from_iter(
+    //         vec![
+    //             limit.map(|limit| ("limit", limit.into())),
+    //             offset.map(|offset| ("offset", offset.into())),
+    //         ]
+    //         .into_iter()
+    //         .filter_map(|e| e),
+    //     );
+    //     self.client
+    //         .get(api!(format!("users/{}/playlists", user_id.id()))?)
+    //         .headers(self.auth_headers().await)
+    //         .query(&params)
+    //         .send()
+    //         .await?
+    //         .json::<Page<SimplifiedPlaylist>>()
+    //         .await
+    //         .map_err(Into::into)
+    // }
+
+    pub fn search_stream<'a>(
+        // pub fn search_stream(
+        &'a self,
+        // &self,
+        search_query: String,
+        // continuation: Option<String>,
+        // user_id: &'a UserId,
+        // ) -> impl Stream<Item = Result<YoutubeVideo>> + 'a + Send {
+    ) -> impl Stream<Item = Result<model::YoutubeVideo>> + 'a + Send {
+        paginate(
+            move |continuation| self.search_page(search_query.to_owned(), continuation)
+            // &user_id, Some(limit), Some(offset)),
+            // DEFAULT_PAGINATION_CHUNKS,
+        )
     }
 }
 

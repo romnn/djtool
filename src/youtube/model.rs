@@ -22,6 +22,20 @@ use tempdir::TempDir;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Mutex};
 
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct Page<T>
+where
+    T: Serialize,
+{
+    pub continuation: Option<String>,
+    pub results: Vec<T>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct YoutubeVideo {
+    pub title: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoRendererSimpleText {
@@ -110,7 +124,7 @@ where
 #[serde(rename_all = "SCREAMING_SNAKE_CASE", tag = "style")]
 pub enum OwnerBadgeStyle {
     BadgeStyleTypeVerifiedArtist,
-    // BadgeStyleTypeVerified,
+    BadgeStyleTypeVerified,
     BadgeStyleTypeUnknown,
 }
 
@@ -148,7 +162,7 @@ impl fmt::Debug for VideoRenderer {
         f.debug_struct("VideoRenderer")
             .field("id", &self.video_id)
             .field("title", &self.title)
-            .field("user", &self.owner_text) // .iter().map(|r| r.title).first().unwrap_or(""))
+            .field("user", &self.owner_text)
             .finish()
     }
 }
@@ -181,8 +195,8 @@ pub enum SearchResult {
     ItemSectionRenderer {
         contents: Vec<ItemSectionRendererItem>,
     },
-    #[serde(rename_all = "camelCase")]
-    RichItemRenderer {},
+    // #[serde(rename_all = "camelCase")]
+    // RichItemRenderer {},
     #[serde(rename_all = "camelCase")]
     ContinuationItemRenderer {
         continuation_endpoint: ContinuationEndpoint,
@@ -198,7 +212,7 @@ impl fmt::Debug for SearchResult {
                 .debug_struct("SectionRenderer")
                 .field("contents", contents)
                 .finish(),
-            Self::RichItemRenderer { .. } => f.debug_struct("RichRenderer").finish(),
+            // Self::RichItemRenderer { .. } => f.debug_struct("RichRenderer").finish(),
             Self::ContinuationItemRenderer { .. } => {
                 f.debug_struct("ContinuationRenderer").finish()
             }
@@ -210,6 +224,36 @@ impl fmt::Debug for SearchResult {
 #[serde(rename_all = "camelCase")]
 pub struct SearchResultPage {
     pub results: Vec<SearchResult>,
+}
+
+impl SearchResultPage {
+    pub fn parse(&self) -> Result<Page<YoutubeVideo>> {
+        let continuation: Option<String> = self.results.iter().find_map(|r| match r {
+            SearchResult::ContinuationItemRenderer {
+                continuation_endpoint,
+                ..
+            } => Some(continuation_endpoint.continuation_command.token.to_owned()),
+            _ => None,
+        });
+        let results: Vec<ItemSectionRendererItem> = self
+            .results
+            .iter()
+            .find_map(|r| match r {
+                SearchResult::ItemSectionRenderer { contents, .. } => Some(contents.to_owned()),
+                _ => None,
+            })
+            .unwrap();
+        let results: Vec<YoutubeVideo> = results
+            .iter()
+            .map(|item| YoutubeVideo {
+                title: item.video_renderer.title.to_str().unwrap_or("").to_string(),
+            })
+            .collect();
+        Ok(Page {
+            continuation,
+            results,
+        })
+    }
 }
 
 impl fmt::Debug for SearchResultPage {

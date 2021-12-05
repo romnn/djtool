@@ -1,29 +1,28 @@
+use super::model::Page;
 use anyhow::Result;
 use async_stream::stream;
 use futures::stream::Stream;
 use futures::Future;
-use rspotify_model::Page;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
 pub fn paginate<'a, T: 'a, Fut, Req: 'a>(
     req: Req,
-    page_size: u32,
 ) -> impl Stream<Item = Result<T>> + 'a + Send
 where
-    T: Unpin + Send,
+    T: Unpin + Serialize + Send,
     Fut: Future<Output = Result<Page<T>>> + Send,
-    Req: Fn(u32, u32) -> Fut + Send + Sync,
+    Req: Fn(Option<String>) -> Fut + Send + Sync,
 {
-    let mut offset = 0;
+    let mut continuation: Option<String> = None;
     Box::pin(stream! {
         loop {
-            let page = req(page_size, offset).await?;
-            offset += page.items.len() as u32;
-            for item in page.items {
-                yield Ok(item);
+            let page = req(continuation).await?;
+            continuation = page.continuation;
+            for result in page.results.into_iter() {
+                yield Ok(result);
             }
-            if page.next.is_none() {
+            if continuation.is_none() {
                 break;
             }
         }

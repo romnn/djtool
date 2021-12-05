@@ -15,6 +15,7 @@ mod spotify;
 mod transcode2;
 mod utils;
 mod youtube;
+mod id3;
 
 use anyhow::Result;
 use config::Persist;

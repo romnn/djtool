@@ -6,8 +6,7 @@ pub mod stream;
 use super::config::Persist;
 use super::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
-use stream::{paginate, Paginator};
-// use async_stream::stream;
+use stream::paginate;
 use async_trait::async_trait;
 use base64;
 use chrono::{DateTime, Duration, Utc};
@@ -75,7 +74,7 @@ impl Spotify {
         self.authenticator.auth_headers().await
     }
 
-    pub async fn user_playlists_manual(
+    pub async fn user_playlists_page(
         &self,
         user_id: &UserId,
         limit: Option<u32>,
@@ -89,19 +88,6 @@ impl Spotify {
             .into_iter()
             .filter_map(|e| e),
         );
-        // let res = self
-        //     .client
-        //     .get(api!(format!("users/{}/playlists", user_id.id()))?)
-        //     .headers(self.auth_headers().await)
-        //     .query(&params)
-        //     .send()
-        //     .await?
-        //     .text()
-        //     .await?;
-        // // println!("url: {:?}", URL.as_string());
-        // println!("params: {:?}", params);
-        // println!("headers: {:?}", self.auth_headers().await);
-        // println!("response: {}", res);
         self.client
             .get(api!(format!("users/{}/playlists", user_id.id()))?)
             .headers(self.auth_headers().await)
@@ -118,7 +104,7 @@ impl Spotify {
         user_id: &'a UserId,
     ) -> impl Stream<Item = Result<SimplifiedPlaylist>> + 'a + Send {
         paginate(
-            move |limit, offset| self.user_playlists_manual(&user_id, Some(limit), Some(offset)),
+            move |limit, offset| self.user_playlists_page(&user_id, Some(limit), Some(offset)),
             DEFAULT_PAGINATION_CHUNKS,
         )
     }
@@ -129,7 +115,7 @@ impl Spotify {
             .await
     }
 
-    pub async fn playlist_items_manual(
+    pub async fn playlist_items_page(
         &self,
         playlist_id: PlaylistId,
         fields: Option<&str>,
@@ -178,7 +164,7 @@ impl Spotify {
     ) -> impl Stream<Item = Result<PlaylistItem>> + 'a + Send {
         paginate(
             move |limit, offset| {
-                self.playlist_items_manual(
+                self.playlist_items_page(
                     playlist_id.to_owned(),
                     fields,
                     market,

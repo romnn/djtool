@@ -1,6 +1,8 @@
 use super::SpotifyClient;
 use super::YoutubeClient;
+use crate::youtube::model::YoutubeVideo;
 use anyhow::Result;
+use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
 use rspotify_model::{Id, PlaylistId, PlaylistItem, UserId};
 use serde::{Deserialize, Serialize};
@@ -18,21 +20,45 @@ pub struct DebugSpotifyPlaylistsQuery {
 pub struct DebugYoutubeSearchQuery {
     query: String,
     parsed: Option<bool>,
-    limit: Option<u32>,
+    limit: Option<usize>,
 }
 
 pub async fn debug_youtube_search_handler(
     query: DebugYoutubeSearchQuery,
     youtube: YoutubeClient,
 ) -> std::result::Result<impl Reply, Infallible> {
+    // let results = youtube
+    //     .search_stream(query.query)
+    //     .take(query.limit.unwrap_or(1))
+    //     .collect::<Vec<Result<YoutubeVideo>>>()
+    //     .await;
+    // let results: Vec<&YoutubeVideo> = results.iter().flat_map(|r| r.as_ref().ok()).collect();
+    let stream = youtube
+        .search_stream(query.query)
+        .take(query.limit.unwrap_or(1));
+    let results = stream.collect::<Vec<Result<YoutubeVideo>>>().await;
+    let results = results
+        .iter()
+        .flat_map(|r| r.as_ref().ok())
+        .collect::<Vec<&YoutubeVideo>>();
+
+    // let results: Vec<&YoutubeVideo> = Vec::new();
+    // pin_mut!(stream);
+
+    // while let Some(vid) = stream.next().await {
+    //     println!("got {:?}", vid);
+    // }
+
+    return Ok(warp::reply::json(&results));
+
     if query.parsed.unwrap_or(true) {
         Ok(warp::reply::json(
-            &youtube.search(query.query).await.unwrap(),
+            &youtube.search_page(query.query, None).await.unwrap(),
         ))
     } else {
         Ok(warp::reply::json(
             &youtube
-                .get_search_response(query.query, None)
+                .search_page_response(query.query, None, None)
                 .await
                 .unwrap(),
         ))

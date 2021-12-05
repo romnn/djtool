@@ -85,9 +85,10 @@ impl Youtube {
         headers
     }
 
-    pub async fn get_search_response(
+    pub async fn search_page_response(
         &self,
         search_query: String,
+        continuation: Option<String>,
         client: Option<model::Innertube>,
     ) -> Result<Value> {
         let innertube = client.unwrap_or(model::Innertube::Web);
@@ -101,8 +102,20 @@ impl Youtube {
         let data = json!({
             "context": innertube_config.context(),
             "query": search_query,
-            "params": "EgIQAQ%3D%3D"
+            "params": "EgIQAQ%3D%3D",
+            "continuation": continuation
         });
+
+        // query = {
+        //     'continuation': continuation
+        // }
+        // # TODO: Inconsistency with clickTrackingParams.
+        // # Currently we have a fixed ctp contained within context (from ytcfg)
+        // # and a ctp in root query for continuation.
+        // if ctp:
+        //     query['clickTracking'] = {'clickTrackingParams': ctp}
+        // return query
+
         let query = json!({"key": innertube_config.api_key });
         let response: Value = self
             .client
@@ -117,8 +130,14 @@ impl Youtube {
         Ok(response)
     }
 
-    pub async fn search(&self, search_query: String) -> Result<model::SearchResultPage> {
-        let search_response = self.get_search_response(search_query, None).await?;
+    pub async fn search_page(
+        &self,
+        search_query: String,
+        continuation: Option<String>,
+    ) -> Result<model::Page<model::YoutubeVideo>> {
+        let search_response = self
+            .search_page_response(search_query, continuation, None)
+            .await?;
         let slr_contents = vec![
             get!(
                 &search_response,
@@ -143,6 +162,7 @@ impl Youtube {
         let slr_contents = slr_contents.first().unwrap().to_owned().to_owned();
         let parsed: model::SearchResultPage =
             serde_json::from_value(json!({ "results": slr_contents }))?;
+        let parsed = parsed.parse()?;
         Ok(parsed)
     }
 }
