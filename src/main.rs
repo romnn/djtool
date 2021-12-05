@@ -4,21 +4,24 @@
 )]
 
 use tokio;
-mod download;
-// mod transcode;
+mod backend;
 mod config;
+#[cfg(feature = "debug")]
+mod debug;
+mod download;
 mod ffmpeg;
 mod ffmpeg_sys;
 mod spotify;
 mod transcode2;
 mod utils;
+mod youtube;
 
 use anyhow::Result;
 use config::Persist;
 use dirs;
-use download::Downloader;
 use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
+use reqwest;
 use rspotify_model::{Id, PlaylistId, UserId};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -30,26 +33,27 @@ use tauri::Event;
 use tempdir::TempDir;
 use tokio::sync::{Mutex, RwLock};
 use warp::{Filter, Rejection, Reply};
-// use transcode::Transcoder;
-use reqwest::Url;
+use youtube::Youtube;
 
 const DEFAULT_PORT: u16 = 21011;
 
 type SpotifyClient = Arc<spotify::Spotify>;
+type YoutubeClient = Arc<youtube::Youtube>;
 
 struct DjTool {
-    downloader: Downloader,
-    // transcoder: Transcoder,
+    backends: Youtube,
     config: Arc<RwLock<config::Config>>,
     spotify: SpotifyClient,
 }
 
-fn request_user_login() {}
+fn request_user_login(auth_url: reqwest::Url) {
+    webbrowser::open(auth_url.as_str());
+}
 
 impl DjTool {
     pub async fn new(config_dir: &PathBuf) -> Result<Self> {
-        let downloader = Downloader::new()?;
         let config = config::Config::open(&config_dir).await?;
+        let backends = Youtube::new()?; // config.debug_dir())?;
 
         // todo: store the credentials in the spotify config
         let creds = spotify::auth::Credentials::pkce("893474f878934ae89fff417e4722e147");
@@ -58,8 +62,6 @@ impl DjTool {
             scopes: scopes!("playlist-read-private"),
             ..Default::default()
         };
-        // let mut client =
-        //     spotify::auth::PKCE::new(&config_dir, creds.clone(), oauth.clone()).await?;
         let client = spotify::Spotify::pkce(&config_dir, creds.clone(), oauth.clone()).await?;
         println!("created spotify client");
 
@@ -68,7 +70,7 @@ impl DjTool {
             Err(spotify::error::Error::Auth(spotify::error::AuthError::RequireUserLogin {
                 auth_url,
             })) => {
-                webbrowser::open(auth_url.as_str());
+                request_user_login(auth_url);
                 // match webbrowser::open(auth_url.as_str()) {
                 //     Ok(_) => Ok(()),
                 //     Err(err) => Err(err.into()),
@@ -79,91 +81,55 @@ impl DjTool {
         };
 
         Ok(Self {
-            downloader,
+            backends,
             config: Arc::new(RwLock::new(config)),
             spotify: Arc::new(client),
             // transcoder,
         })
     }
 
-    async fn download_youtube(&self, video_id: String) -> Result<()> {
-        let temp_dir = TempDir::new("djtool")?;
-        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
-        let downloaded_audio = temp_dir.path().join(&video_id);
-        let audio = self
-            .downloader
-            // .download_audio(video_id, temp_dir.path().to_path_buf())
-            .download_audio(
-                video_id,
-                // PathBuf::from("/home/roman/dev/djtool/Touchpad.webm"),
-                &downloaded_audio,
-                // temp_dir.join(video_id),
-                // PathBuf::from(format!("/home/roman/dev/djtool/Touchpad.webm"),
-            )
-            .await?;
+    // async fn download_youtube(&self, video_id: String) -> Result<()> {
+    //     let temp_dir = TempDir::new("djtool")?;
+    //     // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
+    //     let downloaded_audio = temp_dir.path().join(&video_id);
+    //     let audio = self
+    //         .downloader
+    //         // .download_audio(video_id, temp_dir.path().to_path_buf())
+    //         .download_audio(
+    //             video_id,
+    //             // PathBuf::from("/home/roman/dev/djtool/Touchpad.webm"),
+    //             &downloaded_audio,
+    //             // temp_dir.join(video_id),
+    //             // PathBuf::from(format!("/home/roman/dev/djtool/Touchpad.webm"),
+    //         )
+    //         .await?;
 
-        // transcode to MP3
-        // println!("temp dir: {}", temp_dir.path().display());
-        // println!("audio output: {}", audio.audio_file.display());
-        // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
-        let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
-        let res = tokio::task::spawn_blocking(move || {
-            transcode2::test(audio.audio_file, output_file);
-            // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
-            // transcoder.start().unwrap();
-        })
-        .await?;
-        Ok(())
-    }
+    //     // transcode to MP3
+    //     // println!("temp dir: {}", temp_dir.path().display());
+    //     // println!("audio output: {}", audio.audio_file.display());
+    //     // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
+    //     // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
+    //     let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
+    //     let res = tokio::task::spawn_blocking(move || {
+    //         transcode2::test(audio.audio_file, output_file);
+    //         // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
+    //         // transcoder.start().unwrap();
+    //     })
+    //     .await?;
+    //     Ok(())
+    // }
 }
 
 fn with_spotify(
-    sp: SpotifyClient,
+    spotify: SpotifyClient,
 ) -> impl Filter<Extract = (SpotifyClient,), Error = Infallible> + Send + Clone {
-    warp::any().map(move || sp.clone())
+    warp::any().map(move || spotify.clone())
 }
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct DebugQuery {
-    user_id: Option<String>,
-}
-
-pub async fn debug_handler(
-    query: DebugQuery,
-    sp: SpotifyClient,
-) -> std::result::Result<impl Reply, Infallible> {
-    let user_id = UserId::from_id(&query.user_id.unwrap_or(String::new())).unwrap();
-    // let playlist_id = PlaylistId::from_id(&query.user_id.unwrap_or(String::new())).unwrap();
-    // println!("user id: {}", user_id);
-    // let playlist_item_stream = sp.user_playlists_items(user_id, None, None);
-    // let playlist_item_stream = sp.playlist_items(&playlist_id, None, None).await;
-    // pin_mut!(playlist_item_stream);
-
-    // let count = Arc::new(Mutex::new(0usize))
-    println!("getting user playlists");
-    sp.user_playlists_items_stream(&user_id, None, None)
-        .take(1)
-        .try_for_each_concurrent(10, |item| {
-            // let cc = count.clone();
-            async move {
-                // let mut c = cc.lock().await;
-                // *c += 1
-                println!("{:?}", item);
-                Ok(())
-            }
-        })
-        .await;
-    //
-    // todo: map the playlist for each playlist item
-    // create library manager to check if items are already downloaded
-    // check if static server works
-
-    // let playlist_items = sp.user_playlists_items(&user_id, None, None).await;
-    // println!("total items: {}", playlist_items.len());
-
-    let test = HashMap::<String, String>::new();
-    Ok(warp::reply::json(&test))
+fn with_youtube(
+    youtube: YoutubeClient,
+) -> impl Filter<Extract = (YoutubeClient,), Error = Infallible> + Send + Clone {
+    warp::any().map(move || youtube.clone())
 }
 
 pub async fn spotify_pkce_callback_handler(
@@ -179,12 +145,12 @@ pub async fn spotify_pkce_callback_handler(
                 })
                 .await
                 .unwrap();
-            Url::parse("https://spotify.com/").unwrap()
+            reqwest::Url::parse("https://spotify.com/").unwrap()
         }
         None => {
             let mut params: HashMap<&str, String> = HashMap::new();
             params.insert("error", query.error.unwrap_or(String::new()));
-            Url::parse_with_params("https://google.com", params).unwrap()
+            reqwest::Url::parse_with_params("https://google.com", params).unwrap()
         }
     };
     println!("redirect to: {}", redirect_url);
@@ -206,40 +172,76 @@ pub async fn spotify_pkce_callback_handler(
     Ok(warp::reply::html(body))
 }
 
+// #[tokio::main]
+// async fn main_async() {
+//     let debug_dir = dirs::home_dir().unwrap().join(".djtool").join("debug");
+//     let mock = Youtube::new(debug_dir).unwrap();
+//     let results = mock.search("Touchpad Two Shell".to_string()).await.unwrap();
+//     println!("search results: {:?}", results);
+// }
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
-    // https://www.youtube.com/watch?v=KUyJFHgrrZc
-    // https://www.youtube.com/watch?v=_Q8ELKOLudE
-    // Hb5ZXUeGPHc
-
     let _ = thread::spawn(|| {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
             let config_dir = dirs::home_dir().unwrap().join(".djtool");
             println!("config dir: {}", config_dir.display());
-            let _ = tokio::fs::create_dir_all(&config_dir).await;
 
             let tool = DjTool::new(&config_dir).await.unwrap();
-            let sp_client = tool.spotify.clone();
+            let spotify_client = tool.spotify.clone();
+            // let backend_client = tool.backend.clone();
+
+            // let results = tool
+            //     .backends
+            //     .search("Touchpad Two Shell".to_string())
+            //     .await
+            //     .unwrap();
+            // println!("search results: {:?}", results);
+
+            println!("getting lock on the library path");
+            let (library_dir, _) = {
+                let config = tool.config.read().await;
+                (
+                    config.library.library_dir.to_owned(),
+                    config.debug_dir.to_owned(),
+                )
+            };
 
             // spin up a webserver
-            println!("getting lock on the library path");
-            let library_path = tool.config.read().await.library.library_path.to_owned();
             let server = tokio::spawn(async move {
-                let library = warp::path("static").and(warp::fs::dir(library_path));
-                let debug = warp::get()
-                    .and(warp::path!("debug"))
-                    .and(warp::query::<DebugQuery>())
-                    .and(with_spotify(sp_client.clone()))
-                    .and_then(debug_handler);
+                let library = warp::path("static").and(warp::fs::dir(library_dir));
 
-                let spotify_callback = warp::get()
+                let spotify_pkce_callback = warp::get()
                     .and(warp::path!("spotify" / "pkce" / "callback"))
                     .and(warp::query::<spotify::auth::pkce::CallbackQuery>())
-                    .and(with_spotify(sp_client))
+                    .and(with_spotify(spotify_client.clone()))
                     .and_then(spotify_pkce_callback_handler);
 
-                let routes = spotify_callback.or(debug).or(library);
+                #[cfg(feature = "debug")]
+                let routes = {
+                    let debug_spotify_playlists = warp::get()
+                        .and(warp::path!("debug" / "spotify" / "playlists"))
+                        .and(warp::query::<debug::DebugSpotifyPlaylistsQuery>())
+                        .and(with_spotify(spotify_client.clone()))
+                        .and_then(debug::debug_spotify_playlists_handler);
+
+                    let youtube = Arc::new(Youtube::new().unwrap());
+                    let debug_youtube_search = warp::get()
+                        .and(warp::path!("debug" / "youtube" / "search"))
+                        .and(warp::query::<debug::DebugYoutubeSearchQuery>())
+                        .and(with_youtube(youtube.clone()))
+                        .and_then(debug::debug_youtube_search_handler);
+
+                    spotify_pkce_callback
+                        .or(library)
+                        .or(debug_youtube_search)
+                        .or(debug_spotify_playlists)
+                };
+
+                #[cfg(not(feature = "debug"))]
+                let routes = spotify_pkce_callback.or(library);
+
                 println!("starting server now ...");
                 warp::serve(routes)
                     // .try_bind_with_graceful_shutdown(([127, 0, 0, 1], DEFAULT_PORT), )
@@ -251,8 +253,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             //     .await
             //     .unwrap();
 
-            // let history = spotify.current_playback(None, None::<Vec<_>>).await;
-            // println!("Response: {:?}", history);
             server.await;
         });
     });
@@ -273,17 +273,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // ui.join().unwrap();
-    // println!("exiting");
-    // println!("exiting bye");
+    // unreacheable
     Ok(())
 }
-
-// fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     ffmpeg::init()?;
-//     let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-//     let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
-//     let mut transcoder = Transcoder::new(input_file, output_file)?;
-//     transcoder.start()?;
-//     Ok(())
-// }

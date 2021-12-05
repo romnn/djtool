@@ -173,8 +173,10 @@ impl PkceAuthenticator {
         let (verifier, challenge) = self.generate_codes(verifier_bytes);
 
         // the verifier will be needed later when requesting the token
-        let mut config = self.config.write().await;
-        config.verifier = Some(verifier);
+        {
+            let mut config = self.config.write().await;
+            config.verifier = Some(verifier);
+        };
 
         let mut payload: HashMap<&str, &str> = HashMap::new();
         // todo: convert to serde struct
@@ -194,14 +196,19 @@ impl PkceAuthenticator {
 
     async fn read_config(&self) -> Result<()> {
         let new_config = Config::load(&self.config_file).await?;
-        let mut config = self.config.write().await;
-        *config = new_config;
+        {
+            let mut config = self.config.write().await;
+            *config = new_config;
+        };
         println!("read the config");
         Ok(())
     }
 
-    async fn write_config(&self) -> std::result::Result<(), spotify::error::Error> {
-        let config = self.config.read().await;
+    async fn write_config(
+        &self,
+        config: &Config,
+    ) -> std::result::Result<(), spotify::error::Error> {
+        // let config = self.config.read().await;
         config.save(&self.config_file).await.map_err(|err| {
             spotify::error::Error::Config(spotify::error::ConfigError::WriteError(err))
         })
@@ -223,13 +230,14 @@ impl PkceAuthenticator {
         data.insert(param::CODE_VERIFIER, verifier.to_owned());
 
         let new_token = self.fetch_access_token(&data, None).await?;
-        {
-            let mut config = self.config.write().await;
-            config.token = Some(new_token);
-        }
+        // {
+        let mut config = self.config.write().await;
+        config.token = Some(new_token);
+        self.write_config(&config).await
+        // }
 
-        println!("writing config");
-        self.write_config().await
+        // println!("writing config");
+        // self.write_config().await
     }
 
     pub async fn authenticate(&self) -> std::result::Result<(), spotify::error::Error> {
@@ -251,12 +259,15 @@ impl PkceAuthenticator {
                 match self.refetch_token().await {
                     Ok(Some(refreshed_token)) => {
                         println!("successfully refreshed expired token from token cache");
+                        // {
                         let mut config = self.config.write().await;
                         config.token = Some(refreshed_token);
                         println!("updated token");
-                        let test = self.write_config().await;
-                        println!("wrote config");
-                        return test;
+                        return self.write_config(&config).await;
+                        // };
+                        // let test = self.write_config(&config).await;
+                        // println!("wrote config");
+                        // return test;
                     }
                     _ => {
                         println!("unable to refresh expired token from token cache");

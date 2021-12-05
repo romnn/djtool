@@ -1,20 +1,21 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
 use std::io;
+use std::marker::{Send, Sync};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
-// use tokio::io::{BufReader, BufWriter};
-use async_trait::async_trait;
-use std::marker::{Send, Sync};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Library {
-    pub library_path: PathBuf,
+    pub library_dir: PathBuf,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
+    pub config_dir: PathBuf,
+    pub debug_dir: PathBuf,
     pub config_file: PathBuf,
     pub library: Library,
 }
@@ -34,9 +35,10 @@ pub trait Persist: Serialize + DeserializeOwned {
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(config_file)?;
-        let writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(writer, &self)?;
+        // let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(&file, &self)?;
         Ok(())
     }
 }
@@ -45,28 +47,41 @@ impl Persist for Library {}
 
 impl Config {
     pub async fn open<T: AsRef<Path> + Send + Sync>(config_dir: T) -> Result<Self> {
+        let debug_dir = config_dir.as_ref().join("debug");
         let config_file = config_dir.as_ref().join("config.json");
+
+        let _ = tokio::fs::create_dir_all(&config_dir).await;
+        let _ = tokio::fs::create_dir_all(&debug_dir).await;
+
+        // load the library
         let library = Library::load(&config_file).await;
         let library = match library {
             Err(_) => {
-                let default_library_path = dirs::audio_dir()
+                let default_library_dir = dirs::audio_dir()
                     .or(dirs::download_dir())
                     .unwrap()
                     .join("djtool");
                 let empty = Library {
-                    library_path: default_library_path,
+                    library_dir: default_library_dir,
                 };
                 empty.save(&config_file).await?;
                 empty
             }
             Ok(library) => library,
         };
-        let _ = tokio::fs::create_dir_all(&library.library_path).await;
+        let _ = tokio::fs::create_dir_all(&library.library_dir).await;
+
         println!("loaded library: {:?}", library);
         Ok(Self {
             library,
+            config_dir: config_dir.as_ref().to_owned(),
+            debug_dir,
             config_file,
         })
+    }
+
+    pub fn debug_dir(&self) -> &PathBuf {
+        &self.debug_dir
     }
 
     // pub async fn load<T: AsRef<Path>>(config_dir: T) -> Result<Self> {

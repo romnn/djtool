@@ -1,6 +1,10 @@
+use anyhow::Result;
 pub use rand::distributions::Alphanumeric;
 use rand::{distributions::Distribution, Rng};
 use sanitize_filename as sanitizer;
+use serde_json::{self, Value};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct PKCECodeVerifier;
 
@@ -23,6 +27,19 @@ impl Distribution<u8> for PKCECodeVerifier {
             }
         }
     }
+}
+
+pub async fn save_json_response<P: AsRef<Path> + Send + Sync>(
+    output_file: P,
+    response: &Value,
+) -> Result<()> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(output_file)?;
+    serde_json::to_writer(&file, response)?;
+    Ok(())
 }
 
 pub fn sanitize_filename(name: String) -> String {

@@ -1,0 +1,95 @@
+mod extractor;
+pub mod model;
+mod search;
+
+use crate::backend::{ExtractorBackend, Method, TrackDescription};
+use anyhow::Result;
+use async_trait::async_trait;
+use reqwest;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+pub struct Youtube {
+    // debug_dir: PathBuf,
+    client: Arc<reqwest::Client>,
+}
+
+impl Youtube {
+    // pub fn new<P: AsRef<Path> + Send + Sync>(debug_dir: P) -> Result<Self> {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            // debug_dir: debug_dir.as_ref().to_owned(),
+            client: Arc::new(reqwest::Client::new()),
+        })
+    }
+}
+
+#[async_trait]
+impl ExtractorBackend for Youtube {
+    async fn download<P: AsRef<Path> + Send + Sync>(
+        track: TrackDescription,
+        output_file: P,
+        method: Method,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    // pub async fn download(
+    //     &self,
+    //     video: &Video,
+    //     format: &Format,
+    //     output_path: PathBuf,
+    // ) -> Result<u64> {
+    //     let stream_url = self.get_stream_url(video, format).await?;
+    //     println!("stream url: {}", stream_url);
+    //     let mut download = Download::new(stream_url, output_path).await?;
+    //     download.start().await?;
+    //     Ok(download.info.content_length)
+    // }
+
+    // pub async fn download_audio(&self, id: String, dest: &PathBuf) -> Result<OutputVideo> {
+    //     let video = self.get_video(&id).await?;
+    //     // if video.formats.len() < 1 {
+    //     // todo: raise error here
+    //     // panic!("todo: error when no formats");
+    //     // }
+    //     let audio_formats = video.formats.audio();
+    //     for (i, f) in audio_formats.iter().enumerate() {
+    //         println!(
+    //             "{}: {:?} {:?} {:?}",
+    //             i, f.quality_label, f.mime_type, f.bitrate
+    //         );
+
+    //         // println!(
+    //         //     "{}: {:?} {:?} {:?} {:?}",
+    //         //     i, f.quality_label, f.mime_type, f.bitrate, f.url
+    //         // );
+    //     }
+    //     let format = audio_formats.first().unwrap().to_owned().to_owned();
+    //     println!(
+    //         "Video '{:?}' - Quality '{:?}' - Codec '{:?}'",
+    //         video.title, format.quality_label, format.mime_type
+    //     );
+
+    //     // let random_filename = utils::random_filename(25);
+    //     // println!("random filename: {}", random_filename);
+
+    //     let sanitized_filename = utils::sanitize_filename(video.title.clone().unwrap());
+    //     println!("sanitized filename: {}", sanitized_filename);
+
+    //     let output_path = dest.to_owned();
+    //     println!("output path: {}", output_path.display());
+
+    //     // create the directory if it does not already exist
+    //     let content_length = self.download(&video, &format, output_path.clone()).await?;
+
+    //     Ok(OutputVideo {
+    //         info: video,
+    //         thumbnail: None,
+    //         audio_file: output_path,
+    //         content_length,
+    //         format,
+    //     })
+    // }
+}

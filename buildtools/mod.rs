@@ -23,11 +23,7 @@ use std::path::PathBuf;
 #[macro_export]
 macro_rules! switch {
     ($conf:expr, $feat:expr, $name:expr) => {
-        let arg = if $feat {
-            "enable"
-        } else {
-            "disable"
-        };
+        let arg = if $feat { "enable" } else { "disable" };
         $conf.arg(format!("--{}-{}", arg, $name));
     };
 }
@@ -89,11 +85,11 @@ pub fn feature_env_set(name: &'static str) -> bool {
     env::var(&format!("CARGO_FEATURE_FFMPEG_{}", name.to_uppercase())).is_ok()
 }
 
-fn is_debug_build() -> bool {
+pub fn is_debug_build() -> bool {
     env::var("DEBUG").is_ok()
 }
 
-fn is_cross_build() -> bool {
+pub fn is_cross_build() -> bool {
     || -> Result<bool> {
         let target = env::var("TARGET")?;
         let host = env::var("HOST")?;

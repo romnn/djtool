@@ -2,12 +2,8 @@
 
 TODO:
 
-- credentials shall be used by any mean of authentication
-- use a notification channel from spotify to djtool, which handles the user interface
-- need separate api endpoints per auth flow
-- the authentication methods should be traits
-- the spotify client should be a struct
-- depending on which the suitable auth method trait should be loaded
+- convert the youtube resutls via an impl
+- implement the stream interface for youtube
 
 - add config struct that manages all the local assets in a persisted database
   - need a reindex method that builds the config from scratch!
@@ -20,8 +16,17 @@ TODO:
 
 Done:
 
+- create a more sophisticated debug API for spotify and youtube query endpoints
+- use macros for nicer path handling of js parsed values
 - implement a async webserver that runs in the background
 - add tauri
+- credentials shall be used by any mean of authentication
+- use a notification channel from spotify to djtool, which handles the user interface
+- need separate api endpoints per auth flow
+- the authentication methods should be traits
+- the spotify client should be a struct
+- depending on which the suitable auth method trait should be loaded
+
 
 #### Big issues to address
 

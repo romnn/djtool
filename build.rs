@@ -10,7 +10,7 @@ use buildtools::dep_graph::parallel::*;
 use buildtools::dep_graph::{DepGraph, Dependency};
 use buildtools::git::GitRepository;
 use buildtools::libs::{Library, LibraryId, LIBRARIES};
-use buildtools::{feature_env_set, output, search};
+use buildtools::{feature_env_set, is_debug_build, output, search};
 #[cfg(feature = "parallel-build")]
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -248,6 +248,11 @@ fn main() {
     tauri_build::build();
 
     println!("cargo:warning={}", output().display());
+
+    if is_debug_build() {
+        println!("cargo:warning=is debug build");
+        println!(r#"cargo:rustc-cfg=feature="debug""#);
+    }
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
 
