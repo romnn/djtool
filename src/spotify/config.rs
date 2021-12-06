@@ -1,5 +1,5 @@
 use crate::config::Persist;
-use rspotify_model::Token;
+use super::model::Token;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

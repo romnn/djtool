@@ -1,24 +1,23 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod model;
 pub mod stream;
 
 use super::config::Persist;
+use super::source::Source;
 use super::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
-use stream::paginate;
 use async_trait::async_trait;
 use base64;
 use chrono::{DateTime, Duration, Utc};
 use futures::stream::Stream;
 use futures_util::pin_mut;
 use futures_util::stream::{StreamExt, TryStreamExt};
+use model::{FullPlaylist, Id, Market, Page, PlaylistId, PlaylistItem, SimplifiedPlaylist, UserId};
 use reqwest;
 use reqwest::Url;
 use reqwest::{header::HeaderMap, Error as HttpError};
-use rspotify_model::{
-    FullPlaylist, Id, Market, Page, PlaylistId, PlaylistItem, SimplifiedPlaylist, UserId,
-};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -28,6 +27,7 @@ use std::io::{Read, Write};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use stream::paginate;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use webbrowser;
@@ -199,3 +199,5 @@ impl Spotify {
             .await
     }
 }
+
+impl Source for Spotify {}

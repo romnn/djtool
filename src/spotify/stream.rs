@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_stream::stream;
 use futures::stream::Stream;
 use futures::Future;
-use rspotify_model::Page;
+use super::model::Page;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 

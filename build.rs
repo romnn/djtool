@@ -254,7 +254,10 @@ fn compile_protos() -> Result<()> {
     println!("cargo:warning=proto source dir is {:?}", source_dir);
     println!("cargo:warning=proto output dir is {:?}", output_dir);
     tonic_build::configure()
-        // .type_attribute("proto.grpc.InstanceId", "#[derive(Hash, Eq)]")
+        .type_attribute("proto.djtool.Track", "#[derive(Serialize, Deserialize, Hash, Eq)]")
+        .type_attribute("proto.djtool.Playlist", "#[derive(Serialize, Deserialize, Hash, Eq)]")
+        .type_attribute("proto.djtool.SourcePlaylists", "#[derive(Serialize, Deserialize, Hash, Eq)]")
+        .type_attribute("proto.djtool.Library", "#[derive(Serialize, Deserialize, Hash, Eq)]")
         // .type_attribute("proto.grpc.SessionToken", "#[derive(Hash, Eq)]")
         // .type_attribute("proto.grpc.AudioInputDescriptor", "#[derive(Hash, Eq)]")
         // .type_attribute("proto.grpc.AudioOutputDescriptor", "#[derive(Hash, Eq)]")

@@ -7,24 +7,75 @@ package proto.djtool;
 /* import "proto/grpc/descriptors.proto"; */
 /* import "proto/grpc/remote.proto"; */
 
-service Djtool {
-  // connect and disconnect
-  rpc Connect(ConnectRequest) returns (stream Update) {}
-  rpc Disconnect(DisconnectRequest) returns (Empty) {}
+service DjTool {
+  // sync request
+  rpc Sync(SyncRequest) returns (stream SyncProgressUpdate) {}
+  // load library
+  /* rpc Disconnect(DisconnectRequest) returns (Empty) {} */
 }
 
-message Empty {}
+enum Source { SPOTIFY = 0; }
 
-message ConnectRequest {}
+enum Sink { YOUTUBE = 0; }
 
-message DisconnectRequest {}
-
-message Heartbeat { uint64 seq = 1; }
-
-message Update {
-  oneof update {
-    // todo: add status messages or notifications
-    Heartbeat heartbeat = 1;
-    /* Assignment assignment = 2; */
-  }
+message Track {
+  string name = 1;
 }
+
+message Playlist {
+  string name = 1;
+  repeated Track tracks = 2;
+}
+
+message SourcePlaylists {
+  Source source = 1;
+  repeated Playlist playlists = 2;
+}
+
+message Library {
+  repeated SourcePlaylists sources = 1;
+}
+
+message TrackSyncDesc {
+  string id = 1;
+  Source source = 2;
+  Sink sink = 3;
+}
+
+message PlaylistSyncDesc {
+  string id = 1;
+  Source source = 2;
+  Sink sink = 3;
+}
+
+message SyncProgressUpdate {
+  // todo oneof
+}
+
+message SyncRequest {
+  repeated Source sources = 1;
+  repeated TrackSyncDesc tracks = 2;
+  repeated PlaylistSyncDesc playlists = 3;
+  /* oneof request { */
+  /*   TrackDescriptor track = 1; */
+  /*   PlaylistDescriptor playlist = 2; */
+  /*   // all is equal to none here */
+  /*   /1* SyncAll all = 3; *1/ */
+  /* } */
+}
+
+/* message Empty {} */
+
+/* message ConnectRequest {} */
+
+/* message DisconnectRequest {} */
+
+/* message Heartbeat { uint64 seq = 1; } */
+
+/* message Update { */
+/*   oneof update { */
+/*     // todo: add status messages or notifications */
+/*     Heartbeat heartbeat = 1; */
+/*     /1* Assignment assignment = 2; *1/ */
+/*   } */
+/* } */

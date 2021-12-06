@@ -1,60 +1,94 @@
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Empty {}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ConnectRequest {}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DisconnectRequest {}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Heartbeat {
-    #[prost(uint64, tag = "1")]
-    pub seq: u64,
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct Track {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct Playlist {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub tracks: ::prost::alloc::vec::Vec<Track>,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct SourcePlaylists {
+    #[prost(enumeration = "Source", tag = "1")]
+    pub source: i32,
+    #[prost(message, repeated, tag = "2")]
+    pub playlists: ::prost::alloc::vec::Vec<Playlist>,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct Library {
+    #[prost(message, repeated, tag = "1")]
+    pub sources: ::prost::alloc::vec::Vec<SourcePlaylists>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Update {
-    #[prost(oneof = "update::Update", tags = "1")]
-    pub update: ::core::option::Option<update::Update>,
+pub struct TrackSyncDesc {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "Source", tag = "2")]
+    pub source: i32,
+    #[prost(enumeration = "Sink", tag = "3")]
+    pub sink: i32,
 }
-/// Nested message and enum types in `Update`.
-pub mod update {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Update {
-        /// todo: add status messages or notifications
-        ///
-        /// Assignment assignment = 2;
-        #[prost(message, tag = "1")]
-        Heartbeat(super::Heartbeat),
-    }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaylistSyncDesc {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "Source", tag = "2")]
+    pub source: i32,
+    #[prost(enumeration = "Sink", tag = "3")]
+    pub sink: i32,
+}
+/// todo oneof
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncProgressUpdate {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncRequest {
+    #[prost(enumeration = "Source", repeated, tag = "1")]
+    pub sources: ::prost::alloc::vec::Vec<i32>,
+    #[prost(message, repeated, tag = "2")]
+    pub tracks: ::prost::alloc::vec::Vec<TrackSyncDesc>,
+    /// oneof request {
+    #[prost(message, repeated, tag = "3")]
+    pub playlists: ::prost::alloc::vec::Vec<PlaylistSyncDesc>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Source {
+    Spotify = 0,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Sink {
+    Youtube = 0,
 }
 #[doc = r" Generated server implementations."]
-pub mod djtool_server {
+pub mod dj_tool_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    #[doc = "Generated trait containing gRPC methods that should be implemented for use with DjtoolServer."]
+    #[doc = "Generated trait containing gRPC methods that should be implemented for use with DjToolServer."]
     #[async_trait]
-    pub trait Djtool: Send + Sync + 'static {
-        #[doc = "Server streaming response type for the Connect method."]
-        type ConnectStream: futures_core::Stream<Item = Result<super::Update, tonic::Status>>
+    pub trait DjTool: Send + Sync + 'static {
+        #[doc = "Server streaming response type for the Sync method."]
+        type SyncStream: futures_core::Stream<Item = Result<super::SyncProgressUpdate, tonic::Status>>
             + Send
             + Sync
             + 'static;
-        #[doc = " connect and disconnect"]
-        async fn connect(
+        #[doc = " sync request"]
+        async fn sync(
             &self,
-            request: tonic::Request<super::ConnectRequest>,
-        ) -> Result<tonic::Response<Self::ConnectStream>, tonic::Status>;
-        async fn disconnect(
-            &self,
-            request: tonic::Request<super::DisconnectRequest>,
-        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+            request: tonic::Request<super::SyncRequest>,
+        ) -> Result<tonic::Response<Self::SyncStream>, tonic::Status>;
     }
     #[derive(Debug)]
-    pub struct DjtoolServer<T: Djtool> {
+    pub struct DjToolServer<T: DjTool> {
         inner: _Inner<T>,
         accept_compression_encodings: (),
         send_compression_encodings: (),
     }
     struct _Inner<T>(Arc<T>);
-    impl<T: Djtool> DjtoolServer<T> {
+    impl<T: DjTool> DjToolServer<T> {
         pub fn new(inner: T) -> Self {
             let inner = Arc::new(inner);
             let inner = _Inner(inner);
@@ -71,9 +105,9 @@ pub mod djtool_server {
             InterceptedService::new(Self::new(inner), interceptor)
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for DjtoolServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for DjToolServer<T>
     where
-        T: Djtool,
+        T: DjTool,
         B: Body + Send + Sync + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -86,20 +120,20 @@ pub mod djtool_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/proto.djtool.Djtool/Connect" => {
+                "/proto.djtool.DjTool/Sync" => {
                     #[allow(non_camel_case_types)]
-                    struct ConnectSvc<T: Djtool>(pub Arc<T>);
-                    impl<T: Djtool> tonic::server::ServerStreamingService<super::ConnectRequest> for ConnectSvc<T> {
-                        type Response = super::Update;
-                        type ResponseStream = T::ConnectStream;
+                    struct SyncSvc<T: DjTool>(pub Arc<T>);
+                    impl<T: DjTool> tonic::server::ServerStreamingService<super::SyncRequest> for SyncSvc<T> {
+                        type Response = super::SyncProgressUpdate;
+                        type ResponseStream = T::SyncStream;
                         type Future =
                             BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ConnectRequest>,
+                            request: tonic::Request<super::SyncRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
-                            let fut = async move { (*inner).connect(request).await };
+                            let fut = async move { (*inner).sync(request).await };
                             Box::pin(fut)
                         }
                     }
@@ -108,44 +142,13 @@ pub mod djtool_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = ConnectSvc(inner);
+                        let method = SyncSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
                         let res = grpc.server_streaming(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/proto.djtool.Djtool/Disconnect" => {
-                    #[allow(non_camel_case_types)]
-                    struct DisconnectSvc<T: Djtool>(pub Arc<T>);
-                    impl<T: Djtool> tonic::server::UnaryService<super::DisconnectRequest> for DisconnectSvc<T> {
-                        type Response = super::Empty;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::DisconnectRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move { (*inner).disconnect(request).await };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = DisconnectSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
-                            accept_compression_encodings,
-                            send_compression_encodings,
-                        );
-                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
@@ -161,7 +164,7 @@ pub mod djtool_server {
             }
         }
     }
-    impl<T: Djtool> Clone for DjtoolServer<T> {
+    impl<T: DjTool> Clone for DjToolServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -171,7 +174,7 @@ pub mod djtool_server {
             }
         }
     }
-    impl<T: Djtool> Clone for _Inner<T> {
+    impl<T: DjTool> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(self.0.clone())
         }
@@ -181,7 +184,7 @@ pub mod djtool_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: Djtool> tonic::transport::NamedService for DjtoolServer<T> {
-        const NAME: &'static str = "proto.djtool.Djtool";
+    impl<T: DjTool> tonic::transport::NamedService for DjToolServer<T> {
+        const NAME: &'static str = "proto.djtool.DjTool";
     }
 }

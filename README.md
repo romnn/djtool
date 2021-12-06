@@ -17,7 +17,10 @@ python3 compile-proto-grpcweb.py
 
 TODO:
 
-- start a tonic server
+- unify the start routine of the djtool with a shutdown channel
+- start working on the sync function with semaphores (in djtool, calling out to various parts)
+- need its own transcoder(sem), downloader(sem), library copies to perform the tasks
+
 - build the UI using mock data
 - refactor the transcoder and wrap it in a semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
 - convert the full youtube results via an impl
@@ -26,10 +29,16 @@ TODO:
   - need a reindex method that builds the config from scratch!
   - needs to be run whenever the version changes
 - use main config to initialize spotify config path
-- use spotify api to get the playlists, with preview url and thumbnail that need to be downloaded
 
 Done:
 
+- create a library in protobuf and add serde serialization to it
+- move djtool server code to lib
+- allow of vec of sinks
+- rename backend / frontend into source and sink
+- allow for vec of sources
+- use spotify api to get the playlists, with preview url and thumbnail that need to be downloaded
+- start a tonic server
 - add protobuf to the project for server side streaming using more sophisticated build scripts
 - implement a basic audio player in the UI and check if this works
 - implement full auth flow with webbrowser externally (not using tauri)

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{Utc, Date};
+use chrono::{Date, Utc};
 use std::path::{Path, PathBuf};
 
 // #[derive(Debug, Clone)]
@@ -36,10 +36,11 @@ pub enum Method {
 }
 
 #[async_trait]
-pub trait ExtractorBackend {
-    async fn download<P: AsRef<Path> + Send + Sync>(
+pub trait Sink {
+    async fn download(
+        &self,
         track: TrackDescription,
-        output_file: P,
+        output_file: &PathBuf,
         method: Method,
     ) -> Result<()>;
 }

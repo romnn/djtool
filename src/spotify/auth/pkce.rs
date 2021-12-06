@@ -1,8 +1,8 @@
 use crate::config::Persist;
 use crate::spotify::auth::{join_scopes, Authenticator, Credentials, OAuth};
 use crate::spotify::config::Config;
-// use crate::spotify::error::{AuthError as SpotifyAuthError, Error as SpotifyError};
 use crate::spotify;
+use crate::spotify::model::Token;
 use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,7 +11,6 @@ use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Url;
-use rspotify_model::Token;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};

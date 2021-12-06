@@ -858,8 +858,10 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-build",
+ "tonic-web",
  "url",
  "vcpkg",
  "warp",
@@ -3958,6 +3960,24 @@ dependencies = [
  "prost-build",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8425af3a75718dc8e0d58e1916bc09cced5bd206d114ab57e66c83b0ad740d3c"
+dependencies = [
+ "base64",
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "hyper",
+ "pin-project",
+ "tonic",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]

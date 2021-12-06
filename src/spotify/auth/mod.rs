@@ -11,7 +11,7 @@ use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Error as HttpError, Url};
-use rspotify_model::Token;
+use crate::spotify::model::Token;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};

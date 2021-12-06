@@ -3,7 +3,7 @@ pub mod model;
 mod search;
 mod stream;
 
-use crate::backend::{ExtractorBackend, Method, TrackDescription};
+use crate::sink::{Method, Sink, TrackDescription};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -71,10 +71,11 @@ impl Youtube {
 }
 
 #[async_trait]
-impl ExtractorBackend for Youtube {
-    async fn download<P: AsRef<Path> + Send + Sync>(
+impl Sink for Youtube {
+    async fn download(
+        &self,
         track: TrackDescription,
-        output_file: P,
+        output_file: &PathBuf,
         method: Method,
     ) -> Result<()> {
         Ok(())
