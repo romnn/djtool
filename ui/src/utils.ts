@@ -3,8 +3,17 @@ export const toHHMMSS = (seconds: number) => {
   const mins = Math.floor((seconds - hrs * 3600) / 60);
   const secs = seconds - hrs * 3600 - mins * 60;
 
-  const hrsString = ("00" + Math.round(hrs).toString()).slice(-2);
-  const minsString = ("00" + Math.round(mins).toString()).slice(-2);
-  const secsString = ("00" + Math.round(secs).toString()).slice(-2);
-  return `${hrsString}:${minsString}:${secsString}`;
+  let output = [];
+  let parts = [hrs, mins, secs].map((p) => Math.round(p));
+  if (parts[0]  == 0) {
+    parts = parts.slice(1);
+  }
+  for (let i = 0; i < parts.length; i++) {
+    if (i === 0) {
+      output.push(parts[i].toString());
+    } else {
+      output.push(("00" + parts[i].toString()).slice(-2));
+    }
+  }
+  return output.join(":");
 };
