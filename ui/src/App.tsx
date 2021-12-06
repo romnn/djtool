@@ -1,27 +1,47 @@
 import React from "react";
-import logo from "./logo.svg";
-import "./App.css";
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import "./App.sass";
+import Library from "./views/Library";
+import Landing from "./views/Landing";
+import { connect, ConnectedProps } from "react-redux";
+import { RootState } from "./store";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <audio src="http://localhost:21011/static/audio.mp3" controls autoPlay></audio>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+const mapState = (state: RootState) => ({
+  useDarkTheme: state.config?.useDarkTheme,
+});
+
+const mapDispatch = {};
+
+const connector = connect(mapState, mapDispatch);
+type PropsFromRedux = ConnectedProps<typeof connector>;
+
+interface AppProps extends PropsFromRedux {}
+type AppState = {};
+
+class App extends React.Component<AppProps, AppState> {
+  constructor(props: AppProps) {
+    super(props);
+    this.state = {};
+  }
+
+  componentDidMount = () => {};
+
+  render = () => {
+    return (
+      <div
+        className={`App ${this.props.useDarkTheme ? "dark" : "light"}`}
+      >
+        <Router>
+          <Routes>
+            <Route path="/library/:source/:playlist" element={<Library />} />
+            <Route path="/library/:source" element={<Library />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/" element={<Landing />} />
+          </Routes>
+        </Router>
+      </div>
+    );
+  };
 }
 
-export default App;
+export default connector(App);

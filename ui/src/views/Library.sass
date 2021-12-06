@@ -1,0 +1,43 @@
+.Library
+  width: 100vw
+  height: 100vh
+  overflow: hidden
+
+  .content
+    display: flex
+    flex-flow: row nowrap
+    align-items: flex-start
+    position: absolute
+    background-color: blue
+    height: calc(100vh - 50px)
+    width: 100vw
+    top: 0
+    left: 0
+
+    .sources
+      min-width: 150px
+      height: 100%
+      width: 15%
+      background-color: yellow
+
+    .playlists
+      background-color: green
+      height: 100%
+      min-width: 200px
+      width: 20%
+
+    .tracks
+      flex-grow: 1
+      height: 100%
+      background-color: orange
+      // min-width: 200px
+      // width: 20%
+
+
+  .player
+    position: absolute
+    background-color: red
+    height: 50px
+    width: 100vw
+    bottom: 0
+    left: 0
