@@ -1,6 +1,8 @@
 import React from "react";
 import "./Library.sass";
-import Player from "../components/Player";
+import Player from "./Player";
+import Sources from "./Sources";
+import Tracks from "./Tracks";
 import { connect, ConnectedProps } from "react-redux";
 import { RootState } from "../store";
 
@@ -21,22 +23,19 @@ class Library extends React.Component<LibraryProps, LibraryState> {
   }
 
   componentDidMount = () => {};
-  //
-  // <audio
-  //         src="http://localhost:21011/static/audio.mp3"
-  //         controls
-  //         autoPlay
-  //       ></audio>
-  //
-  //
 
   render = () => {
     return (
       <div className="Library">
         <div className="content">
-          <div className="sources"></div>
+          <div className="sources">
+            <Sources />
+          </div>
           <div className="playlists"></div>
-          <div className="tracks"></div>
+          <div className="tracks">
+          <Tracks />
+
+          </div>
         </div>
         <div className="player">
           <Player />

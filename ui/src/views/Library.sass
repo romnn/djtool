@@ -1,3 +1,5 @@
+$player-height: 4rem
+
 .Library
   width: 100vw
   height: 100vh
@@ -8,17 +10,17 @@
     flex-flow: row nowrap
     align-items: flex-start
     position: absolute
-    background-color: blue
-    height: calc(100vh - 50px)
+    // background-color: blue
+    height: calc(100vh - #{$player-height})
     width: 100vw
     top: 0
     left: 0
 
     .sources
-      min-width: 150px
+      min-width: 8rem
       height: 100%
       width: 15%
-      background-color: yellow
+      // background-color: yellow
 
     .playlists
       background-color: green
@@ -30,14 +32,13 @@
       flex-grow: 1
       height: 100%
       background-color: orange
-      // min-width: 200px
-      // width: 20%
 
 
   .player
     position: absolute
     background-color: red
-    height: 50px
+    border-top: 2px solid black
+    height: $player-height
     width: 100vw
     bottom: 0
     left: 0
