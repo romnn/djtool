@@ -22,6 +22,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str;
+use std::thread;
 
 use bindgen::callbacks::{
     EnumVariantCustomBehavior, EnumVariantValue, IntKind, MacroParsingBehavior, ParseCallbacks,
@@ -244,6 +245,32 @@ fn maybe_search_include(include_paths: &[PathBuf], header: &str) -> Option<Strin
     }
 }
 
+fn compile_protos() -> Result<()> {
+    let source_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).canonicalize()?;
+    let output_dir = source_dir.join("src/proto");
+    let _ = std::fs::remove_dir_all(&output_dir);
+    let _ = std::fs::create_dir_all(&output_dir);
+
+    println!("cargo:warning=proto source dir is {:?}", source_dir);
+    println!("cargo:warning=proto output dir is {:?}", output_dir);
+    tonic_build::configure()
+        // .type_attribute("proto.grpc.InstanceId", "#[derive(Hash, Eq)]")
+        // .type_attribute("proto.grpc.SessionToken", "#[derive(Hash, Eq)]")
+        // .type_attribute("proto.grpc.AudioInputDescriptor", "#[derive(Hash, Eq)]")
+        // .type_attribute("proto.grpc.AudioOutputDescriptor", "#[derive(Hash, Eq)]")
+        // .type_attribute("proto.grpc.AudioAnalyzerDescriptor", "#[derive(Hash, Eq)]")
+        .build_server(true)
+        .build_client(false)
+        .out_dir(&output_dir)
+        .compile(
+            &[source_dir.join("proto/djtool.proto")],
+            &[source_dir],
+            // &proto_files,
+            // &[include_dir.canonicalize().unwrap()],
+        )?;
+    Ok(())
+}
+
 fn main() {
     tauri_build::build();
 
@@ -253,6 +280,11 @@ fn main() {
         println!("cargo:warning=is debug build");
         println!(r#"cargo:rustc-cfg=feature="debug""#);
     }
+
+    #[cfg(all(feature = "proto-build", feature = "parallel-build"))]
+    let proto_build_thread = thread::spawn(|| compile_protos().unwrap());
+    #[cfg(all(feature = "proto-build", not(feature = "parallel-build")))]
+    compile_protos().unwrap();
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
 
@@ -285,8 +317,6 @@ fn main() {
     }
 
     for inner in dependencies.into_iter() {
-        println!("cargo:warning={:?}", inner);
-        // println!("cargo:rustc-link-lib=static={}", inner.name);
         let lib = LIBRARIES.get(&inner).unwrap();
         (lib.build)(need_build, lib.version).unwrap();
     }
@@ -918,6 +948,8 @@ fn main() {
         // required to make tao (from tauri) link
         println!("cargo:rustc-link-lib=framework=ColorSync");
     }
+    #[cfg(all(feature = "proto-build", feature = "parallel-build"))]
+    proto_build_thread.join().unwrap();
 }
 
 // println!("cargo:rerun-if-changed=build.rs");

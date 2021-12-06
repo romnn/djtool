@@ -1,9 +1,25 @@
+## djtool
+
+#### Usage
+
+```bash
+cargo run --release
+```
+
+#### Development
+
+```bash
+pip3 install "proto-compile>=0.1.6"
+python3 compile-proto-grpcweb.py
+```
+
 #### Development roadmap
 
 TODO:
 
-- implement a basic audio player in the UI and check if this works
-- refactor the transcoder
+- start a tonic server
+- build the UI using mock data
+- refactor the transcoder and wrap it in a semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
 - convert the full youtube results via an impl
 
 - add config struct that manages all the local assets in a persisted database
@@ -14,6 +30,8 @@ TODO:
 
 Done:
 
+- add protobuf to the project for server side streaming using more sophisticated build scripts
+- implement a basic audio player in the UI and check if this works
 - implement full auth flow with webbrowser externally (not using tauri)
   - needs callback handler in warp
 - cache the spotify auth key so that subsequent uses do not need to get it again
@@ -49,3 +67,7 @@ Done:
 - replace collect and first with next()
 - split into youtube extractor and more general downloader
 - build higher level AudioTranscoder and InternalAudioTranscoder
+- make the tauri UI optional
+  - we are using only protocol buffers and a static file server anyways, so just bundle the UI in another webserver at build time and use webbrowser.open() when the rust app launches
+- allow changing the default music library location
+  - need system native file picker a la https://github.com/saurvs/nfd-rs which could be used with a feature maybe

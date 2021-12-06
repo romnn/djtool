@@ -7,6 +7,16 @@ edition = "2021"
 [profile.release]
 # opt-level = 's'  # Optimize for size.
 # lto = true # Link Time Optimization (LTO)
+#
+
+# [workspace]
+# members = [
+#   "buildtools/proto",
+# ]
+
+# [[bin]]
+# name = "client"
+# path = "src/client/bin/main.rs"
 
 [dependencies]
 reqwest = { version = "0.11.6", features = ["json", "blocking", "default-tls", "stream"] }
@@ -36,12 +46,15 @@ thiserror = "1.0.30"
 sha2 = "0.9.6"
 webbrowser = "0.5.5"
 warp = "0.3.2"
-tauri = { version = "1.0.0-beta.8" }
+tauri = { version = "1.0.0-beta.8", features = ["custom-protocol"] , optional = true}
 dirs = "4.0.0"
 rspotify-model = "0.11.3"
 async-stream = "0.3.2"
 id3 = "0.6.6"
 image = "0.23.14"
+tonic = "0.5"
+prost = "0.8"
+prost-types = "0.8"
 
 [build-dependencies]
 anyhow = "1.0"
@@ -50,8 +63,8 @@ cc         = "1.0"
 pkg-config = "0.3"
 lazy_static = "1.4.0"
 bindgen    = { version = "0.59", default-features = false, features = ["runtime"] }
-tauri-build = { version = "1.0.0-beta.4" }
-
+tauri-build = { version = "1.0.0-beta.4", optional = true }
+tonic-build = { version = "0.5", features = ["prost"], optional = true }
 rayon = { version = "1.5.1", optional=true }
 crossbeam-channel = { version = "0.4", optional = true }
 
@@ -60,9 +73,17 @@ vcpkg = "0.2"
 
 [features]
 default  = [
-  # parallel dependency graph iterator to build dependencies in parallel
   "parallel-build",
-  # standard ffmpeg libraries
+  "proto-build",
+  "ffmpeg",
+  "gui",
+]
+
+gui = ["tauri", "tauri-build"]
+proto-build = ["tonic-build"]
+
+# ffmpeg libraries
+ffmpeg = [
   "ffmpeg-avcodec",
   "ffmpeg-avdevice",
   "ffmpeg-avfilter",
@@ -71,17 +92,17 @@ default  = [
   "ffmpeg-swscale",
   # additional ffmpeg decoders and encoders
   "ffmpeg-mp3lame",
-  # miscelanious
   "ffmpeg-license-nonfree",
-  # tauri frontend
-  "custom-protocol",
 ]
 
+# force rebuilding ffmpeg
 force-build = []
+
+# parallel dependency graph iterator to build dependencies in parallel
 parallel-build = ["rayon", "crossbeam-channel"]
 
 # tauri
-custom-protocol = [ "tauri/custom-protocol" ]
+# custom-protocol = [ "tauri/custom-protocol" ]
 
 # licensing
 ffmpeg-license-gpl      = []

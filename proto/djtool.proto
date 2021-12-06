@@ -1,0 +1,30 @@
+syntax = "proto3";
+package proto.djtool;
+
+/* import "proto/audio/analysis/analysis.proto"; */
+/* import "proto/grpc/connection.proto"; */
+/* import "proto/grpc/session.proto"; */
+/* import "proto/grpc/descriptors.proto"; */
+/* import "proto/grpc/remote.proto"; */
+
+service Djtool {
+  // connect and disconnect
+  rpc Connect(ConnectRequest) returns (stream Update) {}
+  rpc Disconnect(DisconnectRequest) returns (Empty) {}
+}
+
+message Empty {}
+
+message ConnectRequest {}
+
+message DisconnectRequest {}
+
+message Heartbeat { uint64 seq = 1; }
+
+message Update {
+  oneof update {
+    // todo: add status messages or notifications
+    Heartbeat heartbeat = 1;
+    /* Assignment assignment = 2; */
+  }
+}
