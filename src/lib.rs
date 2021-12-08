@@ -51,49 +51,14 @@ pub type Sink = Arc<Box<dyn sink::Sink + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct DjTool {
-    // backends: Youtube,
     sources: Arc<RwLock<HashMap<proto::djtool::Service, Source>>>,
     sinks: Arc<RwLock<HashMap<proto::djtool::Service, Sink>>>,
     transcoder: Arc<Box<dyn transcode::Transcoder + Sync + Send>>,
     data_dir: Option<PathBuf>,
     config: Arc<RwLock<Option<config::Config>>>,
-    // spotify: SpotifyClient,
-    connection: Option<String>,
-
-    // semaphores to limit concurrency
-    request_spotify_download: Arc<Semaphore>,
-    // pub shutdown_rx: watch::Receiver<bool>,
-    // pub sessions: Arc<RwLock<HashMap<proto::grpc::SessionToken, Session<VU, CU>>>>,
-    // connections: Arc<RwLock<mpsc::Sender<Result<VU, Status>>>>,
 }
 
-// fn enable(is_enabled: bool) -> impl Filter<Extract = (), Error = Rejection> + Copy {
-//     warp::any()
-//         .and_then(move || {
-//             if is_enabled {
-//                 Ok(())
-//             } else {
-//                 // or warp::reject::custom if something besides 404
-//                 Err(warp::reject::not_found())
-//             }
-//         })
-//         // this weirdo deals with the Ok(())
-//         .untuple_one()
-// }
-
 impl DjTool {
-    // fn with_spotify(
-    //     spotify: SpotifyClient,
-    // ) -> impl Filter<Extract = (SpotifyClient,), Error = Infallible> + Send + Clone {
-    //     warp::any().map(move || spotify.clone())
-    // }
-
-    // fn with_youtube(
-    //     youtube: YoutubeClient,
-    // ) -> impl Filter<Extract = (YoutubeClient,), Error = Infallible> + Send + Clone {
-    //     warp::any().map(move || youtube.clone())
-    // }
-
     pub async fn serve(&self, shutdown_rx: watch::Receiver<bool>) -> Result<()> {
         let host = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let grpc_addr = SocketAddr::new(host, 21022);
@@ -102,8 +67,6 @@ impl DjTool {
         println!("grpc listening at {}", grpc_addr);
         println!("frontend served at {}", http_addr);
 
-        // let djtool_grpc_service = proto::djtool::dj_tool_server::DjToolServer::new(self.clone());
-        // let test = Arc::new(self);
         let djtool_grpc_service = proto::djtool::dj_tool_server::DjToolServer::new(self.clone());
         let djtool_grpc_service = tonic_web::config()
             // .allow_origins(vec!["localhost", "127.0.0.1"])
@@ -114,10 +77,6 @@ impl DjTool {
             .max_concurrent_streams(128)
             .add_service(djtool_grpc_service);
 
-        // tokio::task::spawn(async move {
-        //     let web = warp::get().and(warp::fs::dir("../../www/build"));
-        //     warp::serve(web).run(static_addr).await;
-        // });
         let library_dir = {
             let config = self.config.read().await;
             config.as_ref().map(|c| c.library.library_dir.to_owned())
@@ -125,7 +84,6 @@ impl DjTool {
         let http_tool_clone = self.clone();
         let shutdown_clone = shutdown_rx.clone();
         let http_server = tokio::spawn(async move {
-            // config.library.library_dir
             let library = warp::path("library").and(warp::fs::dir(library_dir.unwrap()));
 
             let http_tool = http_tool_clone.clone();
@@ -142,16 +100,13 @@ impl DjTool {
                     .and(warp::path!("debug" / "spotify" / "playlists"))
                     .and(warp::query::<debug::DebugSpotifyPlaylistsQuery>())
                     .and(warp::any().map(move || http_tool.clone()))
-                    // .and(with_spotify(spotify_client.clone()))
                     .and_then(debug::debug_spotify_playlists_handler);
 
-                // let youtube = Arc::new(Youtube::new().unwrap());
                 let http_tool = http_tool_clone.clone();
                 let debug_youtube_search = warp::get()
                     .and(warp::path!("debug" / "youtube" / "search"))
                     .and(warp::query::<debug::DebugYoutubeSearchQuery>())
                     .and(warp::any().map(move || http_tool.clone()))
-                    // .and(with_youtube(youtube.clone()))
                     .and_then(debug::debug_youtube_search_handler);
 
                 spotify_pkce_callback
@@ -166,7 +121,6 @@ impl DjTool {
             println!("starting server now ...");
             let (_, server) = warp::serve(routes)
                 .try_bind_with_graceful_shutdown(http_addr, async move {
-                    // shutdown_rx
                     shutdown_clone
                         .clone()
                         .changed()
@@ -175,11 +129,6 @@ impl DjTool {
                 })
                 .expect("failed to bind");
             server.await;
-            // tokio::run(server);
-            // .try_bind_with_graceful_shutdown(([127, 0, 0, 1], DEFAULT_PORT), )
-            // .run(([0, 0, 0, 0], DEFAULT_PORT))
-            // .run(http_addr)
-            // .await;
         });
 
         grpc_server
@@ -230,9 +179,7 @@ impl Default for DjTool {
             transcoder: Arc::new(Box::new(transcode::FFmpegTranscoder::default())),
             sources: Arc::new(RwLock::new(HashMap::new())),
             sinks: Arc::new(RwLock::new(HashMap::new())),
-            connection: None,
             config: Arc::new(RwLock::new(None)),
-            request_spotify_download: Arc::new(Semaphore::new(10)),
         }
     }
 }
@@ -244,11 +191,6 @@ impl DjTool {
     }
 
     pub async fn connect_spotify(&self, creds: Credentials, oauth: OAuth) -> Result<()> {
-        // check if already connected
-        // if self.has_source(proto::djtool::Source::Spotify) {
-        //     return Err(anyhow!("spotify already connected"));
-        // }
-        // todo: fix unwrap
         let spotify_client =
             spotify::Spotify::pkce(&self.data_dir.as_ref().unwrap(), creds, oauth).await?;
         spotify_client
@@ -298,8 +240,6 @@ impl DjTool {
             .ok_or(anyhow::anyhow!("no data dir available"))?;
 
         let config = config::Config::open(&data_dir).await?;
-        // let backends = Youtube::new()?; // config.debug_dir())?;
-        // let config = config::Config::open(&data_dir).await.unwrap();
         Ok(Self {
             data_dir: Some(data_dir.to_owned()),
             config: Arc::new(RwLock::new(Some(config))),
@@ -314,7 +254,6 @@ impl DjTool {
         let downloaded_audio = temp_dir.path().join(&"test");
 
         let sources = Arc::new(HashSet::from([proto::djtool::Service::Spotify]));
-        // let playlists = Arc::new(HashSet::new::<(proto::djtool::Service, String)>());
         let playlists = Arc::new(HashSet::from([(
             proto::djtool::Service::Soundcloud,
             String::from("test"),
@@ -335,34 +274,15 @@ impl DjTool {
         let sinks_lock = self.sinks.read().await;
         println!("locked sources and sinks");
 
-        // let stream = stream::iter(self.sources.read().await.iter())
-        let track_stream = stream::iter(sources_lock.iter())
-            // .filter(|(source_id, source): &(proto::djtool::Source, Source)| {
-            .filter_map(|(source_id, source): (&proto::djtool::Service, &Source)| {
-                // test
-                let sources_clone = sources.clone();
-                async move {
-                    if sources_clone.is_empty() || sources_clone.contains(&source_id) {
-                        Some(source_id)
-                    } else {
-                        None
-                    }
-                }
-            })
-            // .filter_map(|(source_id, source): (&proto::djtool::Source, &Source)| {
+        let track_stream = stream::iter(sources_lock.keys())
             .filter_map(|source_id: &proto::djtool::Service| {
+                let sources_clone = sources.clone();
                 let playlists_failed = playlists_failed.clone();
-                // let source_clone = source.clone();
-                // let playlist_stream =
-                //     playlist_stream.map(move |playlist| (source_clone.clone(), playlist));
-                // let playlist_stream = playlist_stream
-                //     .map(|s| Box::pin(s.map(|playlist| (source_clone.clone(), playlist))));
-
-                // let source: &Source = &sources_lock[source_id];
                 let source: &Source = &sources_lock[source_id];
                 async move {
-                    // let sources = &self.sources.read().await;
-
+                    if !(sources_clone.is_empty() || sources_clone.contains(&source_id)) {
+                        return None;
+                    }
                     let user_id = env::var("SPOTIFY_USER_ID").unwrap();
                     let playlist_stream = source.user_playlists_stream(user_id);
                     match playlist_stream {
@@ -376,89 +296,35 @@ impl DjTool {
                     }
                 }
             })
-            // flatten
-            // .flat_map(|track_stream| track_stream)
             .flat_map(|playlist_stream| playlist_stream)
             .take(1)
-            // filter out Err(playlist_track_stream)
-            .filter_map(
-                // |(source, playlist): (Source, Result<proto::djtool::Playlist>)| {
-                |(playlist): (Result<proto::djtool::Playlist>)| {
-                    // test
-                    let playlists_failed = playlists_failed.clone();
-                    let source_id = playlist
-                        .as_ref()
-                        .ok()
-                        .and_then(|pl| pl.id.as_ref())
-                        .map(|id| id.source)
-                        .and_then(proto::djtool::Service::from_i32);
+            .filter_map(|(playlist): (Result<proto::djtool::Playlist>)| {
+                let playlists_failed = playlists_failed.clone();
+                let source_id = playlist
+                    .as_ref()
+                    .ok()
+                    .and_then(|pl| pl.id.as_ref())
+                    .map(|id| id.source)
+                    .and_then(proto::djtool::Service::from_i32);
 
-                    async move {
-                        // match (source_id, playlist) {
-                        match playlist {
-                            // (Some(source_id), Ok(pl)) => Some((source_id, pl)),
-                            // Ok(pl) => Some(pl),
-                            Ok(pl) => {
-                                source_id.map(|id| (id, pl))
-                                // match source_id {
-                                //     Some(source_id
-                                // }
-                                //     Some
-                                //     // match pl {
-                                //     //     proto::djtool::Playlist {
-                                //     //         id: Some(proto::djtool::PlaylistId{
-                                //     //             source, ..
-                                //     //         }),
-                                //     //         ..
-                                //     //     }
-                            }
-                            Err(err) => {
-                                println!("playlist error: {}", err);
-                                let mut fp = playlists_failed.lock().await;
-                                *fp += 1;
-                                None
-                            }
+                async move {
+                    match playlist {
+                        Ok(pl) => source_id.map(|id| (id, pl)),
+                        Err(err) => {
+                            println!("playlist error: {}", err);
+                            let mut fp = playlists_failed.lock().await;
+                            *fp += 1;
+                            None
                         }
                     }
-                },
-            )
-            // // // .flat_map(|playlist_stream| playlist_stream)
-            // // filter playlists
-            // .filter_map(
-            //     |(source, playlist): (Source, proto::djtool::Playlist)| async {
-            //         match playlist.id.as_ref().map(|id| id.id.clone()) {
-            //             Some(id) => {
-            //                 let key = (source.id(), id);
-            //                 if playlists.is_empty() || playlists.contains(&key) {
-            //                     Some((source, playlist))
-            //                 } else {
-            //                     None
-            //                 }
-            //             }
-            //             None => None,
-            //         }
-            //     },
-            // )
-            // .filter_map(|(source, playlist): (Source, proto::djtool::Playlist)| {
+                }
+            })
             .filter_map(
                 |(source_id, playlist): (proto::djtool::Service, proto::djtool::Playlist)| {
-                    // .filter_map(|(playlist): (proto::djtool::Playlist)| {
                     let playlists_failed = playlists_failed.clone();
                     let playlists_succeeded = playlists_succeeded.clone();
                     let source: &Source = &sources_lock[&source_id];
-                    // let source = source.clone();
-                    // // let tracks_stream = source.clone().user_playlist_tracks_stream(playlist_id);
-                    // let source_clone = source.clone();
-                    // let tracks_stream = ;
-                    // let playlist_clone = playlist.clone();
                     async move {
-                        // let tracks_stream = tracks_stream.map(|s| {
-                        //     //     let source_clone = source.clone();
-                        //     //     s.map(move |track| (source_clone.clone(), playlist_clone.clone(), track))
-                        //     s
-                        // });
-                        // let playlist_id = playlist.id.as_ref().unwrap().id.to_owned();
-                        // println!("playlist: {:?}", playlist);
                         let tracks_stream = source.user_playlist_tracks_stream(playlist);
                         match tracks_stream {
                             Ok(track_stream) => {
@@ -480,41 +346,23 @@ impl DjTool {
             )
             .flat_map(|track_stream| track_stream)
             .take(1)
-            // filter out Err(Track)
-            .filter_map(
-                // |(source, playlist): (Source, Result<proto::djtool::Playlist>)| {
-                |(track): (Result<proto::djtool::Track>)| {
-                    let tracks_failed = tracks_failed.clone();
-                    async move {
-                        match track {
-                            Ok(track) => Some(track),
-                            Err(err) => {
-                                println!("track error: {}", err);
-                                {
-                                    let mut fp = tracks_failed.lock().await;
-                                    *fp += 1;
-                                };
-                                None
-                            }
+            .filter_map(|(track): (Result<proto::djtool::Track>)| {
+                let tracks_failed = tracks_failed.clone();
+                async move {
+                    match track {
+                        Ok(track) => Some(track),
+                        Err(err) => {
+                            println!("track error: {}", err);
+                            {
+                                let mut fp = tracks_failed.lock().await;
+                                *fp += 1;
+                            };
+                            None
                         }
                     }
-                },
-            );
-        // .map(|(source, playlist, track)| (source.id(), playlist, track))
-        // .collect::<Vec<(
-        //     proto::djtool::Source,
-        //     proto::djtool::Playlist,
-        //     Result<proto::djtool::Track>,
-        // )>>()
-        // .collect::<Vec<(proto::djtool::Source, Result<proto::djtool::Playlist>)>>()
-        // .collect::<Vec<Result<proto::djtool::Track>>>()
-        // .collect::<Vec<(Source, Result<proto::djtool::Playlist>)>>()
-        // .collect::<Vec<Result<(proto::djtool::Source, proto::djtool::Playlist)>>>()
-        // .collect::<Vec<Result<proto::djtool::Playlist>>>()
-        // lol
-        // .collect::<Vec<proto::djtool::Track>>()
-        // .await;
-        //
+                }
+            });
+
         let process_track = track_stream
             .for_each_concurrent(Some(1), |track: proto::djtool::Track| {
                 let tracks_succeeded = tracks_succeeded.clone();
@@ -533,14 +381,6 @@ impl DjTool {
                     };
                 }
             })
-            // .then(|track: proto::djtool::Track| async move {
-            //     async move {
-            //         println!("{:?}", track);
-            //     }
-            // })
-            // .buffer_unordered(100)
-            // // .collect::<Vec<proto::djtool::Track>>()
-            // .collect::<Vec<()>>()
             .await;
 
         println!("playlists failed: {:?}", playlists_failed.lock().await);
