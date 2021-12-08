@@ -16,13 +16,15 @@ pub trait Source {
     // use protos for the interface types here
     // get user info (username, profile picture)
     // get stream of playlists
-    fn user_playlists_stream<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStream>;
+    fn user_playlists_stream<'a>(&'a self, user_id: String) -> Result<PlaylistStream>;
     // fn user_playlists_stream_test<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStreamTest>;
     fn user_playlist_tracks_stream<'a>(
         &'a self,
         // playlist_id: String,
         playlist_id: proto::djtool::Playlist,
     ) -> Result<TrackStream>;
+
+    async fn handle_user_login_callback(&self, login: proto::djtool::UserLoginCallback) -> Result<()>;
     // fn user_playlist_tracks_stream<'a>(
     //     &'a self,
     //     playlist_id: &'a str,

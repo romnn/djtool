@@ -111,7 +111,7 @@ impl Youtube {
         Ok(response)
     }
 
-    async fn get_video(&self, id: &String) -> Result<model::Video> {
+    pub async fn get_video(&self, id: &String) -> Result<model::Video> {
         let body = self.video_data_by_innertube(id).await?;
         let video_info: model::PlayerResponseData = serde_json::from_str(&body)?;
         println!("info: {:?}", video_info);
@@ -207,7 +207,7 @@ impl Youtube {
         Ok("".to_string())
     }
 
-    async fn get_stream_url(&self, video: &model::Video, format: &model::Format) -> Result<String> {
+    pub async fn get_stream_url(&self, video: &model::Video, format: &model::Format) -> Result<String> {
         if let Some(url) = &format.url {
             return Ok(url.to_string());
         }

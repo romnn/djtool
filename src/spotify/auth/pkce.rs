@@ -1,7 +1,8 @@
 use crate::config::Persist;
+use crate::proto;
+use crate::spotify;
 use crate::spotify::auth::{join_scopes, Authenticator, Credentials, OAuth};
 use crate::spotify::config::Config;
-use crate::spotify;
 use crate::spotify::model::Token;
 use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
@@ -118,23 +119,23 @@ impl Authenticator for PkceAuthenticator {
 
     async fn handle_user_login_callback(
         &self,
-        data: spotify::auth::SpotifyLoginCallback,
+        // data: spotify::auth::SpotifyLoginCallback,
+        data: proto::djtool::SpotifyUserLoginCallback,
     ) -> Result<()> {
-        match data {
-            spotify::auth::SpotifyLoginCallback::Pkce { code, state } => {
+        match data.method {
+            Some(proto::djtool::spotify_user_login_callback::Method::Pkce(
+                proto::djtool::SpotifyUserLoginCallbackPkce { code, state },
+            )) => {
                 println!("handling received code: {} state: {}", code, state);
                 if self.oauth.state != state {
-                    // todo: error here
                     panic!("state does not match");
                 }
                 self.request_token(&code).await?;
                 println!("handled");
+                Ok(())
             }
-            _ => {
-                panic!("todo");
-            }
-        };
-        Ok(())
+            _ => panic!("not implemented"),
+        }
     }
 }
 

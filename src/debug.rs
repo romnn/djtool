@@ -1,5 +1,6 @@
-use super::SpotifyClient;
-use super::YoutubeClient;
+// use super::SpotifyClient;
+// use super::YoutubeClient;
+use super::DjTool;
 use crate::youtube::model::YoutubeVideo;
 use anyhow::Result;
 use futures_util::pin_mut;
@@ -25,7 +26,7 @@ pub struct DebugYoutubeSearchQuery {
 
 pub async fn debug_youtube_search_handler(
     query: DebugYoutubeSearchQuery,
-    youtube: YoutubeClient,
+    tool: DjTool,
 ) -> std::result::Result<impl Reply, Infallible> {
     // let stream = youtube
     //     .search_stream(query.query)
@@ -36,26 +37,27 @@ pub async fn debug_youtube_search_handler(
     //     .flat_map(|r| r.as_ref().ok())
     //     .collect::<Vec<&YoutubeVideo>>();
 
+    tool.sync_library().await.unwrap();
     let results: Vec<&YoutubeVideo> = Vec::new();
     return Ok(warp::reply::json(&results));
 
-    if query.parsed.unwrap_or(true) {
-        Ok(warp::reply::json(
-            &youtube.search_page(query.query, None).await.unwrap(),
-        ))
-    } else {
-        Ok(warp::reply::json(
-            &youtube
-                .search_page_response(query.query, None, None)
-                .await
-                .unwrap(),
-        ))
-    }
+    // if query.parsed.unwrap_or(true) {
+    //     Ok(warp::reply::json(
+    //         &youtube.search_page(query.query, None).await.unwrap(),
+    //     ))
+    // } else {
+    //     Ok(warp::reply::json(
+    //         &youtube
+    //             .search_page_response(query.query, None, None)
+    //             .await
+    //             .unwrap(),
+    //     ))
+    // }
 }
 
 pub async fn debug_spotify_playlists_handler(
     query: DebugSpotifyPlaylistsQuery,
-    spotify: SpotifyClient,
+    tool: DjTool,
 ) -> std::result::Result<impl Reply, Infallible> {
     let user_id = UserId::from_id(&query.user_id).unwrap();
     let playlist_id = query

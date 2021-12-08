@@ -17,10 +17,16 @@ use tempdir::TempDir;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, Mutex};
 
-// #[derive(Clone, Debug)]
-// pub struct Downloader {
-//     client: Arc<reqwest::Client>,
-// }
+#[derive(Clone, Debug)]
+pub struct Downloader {
+    client: Arc<reqwest::Client>,
+}
+
+impl Downloader {
+    async fn download() -> Result<()> {
+        Ok(())
+    }
+}
 
 struct PreflightDownloadInfo {
     content_length: u64,
@@ -82,7 +88,8 @@ impl Chunk {
         Ok(())
     }
 }
-struct Download {
+
+pub struct Download {
     client: Arc<reqwest::Client>,
     temp_dir: TempDir,
     concurrency: usize,
@@ -98,7 +105,7 @@ struct Download {
 }
 
 impl Download {
-    async fn new(url: String, output_path: PathBuf) -> Result<Self> {
+    pub async fn new(url: String, output_path: PathBuf) -> Result<Self> {
         let client = Arc::new(reqwest::Client::new());
         let info = Self::preflight(&client, &url).await?;
         // println!("preflight check completed");
@@ -257,7 +264,7 @@ impl Download {
         ));
     }
 
-    async fn start(&mut self) -> Result<()> {
+    pub async fn start(&mut self) -> Result<()> {
         self.started_at = Instant::now();
         let chunks_clone = self.chunks.clone();
 

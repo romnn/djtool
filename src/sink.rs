@@ -1,3 +1,4 @@
+use super::proto;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{Date, Utc};
@@ -14,12 +15,12 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct TrackDescription {
-    name: String,
-    artist: Option<String>,
-    album: Option<String>,
-    release_date: Option<Date<Utc>>,
-    duration: Option<u32>,
-    reference_audio: Option<PathBuf>,
+    pub name: String,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub release_date: Option<Date<Utc>>,
+    pub duration: Option<u32>,
+    pub reference_audio: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,12 +36,19 @@ pub enum Method {
     First,
 }
 
+#[derive(Debug, Clone)]
+pub struct DownloadedTrack {
+    pub track: proto::djtool::Track,
+    pub output_path: PathBuf,
+}
+
 #[async_trait]
 pub trait Sink {
     async fn download(
         &self,
         track: TrackDescription,
-        output_file: &PathBuf,
+        // output_path: &PathBuf,
+        output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Method,
-    ) -> Result<()>;
+    ) -> Result<DownloadedTrack>;
 }

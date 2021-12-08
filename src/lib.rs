@@ -27,6 +27,7 @@ use spotify::auth::{Credentials, OAuth};
 use spotify::model::{Id, PlaylistId, UserId};
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
+use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -121,41 +122,45 @@ impl DjTool {
             let config = self.config.read().await;
             config.as_ref().map(|c| c.library.library_dir.to_owned())
         };
-        let http_tool = self.clone();
+        let http_tool_clone = self.clone();
         let shutdown_clone = shutdown_rx.clone();
         let http_server = tokio::spawn(async move {
             // config.library.library_dir
             let library = warp::path("library").and(warp::fs::dir(library_dir.unwrap()));
 
+            let http_tool = http_tool_clone.clone();
             let spotify_pkce_callback = warp::get()
                 .and(warp::path!("spotify" / "pkce" / "callback"))
                 .and(warp::query::<spotify::auth::pkce::CallbackQuery>())
                 .and(warp::any().map(move || http_tool.clone()))
-                // .and(with_spotify(spotify_client.clone()))
                 .and_then(spotify_pkce_callback_handler);
 
-            // #[cfg(feature = "debug")]
-            // let routes = {
-            //     let debug_spotify_playlists = warp::get()
-            //         .and(warp::path!("debug" / "spotify" / "playlists"))
-            //         .and(warp::query::<debug::DebugSpotifyPlaylistsQuery>())
-            //         .and(with_spotify(spotify_client.clone()))
-            //         .and_then(debug::debug_spotify_playlists_handler);
+            #[cfg(feature = "debug")]
+            let routes = {
+                let http_tool = http_tool_clone.clone();
+                let debug_spotify_playlists = warp::get()
+                    .and(warp::path!("debug" / "spotify" / "playlists"))
+                    .and(warp::query::<debug::DebugSpotifyPlaylistsQuery>())
+                    .and(warp::any().map(move || http_tool.clone()))
+                    // .and(with_spotify(spotify_client.clone()))
+                    .and_then(debug::debug_spotify_playlists_handler);
 
-            //     let youtube = Arc::new(Youtube::new().unwrap());
-            //     let debug_youtube_search = warp::get()
-            //         .and(warp::path!("debug" / "youtube" / "search"))
-            //         .and(warp::query::<debug::DebugYoutubeSearchQuery>())
-            //         .and(with_youtube(youtube.clone()))
-            //         .and_then(debug::debug_youtube_search_handler);
+                // let youtube = Arc::new(Youtube::new().unwrap());
+                let http_tool = http_tool_clone.clone();
+                let debug_youtube_search = warp::get()
+                    .and(warp::path!("debug" / "youtube" / "search"))
+                    .and(warp::query::<debug::DebugYoutubeSearchQuery>())
+                    .and(warp::any().map(move || http_tool.clone()))
+                    // .and(with_youtube(youtube.clone()))
+                    .and_then(debug::debug_youtube_search_handler);
 
-            //     spotify_pkce_callback
-            //         .or(library)
-            //         .or(debug_youtube_search)
-            //         .or(debug_spotify_playlists)
-            // };
+                spotify_pkce_callback
+                    .or(library)
+                    .or(debug_youtube_search)
+                    .or(debug_spotify_playlists)
+            };
 
-            // #[cfg(not(feature = "debug"))]
+            #[cfg(not(feature = "debug"))]
             let routes = spotify_pkce_callback.or(library);
 
             println!("starting server now ...");
@@ -327,7 +332,8 @@ impl DjTool {
         let tracks_in_progress = Arc::new(Mutex::new(0u64));
 
         let sources_lock = self.sources.read().await;
-        println!("got sources lock");
+        let sinks_lock = self.sinks.read().await;
+        println!("locked sources and sinks");
 
         // let stream = stream::iter(self.sources.read().await.iter())
         let track_stream = stream::iter(sources_lock.iter())
@@ -356,7 +362,9 @@ impl DjTool {
                 let source: &Source = &sources_lock[source_id];
                 async move {
                     // let sources = &self.sources.read().await;
-                    let playlist_stream = source.user_playlists_stream("todo");
+
+                    let user_id = env::var("SPOTIFY_USER_ID").unwrap();
+                    let playlist_stream = source.user_playlists_stream(user_id);
                     match playlist_stream {
                         Ok(playlist_stream) => Some(playlist_stream),
                         Err(err) => {
@@ -371,6 +379,7 @@ impl DjTool {
             // flatten
             // .flat_map(|track_stream| track_stream)
             .flat_map(|playlist_stream| playlist_stream)
+            .take(1)
             // filter out Err(playlist_track_stream)
             .filter_map(
                 // |(source, playlist): (Source, Result<proto::djtool::Playlist>)| {
@@ -449,6 +458,7 @@ impl DjTool {
                         //     s
                         // });
                         // let playlist_id = playlist.id.as_ref().unwrap().id.to_owned();
+                        // println!("playlist: {:?}", playlist);
                         let tracks_stream = source.user_playlist_tracks_stream(playlist);
                         match tracks_stream {
                             Ok(track_stream) => {
@@ -458,8 +468,10 @@ impl DjTool {
                             }
                             Err(err) => {
                                 println!("track stream error: {}", err);
-                                let mut f = playlists_failed.lock().await;
-                                *f += 1;
+                                {
+                                    let mut f = playlists_failed.lock().await;
+                                    *f += 1;
+                                };
                                 None
                             }
                         }
@@ -467,6 +479,7 @@ impl DjTool {
                 },
             )
             .flat_map(|track_stream| track_stream)
+            .take(1)
             // filter out Err(Track)
             .filter_map(
                 // |(source, playlist): (Source, Result<proto::djtool::Playlist>)| {
@@ -477,8 +490,10 @@ impl DjTool {
                             Ok(track) => Some(track),
                             Err(err) => {
                                 println!("track error: {}", err);
-                                let mut fp = tracks_failed.lock().await;
-                                *fp += 1;
+                                {
+                                    let mut fp = tracks_failed.lock().await;
+                                    *fp += 1;
+                                };
                                 None
                             }
                         }
@@ -501,8 +516,22 @@ impl DjTool {
         // .await;
         //
         let process_track = track_stream
-            .for_each_concurrent(Some(1), |track: proto::djtool::Track| async move {
-                println!("{:?}", track);
+            .for_each_concurrent(Some(1), |track: proto::djtool::Track| {
+                let tracks_succeeded = tracks_succeeded.clone();
+                let tracks_in_progress = tracks_in_progress.clone();
+                async move {
+                    {
+                        let mut p = tracks_in_progress.lock().await;
+                        *p += 1;
+                    };
+                    println!("{:?}", track);
+                    {
+                        let mut s = tracks_succeeded.lock().await;
+                        *s += 1;
+                        let mut p = tracks_in_progress.lock().await;
+                        *p -= 1;
+                    };
+                }
             })
             // .then(|track: proto::djtool::Track| async move {
             //     async move {
@@ -563,18 +592,29 @@ impl DjTool {
 
 pub async fn spotify_pkce_callback_handler(
     query: spotify::auth::pkce::CallbackQuery,
-    // sp: SpotifyClient,
     tool: DjTool,
 ) -> std::result::Result<impl Reply, Infallible> {
     let redirect_url = match query.code {
         Some(code) => {
-            // sp.authenticator
-            //     .handle_user_login_callback(spotify::auth::SpotifyLoginCallback::Pkce {
-            //         code,
-            //         state: query.state.unwrap_or(String::new()),
-            //     })
-            //     .await
-            //     .unwrap();
+            let sources = tool.sources.read().await;
+            let spotify = &sources[&proto::djtool::Service::Spotify];
+            let spotify_login_callback = proto::djtool::SpotifyUserLoginCallback {
+                method: Some(proto::djtool::spotify_user_login_callback::Method::Pkce(
+                    proto::djtool::SpotifyUserLoginCallbackPkce {
+                        code,
+                        state: query.state.unwrap_or(String::new()),
+                    },
+                )),
+            };
+
+            spotify
+                .handle_user_login_callback(proto::djtool::UserLoginCallback {
+                    login: Some(proto::djtool::user_login_callback::Login::SpotifyLogin(
+                        spotify_login_callback,
+                    )),
+                })
+                .await
+                .unwrap();
             reqwest::Url::parse("https://spotify.com/").unwrap()
         }
         None => {

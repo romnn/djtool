@@ -3,6 +3,8 @@ pub mod pkce;
 use super::config::Config;
 use crate::config::Persist;
 use crate::spotify;
+use crate::proto;
+use crate::spotify::model::Token;
 use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,7 +13,6 @@ use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Error as HttpError, Url};
-use crate::spotify::model::Token;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -42,7 +43,11 @@ pub enum SpotifyLoginCallback {
 pub trait Authenticator {
     async fn auth_headers(&self) -> HeaderMap;
     async fn reauthenticate(&self) -> std::result::Result<(), spotify::error::Error>;
-    async fn handle_user_login_callback(&self, data: SpotifyLoginCallback) -> Result<()>;
+    // async fn handle_user_login_callback(&self, data: SpotifyLoginCallback) -> Result<()>;
+    async fn handle_user_login_callback(
+        &self,
+        data: proto::djtool::SpotifyUserLoginCallback,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Default)]

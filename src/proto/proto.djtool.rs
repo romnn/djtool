@@ -47,8 +47,40 @@ pub struct PlaylistId {
 
 //   }
 
-// }
-
+/// }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpotifyUserLoginCallbackPkce {
+    #[prost(string, tag = "1")]
+    pub code: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub state: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpotifyUserLoginCallback {
+    #[prost(oneof = "spotify_user_login_callback::Method", tags = "1")]
+    pub method: ::core::option::Option<spotify_user_login_callback::Method>,
+}
+/// Nested message and enum types in `SpotifyUserLoginCallback`.
+pub mod spotify_user_login_callback {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Method {
+        #[prost(message, tag = "1")]
+        Pkce(super::SpotifyUserLoginCallbackPkce),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserLoginCallback {
+    #[prost(oneof = "user_login_callback::Login", tags = "1")]
+    pub login: ::core::option::Option<user_login_callback::Login>,
+}
+/// Nested message and enum types in `UserLoginCallback`.
+pub mod user_login_callback {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Login {
+        #[prost(message, tag = "1")]
+        SpotifyLogin(super::SpotifyUserLoginCallback),
+    }
+}
 // message UserId {
 
 //   oneof id {
@@ -56,6 +88,16 @@ pub struct PlaylistId {
 //     SpotifyUserId spotify_user_id = 1;
 
 //   }
+
+// }
+
+// message DownloadedTrack {
+
+//   Track track = 1;
+
+//   string file_path = 2;
+
+//   /1* uint64 content_length = 3; *1/
 
 // }
 

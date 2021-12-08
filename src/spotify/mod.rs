@@ -70,6 +70,7 @@ impl Spotify {
             Err(error::Error::Auth(error::AuthError::RequireUserLogin { auth_url })) => {
                 // panic!("require user confirmation: {}", auth_url);
                 // todo: get write lock and set a freeze until login callback received
+                println!("need user login!");
             }
             Err(err) => panic!("{}", err),
             Ok(_) => {}
@@ -82,11 +83,11 @@ impl Spotify {
     pub async fn user_playlists_page(
         &self,
         // user_id: &model::UserId,
-        user_id: &str,
+        user_id: String,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<model::Page<model::SimplifiedPlaylist>> {
-        let user_id = model::UserId::from_id(user_id)?;
+        let user_id = model::UserId::from_id(&user_id)?;
         let params = HashMap::<&str, Value>::from_iter(
             vec![
                 limit.map(|limit| ("limit", limit.into())),
@@ -95,6 +96,20 @@ impl Spotify {
             .into_iter()
             .filter_map(|e| e),
         );
+        // println!("making the playlist request");
+        let headers = self.auth_headers().await;
+        // println!("auth headers: {:?}", headers);
+        // let test = self
+        //     .client
+        //     .get(api!(format!("users/{}/playlists", user_id.id()))?)
+        //     .headers(headers)
+        //     .query(&params)
+        //     .send()
+        //     .await?
+        //     .json::<serde_json::Value>()
+        //     .await?;
+        // println!("user playlists page: {:?}", test);
+
         self.client
             .get(api!(format!("users/{}/playlists", user_id.id()))?)
             .headers(self.auth_headers().await)
@@ -271,14 +286,17 @@ impl TryFrom<proto::djtool::PlaylistId> for model::PlaylistId {
     }
 }
 
+#[async_trait]
 impl Source for Spotify {
     fn id(&self) -> proto::djtool::Service {
         proto::djtool::Service::Spotify
     }
 
-    fn user_playlists_stream<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStream> {
+    fn user_playlists_stream<'a>(&'a self, user_id: String) -> Result<PlaylistStream> {
         let playlists = paginate(
-            move |limit, offset| self.user_playlists_page(&user_id, Some(limit), Some(offset)),
+            move |limit, offset| {
+                self.user_playlists_page(user_id.to_owned(), Some(limit), Some(offset))
+            },
             DEFAULT_PAGINATION_CHUNKS,
         );
         let playlists = playlists.map(|playlist| playlist.map(|p| p.into()));
@@ -290,8 +308,9 @@ impl Source for Spotify {
         &'a self,
         playlist: proto::djtool::Playlist,
     ) -> Result<TrackStream> {
-        // fn user_playlist_tracks_stream(&self, playlist_id: String) -> Result<TrackStream> {
+        println!("playlist: {:?}", playlist);
         let playlist_clone = playlist.to_owned();
+        let playlist_id_clone = Arc::new(playlist.id.to_owned());
         let tracks = paginate(
             move |limit, offset| {
                 self.playlist_tracks_page(
@@ -313,11 +332,27 @@ impl Source for Spotify {
                         ..
                     }) = t.track_id
                     {
-                        *playlist_id = playlist_id.to_owned();
+                        *playlist_id = playlist_id_clone.deref().to_owned();
                     }
                     t
                 })
         });
         Ok(Box::pin(tracks))
+    }
+
+    async fn handle_user_login_callback(
+        &self,
+        login: proto::djtool::UserLoginCallback,
+    ) -> Result<()> {
+        match login {
+            proto::djtool::UserLoginCallback {
+                login: Some(proto::djtool::user_login_callback::Login::SpotifyLogin(login_test)),
+            } => {
+                self.authenticator
+                    .handle_user_login_callback(login_test)
+                    .await
+            }
+            _ => panic!("wrong login callback received"),
+        }
     }
 }

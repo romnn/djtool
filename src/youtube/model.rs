@@ -34,6 +34,7 @@ where
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct YoutubeVideo {
     pub title: String,
+    // pub id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -466,11 +467,11 @@ impl Deref for FormatList {
 
 impl FormatList {
     #[allow(dead_code)]
-    fn sort(&mut self) {
+    pub fn sort(&mut self) {
         self.formats.sort_by(Self::cmp_format);
     }
 
-    fn with_mime_type(&self, substr: &str) -> Vec<&Format> {
+    pub fn with_mime_type(&self, substr: &str) -> Vec<&Format> {
         self.formats
             .iter()
             .filter(|f| {
@@ -482,12 +483,12 @@ impl FormatList {
             .collect()
     }
 
-    fn audio(&self) -> Vec<&Format> {
+    pub fn audio(&self) -> Vec<&Format> {
         self.with_mime_type("audio")
     }
 
     #[allow(dead_code)]
-    fn video(&self) -> Vec<&Format> {
+    pub fn video(&self) -> Vec<&Format> {
         self.with_mime_type("video")
     }
 
