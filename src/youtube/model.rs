@@ -34,6 +34,7 @@ where
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct YoutubeVideo {
     pub title: String,
+    pub video_id: String,
     // pub id: String,
 }
 
@@ -248,6 +249,7 @@ impl SearchResultPage {
             .iter()
             .map(|item| YoutubeVideo {
                 title: item.video_renderer.title.to_str().unwrap_or("").to_string(),
+                video_id: item.video_renderer.video_id.to_owned(),
             })
             .collect();
         Ok(Page {
@@ -580,7 +582,7 @@ pub struct PlayabilityStatus {
     pub status: Option<String>,
     pub reason: Option<String>,
     pub playable_in_embed: Option<bool>,
-    pub miniplayer: Miniplayer,
+    pub miniplayer: Option<Miniplayer>,
     pub context_params: Option<String>,
 }
 

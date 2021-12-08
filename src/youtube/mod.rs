@@ -1,11 +1,12 @@
 mod extractor;
 pub mod model;
+mod rank;
 mod search;
 mod stream;
 
 use crate::download::Download;
 use crate::proto;
-use crate::sink::{DownloadedTrack, Method, Sink, TrackDescription};
+use crate::sink::{DownloadedTrack, Method, Sink};
 use crate::utils;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -24,11 +25,12 @@ pub struct Youtube {
 
 impl Youtube {
     // pub fn new<P: AsRef<Path> + Send + Sync>(debug_dir: P) -> Result<Self> {
-    pub fn new() -> Result<Self> {
-        Ok(Self {
+    // pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
+        Self {
             // debug_dir: debug_dir.as_ref().to_owned(),
             client: Arc::new(reqwest::Client::new()),
-        })
+        }
     }
 
     // pub async fn search_page(
@@ -77,25 +79,15 @@ impl Youtube {
 impl Sink for Youtube {
     async fn download(
         &self,
-        track: TrackDescription,
+        // track: TrackDescription,
+        track: &proto::djtool::Track,
         // output_path: &PathBuf,
         output_path: &(dyn AsRef<Path> + Sync + Send),
-        method: Method,
+        method: Option<Method>,
     ) -> Result<DownloadedTrack> {
         // search the video first
-        let query = format!("{} {}", track.name, track.artist.unwrap_or(String::new()));
-        let search_results = self
-            .search_stream(query)
-            .filter_map(|video: Result<model::YoutubeVideo>| {
-                // test
-                async move { video.ok() }
-            })
-            .take(10)
-            .collect::<Vec<model::YoutubeVideo>>()
-            .await;
-        let first_hit = search_results.first().unwrap();
-
-        let video_id = "test".to_string();
+        let method = method.unwrap_or(Method::First);
+        let video_id = self.find_best_video(&track, method).await?;
         let video = self.get_video(&video_id).await?;
         let audio_formats = video.formats.audio();
         if audio_formats.len() < 1 {
@@ -107,13 +99,21 @@ impl Sink for Youtube {
         //         i, f.quality_label, f.mime_type, f.bitrate
         //     );
         // }
-        let format = audio_formats.first().unwrap().to_owned().to_owned();
+        let format = audio_formats
+            .first()
+            .ok_or(anyhow::anyhow!("no format"))?
+            .to_owned()
+            .to_owned();
         // println!(
         //     "Video '{:?}' - Quality '{:?}' - Codec '{:?}'",
         //     video.title, format.quality_label, format.mime_type
         // );
 
-        let sanitized_filename = utils::sanitize_filename(video.title.clone().unwrap());
+        let title = video.title.to_owned().ok_or(anyhow::anyhow!("untitled"))?;
+        // let artist = video.author.to_owned();
+        // let filename = vec![Some(title), artist]
+        // let sanitized_filename = utils::sanitize_filename(format!("{} - {}", title, artist));
+        let sanitized_filename = utils::sanitize_filename(&title);
         // println!("sanitized filename: {}", sanitized_filename);
 
         // let output_path = output_path.to_owned();
@@ -128,7 +128,8 @@ impl Sink for Youtube {
 
         Ok(DownloadedTrack {
             track: proto::djtool::Track {
-                name: track.name,
+                name: track.name.to_owned(),
+                artist: track.artist.to_owned(),
                 track_id: Some(proto::djtool::TrackId {
                     id: video_id.to_owned(),
                     source: proto::djtool::Service::Youtube as i32,

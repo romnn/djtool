@@ -1,7 +1,9 @@
 // use super::SpotifyClient;
 // use super::YoutubeClient;
+use super::proto;
 use super::DjTool;
 use crate::youtube::model::YoutubeVideo;
+use crate::youtube::Youtube;
 use anyhow::Result;
 use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
@@ -37,22 +39,25 @@ pub async fn debug_youtube_search_handler(
     //     .flat_map(|r| r.as_ref().ok())
     //     .collect::<Vec<&YoutubeVideo>>();
 
-    tool.sync_library().await.unwrap();
-    let results: Vec<&YoutubeVideo> = Vec::new();
-    return Ok(warp::reply::json(&results));
+    // tool.sync_library().await.unwrap();
+    // let results: Vec<&YoutubeVideo> = Vec::new();
+    // return Ok(warp::reply::json(&results));
 
-    // if query.parsed.unwrap_or(true) {
-    //     Ok(warp::reply::json(
-    //         &youtube.search_page(query.query, None).await.unwrap(),
-    //     ))
-    // } else {
-    //     Ok(warp::reply::json(
-    //         &youtube
-    //             .search_page_response(query.query, None, None)
-    //             .await
-    //             .unwrap(),
-    //     ))
-    // }
+    let youtube = Youtube::new();
+    // let sinks = tool.sinks.read().await;
+    // let youtube = &sinks[&proto::djtool::Service::Youtube];
+    if query.parsed.unwrap_or(true) {
+        Ok(warp::reply::json(
+            &youtube.search_page(query.query, None).await.unwrap(),
+        ))
+    } else {
+        Ok(warp::reply::json(
+            &youtube
+                .search_page_response(query.query, None, None)
+                .await
+                .unwrap(),
+        ))
+    }
 }
 
 pub async fn debug_spotify_playlists_handler(
@@ -73,6 +78,10 @@ pub async fn debug_spotify_playlists_handler(
     //     .iter()
     //     .flat_map(|playlist| playlist.as_ref().ok())
     //     .collect::<Vec<&PlaylistItem>>();
+
+    tool.sync_library().await.unwrap();
+    let results: Vec<&YoutubeVideo> = Vec::new();
+    return Ok(warp::reply::json(&results));
 
     let playlists: Vec<&PlaylistItem> = Vec::new();
     // todo: map the playlist for each playlist item

@@ -296,10 +296,10 @@ impl Download {
                     // let client = client.clone();
                     // let headers = headers.clone();
                     let progress = tx.clone();
-                    println!("{}", chunk.path.display());
+                    // println!("{}", chunk.path.display());
 
                     async move {
-                        println!("chunk {}-{}", chunk.range_start, chunk.range_end);
+                        // println!("chunk {}-{}", chunk.range_start, chunk.range_end);
                         if let Err(err) = chunk.download(&progress).await {
                             let _ = progress.send(Err(err.into())).await;
                         };
@@ -321,7 +321,7 @@ impl Download {
             }
         }
         download.await?;
-        println!("download completed: {}", downloaded);
+        // println!("download completed: {}", downloaded);
 
         // concat = tokio::spawn(async move {
 
@@ -338,7 +338,7 @@ impl Download {
             let mut chunk_file = tokio::fs::File::open(chunk.path.clone()).await?;
             tokio::io::copy(&mut chunk_file, &mut output_file).await?;
         }
-        println!("concatenated: {}", self.output_path.display());
+        // println!("concatenated: {}", self.output_path.display());
         Ok(())
     }
 }

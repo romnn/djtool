@@ -109,6 +109,8 @@ pub struct Track {
     pub track_id: ::core::option::Option<TrackId>,
     #[prost(string, tag = "100")]
     pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "101")]
+    pub artist: ::prost::alloc::string::String,
 }
 #[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct Playlist {

@@ -13,6 +13,7 @@ pub struct TranscodeProgress {
 
 pub type ProgressHandlerFunc = dyn FnMut(TranscodeProgress) -> ();
 
+#[derive(Debug, Clone)]
 pub enum Codec {
     MP3,
     // todo: add more codecs in the future
@@ -25,6 +26,8 @@ impl Codec {
         }
     }
 }
+
+#[derive(Default, Debug, Clone)]
 pub struct TranscoderOptions<'a> {
     pub codec: Option<Codec>,
     pub bitrate_kbps: Option<usize>,
@@ -32,8 +35,8 @@ pub struct TranscoderOptions<'a> {
     pub filter_spec: Option<&'a str>,
 }
 
-impl Default for TranscoderOptions<'_> {
-    fn default() -> Self {
+impl TranscoderOptions<'_> {
+    pub fn mp3() -> Self {
         Self {
             codec: Some(Codec::MP3),
             bitrate_kbps: Some(192),
@@ -70,6 +73,7 @@ impl FFmpegTranscode {
         path: &P,
         options: Option<&TranscoderOptions>,
     ) -> Result<Self, ffmpeg::Error> {
+        // println!("options: {:?}", options);
         let input = ictx
             .streams()
             .best(media::Type::Audio)
@@ -80,6 +84,7 @@ impl FFmpegTranscode {
             Some(requested_codec) => requested_codec.codec(),
             None => octx.format().codec(path, media::Type::Audio),
         };
+        // println!("chosen encoder: {:?}", encoder);
 
         let codec = ffmpeg::encoder::find(encoder)
             .ok_or(ffmpeg::error::Error::EncoderNotFound)
@@ -186,7 +191,7 @@ impl FFmpegTranscode {
         filter.output("in", 0)?.input("out", 0)?.parse(spec)?;
         filter.validate()?;
 
-        println!("{}", filter.dump());
+        // println!("{}", filter.dump());
 
         if let Some(codec) = encoder.codec() {
             if !codec

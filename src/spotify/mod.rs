@@ -264,6 +264,12 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     playlist_id: None, // unknown at this point
                 }),
                 name: track.name,
+                artist: track
+                    .artists
+                    .into_iter()
+                    .map(|a| a.name)
+                    .collect::<Vec<String>>()
+                    .join(", "),
             }),
             Some(model::PlayableItem::Episode(ep)) => Ok(proto::djtool::Track {
                 track_id: Some(proto::djtool::TrackId {
@@ -272,6 +278,7 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     playlist_id: None,     // unknown at this point
                 }),
                 name: ep.name,
+                artist: ep.show.publisher,
             }),
             _ => Err(anyhow::anyhow!("not playable")),
         }

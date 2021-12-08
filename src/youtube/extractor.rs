@@ -42,7 +42,7 @@ impl Youtube {
         // TODO: return error here
         // }
         let basejs_url = format!("https://youtube.com{}", escaped_basejs_url);
-        println!("basejs url: {}", basejs_url);
+        // println!("basejs url: {}", basejs_url);
         self.client
             .get(basejs_url)
             .send()
@@ -67,7 +67,7 @@ impl Youtube {
         // todo: error handling
         // ErrSignatureTimestampNotFound
         let result = result.first().unwrap().to_string();
-        println!("signature timestamp: {:?}", result);
+        // println!("signature timestamp: {:?}", result);
         Ok(result)
     }
 
@@ -99,7 +99,7 @@ impl Youtube {
             "https://www.youtube.com/youtubei/v1/player?key={}",
             player_key
         );
-        println!("player_url: {}", player_url);
+        // println!("player_url: {}", player_url);
         let response = self
             .client
             .post(player_url)
@@ -114,7 +114,7 @@ impl Youtube {
     pub async fn get_video(&self, id: &String) -> Result<model::Video> {
         let body = self.video_data_by_innertube(id).await?;
         let video_info: model::PlayerResponseData = serde_json::from_str(&body)?;
-        println!("info: {:?}", video_info);
+        // println!("info: {:?}", video_info);
         if video_info
             .playability_status
             .as_ref()
@@ -207,7 +207,11 @@ impl Youtube {
         Ok("".to_string())
     }
 
-    pub async fn get_stream_url(&self, video: &model::Video, format: &model::Format) -> Result<String> {
+    pub async fn get_stream_url(
+        &self,
+        video: &model::Video,
+        format: &model::Format,
+    ) -> Result<String> {
         if let Some(url) = &format.url {
             return Ok(url.to_string());
         }

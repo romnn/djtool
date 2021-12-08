@@ -42,7 +42,7 @@ pub async fn save_json_response<P: AsRef<Path> + Send + Sync>(
     Ok(())
 }
 
-pub fn sanitize_filename(name: String) -> String {
+pub fn sanitize_filename(name: &String) -> String {
     sanitizer::sanitize_with_options(
         name,
         sanitizer::Options {
@@ -51,7 +51,7 @@ pub fn sanitize_filename(name: String) -> String {
             replacement: "",
         },
     )
-    .replace(" ", "_")
+    // .replace(" ", "_")
 }
 
 pub fn random_string(length: usize, dist: impl Distribution<u8>) -> String {

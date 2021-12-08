@@ -13,15 +13,15 @@ use std::path::{Path, PathBuf};
 //     pub format: Format,
 // }
 
-#[derive(Debug, Clone)]
-pub struct TrackDescription {
-    pub name: String,
-    pub artist: Option<String>,
-    pub album: Option<String>,
-    pub release_date: Option<Date<Utc>>,
-    pub duration: Option<u32>,
-    pub reference_audio: Option<PathBuf>,
-}
+// #[derive(Debug, Clone)]
+// pub struct TrackDescription {
+//     pub name: String,
+//     pub artist: Option<String>,
+//     pub album: Option<String>,
+//     pub release_date: Option<Date<Utc>>,
+//     pub duration: Option<u32>,
+//     pub reference_audio: Option<PathBuf>,
+// }
 
 #[derive(Debug, Clone)]
 pub enum Method {
@@ -46,9 +46,8 @@ pub struct DownloadedTrack {
 pub trait Sink {
     async fn download(
         &self,
-        track: TrackDescription,
-        // output_path: &PathBuf,
+        track: &proto::djtool::Track,
         output_path: &(dyn AsRef<Path> + Sync + Send),
-        method: Method,
+        method: Option<Method>,
     ) -> Result<DownloadedTrack>;
 }

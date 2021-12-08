@@ -174,11 +174,17 @@ fn request_user_login(auth_url: reqwest::Url) -> Result<()> {
 
 impl Default for DjTool {
     fn default() -> Self {
+        let mut sinks: HashMap<proto::djtool::Service, Sink> = HashMap::new();
+        sinks.insert(
+            proto::djtool::Service::Youtube,
+            Arc::new(Box::new(Youtube::new())),
+        );
+        let transcoder = transcode::FFmpegTranscoder::default();
         Self {
             data_dir: None,
-            transcoder: Arc::new(Box::new(transcode::FFmpegTranscoder::default())),
+            transcoder: Arc::new(Box::new(transcoder)),
             sources: Arc::new(RwLock::new(HashMap::new())),
-            sinks: Arc::new(RwLock::new(HashMap::new())),
+            sinks: Arc::new(RwLock::new(sinks)),
             config: Arc::new(RwLock::new(None)),
         }
     }
@@ -249,9 +255,6 @@ impl DjTool {
 
     pub async fn sync_library(&self) -> Result<()> {
         println!("starting sync");
-        let temp_dir = TempDir::new("djtool")?;
-        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.aiff");
-        let downloaded_audio = temp_dir.path().join(&"test");
 
         let sources = Arc::new(HashSet::from([proto::djtool::Service::Spotify]));
         let playlists = Arc::new(HashSet::from([(
@@ -297,7 +300,6 @@ impl DjTool {
                 }
             })
             .flat_map(|playlist_stream| playlist_stream)
-            .take(1)
             .filter_map(|(playlist): (Result<proto::djtool::Playlist>)| {
                 let playlists_failed = playlists_failed.clone();
                 let source_id = playlist
@@ -319,6 +321,7 @@ impl DjTool {
                     }
                 }
             })
+            .take(1)
             .filter_map(
                 |(source_id, playlist): (proto::djtool::Service, proto::djtool::Playlist)| {
                     let playlists_failed = playlists_failed.clone();
@@ -345,7 +348,6 @@ impl DjTool {
                 },
             )
             .flat_map(|track_stream| track_stream)
-            .take(1)
             .filter_map(|(track): (Result<proto::djtool::Track>)| {
                 let tracks_failed = tracks_failed.clone();
                 async move {
@@ -361,24 +363,79 @@ impl DjTool {
                         }
                     }
                 }
-            });
+            })
+            .take(100);
 
         let process_track = track_stream
-            .for_each_concurrent(Some(1), |track: proto::djtool::Track| {
+            .for_each_concurrent(Some(16), |track: proto::djtool::Track| {
+                let sinks_lock = sinks_lock.clone();
+                let transcoder = self.transcoder.clone();
                 let tracks_succeeded = tracks_succeeded.clone();
                 let tracks_in_progress = tracks_in_progress.clone();
                 async move {
-                    {
-                        let mut p = tracks_in_progress.lock().await;
-                        *p += 1;
-                    };
-                    println!("{:?}", track);
-                    {
-                        let mut s = tracks_succeeded.lock().await;
-                        *s += 1;
-                        let mut p = tracks_in_progress.lock().await;
-                        *p -= 1;
-                    };
+                    let title = track.name.to_owned();
+                    let artist = track.artist.to_owned();
+                    let filename = format!("{} - {}", title, artist);
+                    let filename_clone = filename.clone();
+
+                    let res = async move {
+                        {
+                            let mut p = tracks_in_progress.lock().await;
+                            *p += 1;
+                        };
+                        // println!("{}", filename);
+
+                        let filename = utils::sanitize_filename(&filename);
+                        let temp_dir = TempDir::new(&filename)?;
+                        // todo: load the preferred sink for the video if available, otherwise use
+                        // youtube by default
+                        let sink = &sinks_lock[&proto::djtool::Service::Youtube];
+                        let downloaded = sink
+                            .download(&track, &temp_dir.path().to_path_buf().join("audio"), None)
+                            .await?;
+                        // println!("downloaded to {}", downloaded.output_path.display());
+
+                        // transcode
+                        let library_dir = {
+                            let config = self.config.read().await;
+                            config.as_ref().map(|c| c.library.library_dir.to_owned())
+                        }
+                        .ok_or(anyhow::anyhow!("no library"))?;
+
+                        let temp_dir_transcode = TempDir::new(&filename)?;
+                        let mut transcoded_path = temp_dir_transcode.path().join(&filename);
+                        transcoded_path.set_extension("mp3");
+                        let mut output_path = library_dir.join(&filename);
+                        output_path.set_extension("mp3");
+
+                        // println!("transcoding to {}", transcoded_path.display());
+                        let res = tokio::task::spawn_blocking(move || {
+                            transcoder.transcode_blocking(
+                                &downloaded.output_path,
+                                &transcoded_path,
+                                Some(&transcode::TranscoderOptions::mp3()),
+                                &Box::new(|progress: transcode::TranscodeProgress| {
+                                    println!("{}", progress.frame_count);
+                                }),
+                            );
+                            std::fs::rename(&transcoded_path, &output_path)?;
+                            Ok::<(), anyhow::Error>(())
+                        })
+                        .await?;
+
+                        // move result
+                        // transcoded_path.rename(output_path)?;
+
+                        {
+                            let mut s = tracks_succeeded.lock().await;
+                            *s += 1;
+                            let mut p = tracks_in_progress.lock().await;
+                            *p -= 1;
+                        };
+                        Ok::<(), anyhow::Error>(())
+                    }
+                    .await;
+                    println!("track: {} result: {:?}", filename_clone, res);
                 }
             })
             .await;
@@ -391,7 +448,7 @@ impl DjTool {
         println!("tracks failed: {:?}", tracks_failed.lock().await);
         println!("tracks succeeded: {:?}", tracks_succeeded.lock().await);
         println!("sync completed");
-        return Ok(());
+        Ok(())
         // stream!(
         // let audio = self
         //     .downloader
@@ -408,25 +465,25 @@ impl DjTool {
         // transcode to MP3
         // println!("temp dir: {}", temp_dir.path().display());
         // println!("audio output: {}", audio.audio_file.display());
-        let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
-        let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
-        // let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
-        let transcoder = self.transcoder.clone();
-        let res = tokio::task::spawn_blocking(move || {
-            transcoder.transcode_blocking(
-                // &audio.audio_file,
-                &input_file,
-                &output_file,
-                None,
-                &Box::new(|progress: transcode::TranscodeProgress| {
-                    println!("{}", progress.frame_count);
-                }),
-            );
-            // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
-            // transcoder.start().unwrap();
-        })
-        .await?;
-        Ok(())
+        // let input_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.webm");
+        // let output_file = PathBuf::from("/home/roman/dev/djtool/Touchpad.mp3");
+        // // let output_file = PathBuf::from("/Users/roman/dev/djtool/Touchpad.mp3");
+        // let transcoder = self.transcoder.clone();
+        // let res = tokio::task::spawn_blocking(move || {
+        //     transcoder.transcode_blocking(
+        //         // &audio.audio_file,
+        //         &input_file,
+        //         &output_file,
+        //         None,
+        //         &Box::new(|progress: transcode::TranscodeProgress| {
+        //             println!("{}", progress.frame_count);
+        //         }),
+        //     );
+        //     // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();
+        //     // transcoder.start().unwrap();
+        // })
+        // .await?;
+        // Ok(())
     }
 }
 

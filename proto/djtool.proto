@@ -86,6 +86,7 @@ message Track {
   /* PlaylistId playlist_id = 1; */
   TrackId track_id = 1;
   string name = 100;
+  string artist = 101;
 }
 
 message Playlist {
