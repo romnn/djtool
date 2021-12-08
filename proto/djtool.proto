@@ -14,38 +14,86 @@ service DjTool {
   /* rpc Disconnect(DisconnectRequest) returns (Empty) {} */
 }
 
-enum Source { SPOTIFY = 0; }
+enum Service {
+  SPOTIFY = 0;
+  SOUNDCLOUD = 1;
+  YOUTUBE = 2;
+}
 
-enum Sink { YOUTUBE = 0; }
+/* enum Source { */
+/*   SPOTIFY = 0; */
+/*   SOUNDCLOUD = 1; */
+/*   YOUTUBE = 2; */
+/* } */
+
+/* enum Sink { */
+/*   YOUTUBE = 0; */
+/*   SOUNDCLOUD = 1; */
+/* } */
+
+message UserId {
+  string id = 1;
+  Service source = 10;
+}
+
+message TrackId {
+  string id = 1;
+  PlaylistId playlist_id = 2;
+  Service source = 10;
+}
+
+message PlaylistId {
+  string id = 1;
+  Service source = 10;
+}
+
+/* message UserId { */
+/*   oneof id { */
+/*     SpotifyUserId spotify_user_id = 1; */
+/*   } */
+/* } */
+
+/* message UserId { */
+/*   oneof id { */
+/*     SpotifyUserId spotify_user_id = 1; */
+/*   } */
+/* } */
 
 message Track {
-  string name = 1;
+  /* Source source = 1; */
+  /* PlaylistId playlist_id = 1; */
+  TrackId track_id = 1;
+  string name = 100;
 }
 
 message Playlist {
-  string name = 1;
-  repeated Track tracks = 2;
+  PlaylistId id = 1;
+  string name = 2;
+  repeated Track tracks = 100;
 }
 
-message SourcePlaylists {
-  Source source = 1;
-  repeated Playlist playlists = 2;
-}
+/* message SourcePlaylists { */
+/*   Source source = 1; */
+/*   repeated Playlist playlists = 100; */
+/* } */
 
-message Library {
-  repeated SourcePlaylists sources = 1;
-}
+/* message Playlists { repeated Playlist playlists = 1; } */
+
+/* message Library { */
+/*   repeated SourcePlaylists sources = 1; */
+/*   /1* map<string, Playlists> sources = 1; *1/ */
+/* } */
 
 message TrackSyncDesc {
   string id = 1;
-  Source source = 2;
-  Sink sink = 3;
+  string source = 2;
+  string sink = 3;
 }
 
 message PlaylistSyncDesc {
   string id = 1;
-  Source source = 2;
-  Sink sink = 3;
+  string source = 2;
+  string sink = 3;
 }
 
 message SyncProgressUpdate {
@@ -53,7 +101,7 @@ message SyncProgressUpdate {
 }
 
 message SyncRequest {
-  repeated Source sources = 1;
+  repeated string sources = 1;
   repeated TrackSyncDesc tracks = 2;
   repeated PlaylistSyncDesc playlists = 3;
   /* oneof request { */

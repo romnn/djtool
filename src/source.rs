@@ -1,7 +1,35 @@
+use super::proto;
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{Utc, Date};
+use chrono::{Date, Utc};
+use futures::stream::Stream;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
+
+pub type PlaylistStream<'a> =
+    Pin<Box<dyn Stream<Item = Result<proto::djtool::Playlist>> + 'a + Send>>;
+pub type TrackStream<'a> = Pin<Box<dyn Stream<Item = Result<proto::djtool::Track>> + 'a + Send>>;
+
+#[async_trait]
+pub trait Source {
+    fn id(&self) -> proto::djtool::Service;
+    // use protos for the interface types here
+    // get user info (username, profile picture)
+    // get stream of playlists
+    fn user_playlists_stream<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStream>;
+    // fn user_playlists_stream_test<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStreamTest>;
+    fn user_playlist_tracks_stream<'a>(
+        &'a self,
+        // playlist_id: String,
+        playlist_id: proto::djtool::Playlist,
+    ) -> Result<TrackStream>;
+    // fn user_playlist_tracks_stream<'a>(
+    //     &'a self,
+    //     playlist_id: &'a str,
+    // ) -> Result<TrackStream>;
+
+    // get stream of playlist tracks
+}
 
 // #[derive(Debug, Clone)]
 // pub struct TrackDescription {
@@ -25,11 +53,3 @@ use std::path::{Path, PathBuf};
 //     },
 //     First,
 // }
-
-#[async_trait]
-pub trait Source {
-    // use protos for the interface types here
-    // get user info (username, profile picture)
-    // get stream of playlists
-    // get stream of playlist tracks
-}

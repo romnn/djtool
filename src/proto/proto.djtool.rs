@@ -1,52 +1,125 @@
+// enum Source {
+
+//   SPOTIFY = 0;
+
+//   SOUNDCLOUD = 1;
+
+//   YOUTUBE = 2;
+
+// }
+
+// enum Sink {
+
+//   YOUTUBE = 0;
+
+//   SOUNDCLOUD = 1;
+
+// }
+
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct UserId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "Service", tag = "10")]
+    pub source: i32,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct TrackId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub playlist_id: ::core::option::Option<PlaylistId>,
+    #[prost(enumeration = "Service", tag = "10")]
+    pub source: i32,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct PlaylistId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "Service", tag = "10")]
+    pub source: i32,
+}
+// message UserId {
+
+//   oneof id {
+
+//     SpotifyUserId spotify_user_id = 1;
+
+//   }
+
+// }
+
+// message UserId {
+
+//   oneof id {
+
+//     SpotifyUserId spotify_user_id = 1;
+
+//   }
+
+// }
+
+/// Source source = 1;
 #[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct Track {
-    #[prost(string, tag = "1")]
+    /// PlaylistId playlist_id = 1;
+    #[prost(message, optional, tag = "1")]
+    pub track_id: ::core::option::Option<TrackId>,
+    #[prost(string, tag = "100")]
     pub name: ::prost::alloc::string::String,
 }
 #[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct Playlist {
-    #[prost(string, tag = "1")]
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<PlaylistId>,
+    #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag = "2")]
+    #[prost(message, repeated, tag = "100")]
     pub tracks: ::prost::alloc::vec::Vec<Track>,
 }
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
-pub struct SourcePlaylists {
-    #[prost(enumeration = "Source", tag = "1")]
-    pub source: i32,
-    #[prost(message, repeated, tag = "2")]
-    pub playlists: ::prost::alloc::vec::Vec<Playlist>,
-}
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
-pub struct Library {
-    #[prost(message, repeated, tag = "1")]
-    pub sources: ::prost::alloc::vec::Vec<SourcePlaylists>,
-}
+// message SourcePlaylists {
+
+//   Source source = 1;
+
+//   repeated Playlist playlists = 100;
+
+// }
+
+// message Playlists { repeated Playlist playlists = 1; }
+
+// message Library {
+
+//   repeated SourcePlaylists sources = 1;
+
+//   /1* map<string, Playlists> sources = 1; *1/
+
+// }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TrackSyncDesc {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
-    #[prost(enumeration = "Source", tag = "2")]
-    pub source: i32,
-    #[prost(enumeration = "Sink", tag = "3")]
-    pub sink: i32,
+    #[prost(string, tag = "2")]
+    pub source: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub sink: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PlaylistSyncDesc {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
-    #[prost(enumeration = "Source", tag = "2")]
-    pub source: i32,
-    #[prost(enumeration = "Sink", tag = "3")]
-    pub sink: i32,
+    #[prost(string, tag = "2")]
+    pub source: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub sink: ::prost::alloc::string::String,
 }
 /// todo oneof
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncProgressUpdate {}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncRequest {
-    #[prost(enumeration = "Source", repeated, tag = "1")]
-    pub sources: ::prost::alloc::vec::Vec<i32>,
+    #[prost(string, repeated, tag = "1")]
+    pub sources: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "2")]
     pub tracks: ::prost::alloc::vec::Vec<TrackSyncDesc>,
     /// oneof request {
@@ -55,13 +128,10 @@ pub struct SyncRequest {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum Source {
+pub enum Service {
     Spotify = 0,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Sink {
-    Youtube = 0,
+    Soundcloud = 1,
+    Youtube = 2,
 }
 #[doc = r" Generated server implementations."]
 pub mod dj_tool_server {

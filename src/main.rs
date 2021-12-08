@@ -4,19 +4,20 @@
 )]
 
 use anyhow::Result;
-use djtool::config::Persist;
 use dirs;
+use djtool::config::Persist;
+use djtool::spotify::model::{Id, PlaylistId, UserId};
+use djtool::youtube::Youtube;
 use djtool::DjTool;
 use futures::Stream;
 use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
 use reqwest;
-use djtool::spotify::model::{Id, PlaylistId, UserId};
-use djtool::youtube::Youtube;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -38,6 +39,25 @@ const SPLASH_LOGO: &str = r"
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", SPLASH_LOGO);
+    let (shutdown_tx, shutdown_rx) = watch::channel(false);
+    // let shutdown_tx = Arc::new(shutdown_tx);
+    // let shutdown_rx = Arc::new(shutdown_rx);
+
+    let _ = thread::spawn(move || {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async move {
+            //
+            // let config_dir = dirs::home_dir().unwrap().join(".djtool");
+            // println!("config dir: {}", config_dir.display());
+            // let tool = DjTool::persistent(&config_dir).await.unwrap();
+            let tool = DjTool::persistent(None::<PathBuf>).await.unwrap();
+            tool.connect_sources().await;
+            println!("connected sources");
+
+            // tool.sync_library().await.unwrap();
+            tool.serve(shutdown_rx).await;
+        });
+    });
 
     // let _ = thread::spawn(|| {
     //     let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -118,9 +138,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    app.run(|handle, event| {
+    app.run(move |handle, event| {
         match event {
             Event::ExitRequested { api, .. } => {
+                shutdown_tx.send(true).unwrap();
                 println!("exiting");
                 // thread::sleep(std::time::Duration::from_secs(10));
                 // println!("exiting for real");

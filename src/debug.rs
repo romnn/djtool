@@ -27,28 +27,16 @@ pub async fn debug_youtube_search_handler(
     query: DebugYoutubeSearchQuery,
     youtube: YoutubeClient,
 ) -> std::result::Result<impl Reply, Infallible> {
-    // let results = youtube
+    // let stream = youtube
     //     .search_stream(query.query)
-    //     .take(query.limit.unwrap_or(1))
-    //     .collect::<Vec<Result<YoutubeVideo>>>()
-    //     .await;
-    // let results: Vec<&YoutubeVideo> = results.iter().flat_map(|r| r.as_ref().ok()).collect();
-    let stream = youtube
-        .search_stream(query.query)
-        .take(query.limit.unwrap_or(1));
-    let results = stream.collect::<Vec<Result<YoutubeVideo>>>().await;
-    let results = results
-        .iter()
-        .flat_map(|r| r.as_ref().ok())
-        .collect::<Vec<&YoutubeVideo>>();
+    //     .take(query.limit.unwrap_or(1));
+    // let results = stream.collect::<Vec<Result<YoutubeVideo>>>().await;
+    // let results = results
+    //     .iter()
+    //     .flat_map(|r| r.as_ref().ok())
+    //     .collect::<Vec<&YoutubeVideo>>();
 
-    // let results: Vec<&YoutubeVideo> = Vec::new();
-    // pin_mut!(stream);
-
-    // while let Some(vid) = stream.next().await {
-    //     println!("got {:?}", vid);
-    // }
-
+    let results: Vec<&YoutubeVideo> = Vec::new();
     return Ok(warp::reply::json(&results));
 
     if query.parsed.unwrap_or(true) {
@@ -74,16 +62,17 @@ pub async fn debug_spotify_playlists_handler(
         .playlist_id
         .and_then(|id| PlaylistId::from_id(&id).ok());
 
-    let playlists = spotify
-        .user_playlists_items_stream(&user_id, None, None)
-        .take(query.limit.unwrap_or(1))
-        .collect::<Vec<Result<PlaylistItem>>>()
-        .await;
-    let playlists = playlists
-        .iter()
-        .flat_map(|playlist| playlist.as_ref().ok())
-        .collect::<Vec<&PlaylistItem>>();
+    // let playlists = spotify
+    //     .user_playlists_items_stream(&user_id, None, None)
+    //     .take(query.limit.unwrap_or(1))
+    //     .collect::<Vec<Result<PlaylistItem>>>()
+    //     .await;
+    // let playlists = playlists
+    //     .iter()
+    //     .flat_map(|playlist| playlist.as_ref().ok())
+    //     .collect::<Vec<&PlaylistItem>>();
 
+    let playlists: Vec<&PlaylistItem> = Vec::new();
     // todo: map the playlist for each playlist item
     // create library manager to check if items are already downloaded
     // check if static server works

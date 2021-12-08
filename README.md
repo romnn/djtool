@@ -19,10 +19,10 @@ TODO:
 
 - unify the start routine of the djtool with a shutdown channel
 - start working on the sync function with semaphores (in djtool, calling out to various parts)
-- need its own transcoder(sem), downloader(sem), library copies to perform the tasks
+  - semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
+  - need its own transcoder(sem), downloader(sem), library copies to perform the tasks
 
 - build the UI using mock data
-- refactor the transcoder and wrap it in a semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
 - convert the full youtube results via an impl
 
 - add config struct that manages all the local assets in a persisted database
@@ -32,6 +32,7 @@ TODO:
 
 Done:
 
+- refactor the transcoder and wrap it in a 
 - create a library in protobuf and add serde serialization to it
 - move djtool server code to lib
 - allow of vec of sinks
