@@ -16,6 +16,9 @@ use futures::stream::Stream;
 use futures_util::pin_mut;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use model::Id;
+use std::convert::TryFrom;
+use std::convert::TryInto;
+use std::iter::FromIterator;
 // use model::{
 //     FullPlaylist, Id, Market, Page, PlayableItem, PlaylistId, PlaylistItem, SimplifiedPlaylist,
 //     UserId,
@@ -238,6 +241,16 @@ impl Spotify {
 //
 // const SPOTIFY_SOURCE_ID: &'static str = "SPOTIFY";
 
+impl From<model::Image> for proto::djtool::Artwork {
+    fn from(img: model::Image) -> proto::djtool::Artwork {
+        proto::djtool::Artwork {
+            url: img.url,
+            width: img.width.unwrap_or(0),
+            height: img.height.unwrap_or(0),
+        }
+    }
+}
+
 impl From<model::SimplifiedPlaylist> for proto::djtool::Playlist {
     fn from(playlist: model::SimplifiedPlaylist) -> proto::djtool::Playlist {
         proto::djtool::Playlist {
@@ -264,6 +277,19 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     playlist_id: None, // unknown at this point
                 }),
                 name: track.name,
+                artwork: {
+                    let mut images = track
+                        .album
+                        .images
+                        .into_iter()
+                        .map(proto::djtool::Artwork::from)
+                        .collect::<Vec<proto::djtool::Artwork>>();
+                    images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
+                    images.first().map(|a| a.to_owned())
+                },
+                preview: track
+                    .preview_url
+                    .map(|url| proto::djtool::TrackPreview { url }),
                 artist: track
                     .artists
                     .into_iter()
@@ -277,6 +303,20 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     id: ep.id.to_string(), // episodes always have an ID
                     playlist_id: None,     // unknown at this point
                 }),
+                artwork: {
+                    let mut images = ep
+                        .show
+                        .images
+                        .into_iter()
+                        .map(proto::djtool::Artwork::from)
+                        .collect::<Vec<proto::djtool::Artwork>>();
+                    images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
+                    images.first().map(|a| a.to_owned())
+                },
+                // .map(Into::into),
+                preview: ep
+                    .audio_preview_url
+                    .map(|url| proto::djtool::TrackPreview { url }),
                 name: ep.name,
                 artist: ep.show.publisher,
             }),

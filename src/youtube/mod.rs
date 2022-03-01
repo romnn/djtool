@@ -123,13 +123,15 @@ impl Sink for Youtube {
         // let content_length = self.download(&video, &format, output_path.clone()).await?;
         let stream_url = self.get_stream_url(&video, &format).await?;
         //     println!("stream url: {}", stream_url);
-        let mut download = Download::new(stream_url, output_path.as_ref().to_owned()).await?;
+        let mut download = Download::new(&stream_url, &output_path).await?;
         download.start().await?;
 
         Ok(DownloadedTrack {
             track: proto::djtool::Track {
                 name: track.name.to_owned(),
                 artist: track.artist.to_owned(),
+                artwork: None,
+                preview: None,
                 track_id: Some(proto::djtool::TrackId {
                     id: video_id.to_owned(),
                     source: proto::djtool::Service::Youtube as i32,

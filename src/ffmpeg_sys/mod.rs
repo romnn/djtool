@@ -17,7 +17,7 @@ extern crate libc;
 // }
 // panic!(format!("{}", TEST));
 
-#[allow(dead_code)]
+#[allow(warnings, dead_code)]
 mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }

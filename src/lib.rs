@@ -17,6 +17,7 @@ pub mod youtube;
 use anyhow::Result;
 use config::Persist;
 use dirs;
+use download::Download;
 use futures::Stream;
 use futures_util::pin_mut;
 use futures_util::stream;
@@ -300,7 +301,7 @@ impl DjTool {
                 }
             })
             .flat_map(|playlist_stream| playlist_stream)
-            .filter_map(|(playlist): (Result<proto::djtool::Playlist>)| {
+            .filter_map(|playlist: Result<proto::djtool::Playlist>| {
                 let playlists_failed = playlists_failed.clone();
                 let source_id = playlist
                     .as_ref()
@@ -311,7 +312,10 @@ impl DjTool {
 
                 async move {
                     match playlist {
-                        Ok(pl) => source_id.map(|id| (id, pl)),
+                        Ok(pl) => {
+                            // if playlist.name == "IBO
+                            source_id.map(|id| (id, pl))
+                        }
                         Err(err) => {
                             println!("playlist error: {}", err);
                             let mut fp = playlists_failed.lock().await;
@@ -348,7 +352,7 @@ impl DjTool {
                 },
             )
             .flat_map(|track_stream| track_stream)
-            .filter_map(|(track): (Result<proto::djtool::Track>)| {
+            .filter_map(|track: Result<proto::djtool::Track>| {
                 let tracks_failed = tracks_failed.clone();
                 async move {
                     match track {
@@ -363,24 +367,29 @@ impl DjTool {
                         }
                     }
                 }
-            })
-            .take(100);
+            });
+        // .take(100);
 
         let process_track = track_stream
-            .for_each_concurrent(Some(16), |track: proto::djtool::Track| {
+            .for_each_concurrent(Some(8), |track: proto::djtool::Track| {
                 let sinks_lock = sinks_lock.clone();
                 let transcoder = self.transcoder.clone();
                 let tracks_succeeded = tracks_succeeded.clone();
                 let tracks_in_progress = tracks_in_progress.clone();
+                let tracks_failed = tracks_failed.clone();
                 async move {
                     let title = track.name.to_owned();
                     let artist = track.artist.to_owned();
                     let filename = format!("{} - {}", title, artist);
                     let filename_clone = filename.clone();
 
+                    // let tracks_succeeded_clone = tracks_succeeded.clone();
+                    let tracks_in_progress_clone = tracks_in_progress.clone();
+                    // let tracks_failed_clone = tracks_failed.clone();
+
                     let res = async move {
                         {
-                            let mut p = tracks_in_progress.lock().await;
+                            let mut p = tracks_in_progress_clone.lock().await;
                             *p += 1;
                         };
                         // println!("{}", filename);
@@ -388,6 +397,7 @@ impl DjTool {
                         let filename = utils::sanitize_filename(&filename);
                         let temp_dir = TempDir::new(&filename)?;
                         // todo: load the preferred sink for the video if available, otherwise use
+
                         // youtube by default
                         let sink = &sinks_lock[&proto::djtool::Service::Youtube];
                         let downloaded = sink
@@ -409,32 +419,78 @@ impl DjTool {
                         output_path.set_extension("mp3");
 
                         // println!("transcoding to {}", transcoded_path.display());
+                        let transcoded_path_clone = transcoded_path.to_owned();
                         let res = tokio::task::spawn_blocking(move || {
                             transcoder.transcode_blocking(
                                 &downloaded.output_path,
-                                &transcoded_path,
+                                &transcoded_path_clone,
                                 Some(&transcode::TranscoderOptions::mp3()),
                                 &Box::new(|progress: transcode::TranscodeProgress| {
                                     println!("{}", progress.frame_count);
                                 }),
                             );
-                            std::fs::rename(&transcoded_path, &output_path)?;
                             Ok::<(), anyhow::Error>(())
                         })
                         .await?;
 
+                        // download the artwork
+                        if let Some(artwork) = track.artwork {
+                            let artwork_path = async {
+                                let dest = temp_dir.path().join("artwork.jpg");
+                                let mut download = Download::new(&artwork.url, &dest).await?;
+                                download.start().await?;
+                                Ok::<PathBuf, anyhow::Error>(dest)
+                            }
+                            .await;
+                            let transcoded_path_clone = transcoded_path.clone();
+                            let test = tokio::task::spawn_blocking(move || {
+                                artwork_path.and_then(|path| {
+                                    id3::embed_image(&transcoded_path_clone, &path)
+                                })
+                                // match artwork_path {
+                                //     Ok(path) => {
+                                //     },
+                                //     Err(err) => println!("artwork download error: {:?}", err)
+                                // }
+                                //
+                            })
+                            .await;
+                            println!("artwork: {:?}", test);
+                        }
+
+                        std::fs::rename(&transcoded_path, &output_path)?;
+
                         // move result
                         // transcoded_path.rename(output_path)?;
 
-                        {
-                            let mut s = tracks_succeeded.lock().await;
-                            *s += 1;
-                            let mut p = tracks_in_progress.lock().await;
-                            *p -= 1;
-                        };
+                        // {
+                        //     let mut s = tracks_succeeded.lock().await;
+                        //     *s += 1;
+                        //     let mut p = tracks_in_progress.lock().await;
+                        //     *p -= 1;
+                        // };
                         Ok::<(), anyhow::Error>(())
                     }
                     .await;
+
+                    match res {
+                        Ok(_) => {
+                            let mut s = tracks_succeeded.lock().await;
+                            *s += 1;
+                        }
+                        Err(_) => {
+                            {
+                                let mut s = tracks_failed.lock().await;
+                                *s += 1;
+                                // let mut p = tracks_in_progress.lock().await;
+                                // *p -= 1;
+                            }
+                        }
+                    };
+                    {
+                        let mut p = tracks_in_progress.lock().await;
+                        *p -= 1;
+                    }
                     println!("track: {} result: {:?}", filename_clone, res);
                 }
             })

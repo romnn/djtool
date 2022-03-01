@@ -41,7 +41,7 @@ impl TranscoderOptions<'_> {
             codec: Some(Codec::MP3),
             bitrate_kbps: Some(192),
             sample_rate: None,
-            filter_spec: None,
+            filter_spec: Some("loudnorm"),
         }
     }
 }

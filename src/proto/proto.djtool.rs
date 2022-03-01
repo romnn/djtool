@@ -101,6 +101,20 @@ pub mod user_login_callback {
 
 // }
 
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct Artwork {
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+}
+#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+pub struct TrackPreview {
+    #[prost(string, tag = "1")]
+    pub url: ::prost::alloc::string::String,
+}
 /// Source source = 1;
 #[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct Track {
@@ -111,6 +125,10 @@ pub struct Track {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "101")]
     pub artist: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "200")]
+    pub artwork: ::core::option::Option<Artwork>,
+    #[prost(message, optional, tag = "201")]
+    pub preview: ::core::option::Option<TrackPreview>,
 }
 #[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct Playlist {

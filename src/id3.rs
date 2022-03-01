@@ -1,7 +1,11 @@
 use anyhow::{anyhow, Result};
 use std::path::Path;
 
-pub fn embed_image<P: AsRef<Path>>(music_filename: P, image_filename: P) -> Result<()> {
+// pub fn embed_image<P: AsRef<Path>>(music_filename: P, image_filename: P) -> Result<()> {
+pub fn embed_image(
+    music_filename: impl AsRef<Path>,
+    image_filename: impl AsRef<Path>,
+) -> Result<()> {
     let mut tag = read_tag(music_filename.as_ref())?;
     let image = image::open(&image_filename.as_ref()).map_err(|e| {
         anyhow!(

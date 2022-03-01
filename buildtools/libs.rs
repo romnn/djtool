@@ -110,6 +110,8 @@ lazy_static! {
             Library {
                 name: "ffmpeg",
                 version: "4.4",
+                // version: "5.0",
+                // version: "n4.4.1",
                 requires: &[
                     // todo: add the minimal ffmpeg dependencies here
                     // optional dependencies

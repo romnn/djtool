@@ -415,60 +415,60 @@ impl AsMut<Context> for Video {
 pub struct Encoder(pub Video);
 
 impl Encoder {
-    #[deprecated(
-        since = "4.4.0",
-        note = "Underlying API avcodec_encode_video2 has been deprecated since FFmpeg 3.1; \
-        consider switching to send_frame() and receive_packet()"
-    )]
-    #[inline]
-    pub fn encode<P: packet::Mut>(
-        &mut self,
-        frame: &frame::Video,
-        out: &mut P,
-    ) -> Result<bool, Error> {
-        unsafe {
-            if self.format() != frame.format()
-                || self.width() != frame.width()
-                || self.height() != frame.height()
-            {
-                return Err(Error::InvalidData);
-            }
+    // #[deprecated(
+    //     since = "4.4.0",
+    //     note = "Underlying API avcodec_encode_video2 has been deprecated since FFmpeg 3.1; \
+    //     consider switching to send_frame() and receive_packet()"
+    // )]
+    // #[inline]
+    // pub fn encode<P: packet::Mut>(
+    //     &mut self,
+    //     frame: &frame::Video,
+    //     out: &mut P,
+    // ) -> Result<bool, Error> {
+    //     unsafe {
+    //         if self.format() != frame.format()
+    //             || self.width() != frame.width()
+    //             || self.height() != frame.height()
+    //         {
+    //             return Err(Error::InvalidData);
+    //         }
 
-            let mut got: c_int = 0;
+    //         let mut got: c_int = 0;
 
-            match avcodec_encode_video2(
-                self.0.as_mut_ptr(),
-                out.as_mut_ptr(),
-                frame.as_ptr(),
-                &mut got,
-            ) {
-                e if e < 0 => Err(Error::from(e)),
-                _ => Ok(got != 0),
-            }
-        }
-    }
+    //         match avcodec_encode_video2(
+    //             self.0.as_mut_ptr(),
+    //             out.as_mut_ptr(),
+    //             frame.as_ptr(),
+    //             &mut got,
+    //         ) {
+    //             e if e < 0 => Err(Error::from(e)),
+    //             _ => Ok(got != 0),
+    //         }
+    //     }
+    // }
 
-    #[deprecated(
-        since = "4.4.0",
-        note = "Underlying API avcodec_encode_video2 has been deprecated since FFmpeg 3.1; \
-        consider switching to send_frame() and receive_packet()"
-    )]
-    #[inline]
-    pub fn flush<P: packet::Mut>(&mut self, out: &mut P) -> Result<bool, Error> {
-        unsafe {
-            let mut got: c_int = 0;
+    // #[deprecated(
+    //     since = "4.4.0",
+    //     note = "Underlying API avcodec_encode_video2 has been deprecated since FFmpeg 3.1; \
+    //     consider switching to send_frame() and receive_packet()"
+    // )]
+    // #[inline]
+    // pub fn flush<P: packet::Mut>(&mut self, out: &mut P) -> Result<bool, Error> {
+    //     unsafe {
+    //         let mut got: c_int = 0;
 
-            match avcodec_encode_video2(
-                self.0.as_mut_ptr(),
-                out.as_mut_ptr(),
-                ptr::null(),
-                &mut got,
-            ) {
-                e if e < 0 => Err(Error::from(e)),
-                _ => Ok(got != 0),
-            }
-        }
-    }
+    //         match avcodec_encode_video2(
+    //             self.0.as_mut_ptr(),
+    //             out.as_mut_ptr(),
+    //             ptr::null(),
+    //             &mut got,
+    //         ) {
+    //             e if e < 0 => Err(Error::from(e)),
+    //             _ => Ok(got != 0),
+    //         }
+    //     }
+    // }
 
     #[inline]
     pub fn frame_size(&self) -> u32 {

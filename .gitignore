@@ -1,5 +1,6 @@
 /target
 ffmpeg-build/
+experimental/results
 .DS_Store
 *.mp3
 *.aiff

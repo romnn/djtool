@@ -14,30 +14,30 @@ use crate::ffmpeg::{packet, Error, FieldOrder, Rational};
 pub struct Video(pub Opened);
 
 impl Video {
-    #[deprecated(
-        since = "4.4.0",
-        note = "Underlying API avcodec_decode_video2 has been deprecated since FFmpeg 3.1; \
-        consider switching to send_packet() and receive_frame()"
-    )]
-    pub fn decode<P: packet::Ref>(
-        &mut self,
-        packet: &P,
-        out: &mut frame::Video,
-    ) -> Result<bool, Error> {
-        unsafe {
-            let mut got: c_int = 0;
+    // #[deprecated(
+    //     since = "4.4.0",
+    //     note = "Underlying API avcodec_decode_video2 has been deprecated since FFmpeg 3.1; \
+    //     consider switching to send_packet() and receive_frame()"
+    // )]
+    // pub fn decode<P: packet::Ref>(
+    //     &mut self,
+    //     packet: &P,
+    //     out: &mut frame::Video,
+    // ) -> Result<bool, Error> {
+    //     unsafe {
+    //         let mut got: c_int = 0;
 
-            match avcodec_decode_video2(
-                self.as_mut_ptr(),
-                out.as_mut_ptr(),
-                &mut got,
-                packet.as_ptr(),
-            ) {
-                e if e < 0 => Err(Error::from(e)),
-                _ => Ok(got != 0),
-            }
-        }
-    }
+    //         match avcodec_decode_video2(
+    //             self.as_mut_ptr(),
+    //             out.as_mut_ptr(),
+    //             &mut got,
+    //             packet.as_ptr(),
+    //         ) {
+    //             e if e < 0 => Err(Error::from(e)),
+    //             _ => Ok(got != 0),
+    //         }
+    //     }
+    // }
 
     pub fn width(&self) -> u32 {
         unsafe { (*self.as_ptr()).width as u32 }

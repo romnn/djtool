@@ -81,12 +81,24 @@ message UserLoginCallback {
 /*   /1* uint64 content_length = 3; *1/ */
 /* } */
 
+message Artwork {
+  string url = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+}
+
+message TrackPreview {
+  string url = 1;
+}
+
 message Track {
   /* Source source = 1; */
   /* PlaylistId playlist_id = 1; */
   TrackId track_id = 1;
   string name = 100;
   string artist = 101;
+  Artwork artwork = 200;
+  TrackPreview preview = 201;
 }
 
 message Playlist {

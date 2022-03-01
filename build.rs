@@ -255,6 +255,14 @@ fn compile_protos() -> Result<()> {
     println!("cargo:warning=proto output dir is {:?}", output_dir);
     tonic_build::configure()
         .type_attribute(
+            "proto.djtool.TrackPreview",
+            "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        )
+        .type_attribute(
+            "proto.djtool.Artwork",
+            "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        )
+        .type_attribute(
             "proto.djtool.TrackId",
             "#[derive(Serialize, Deserialize, Hash, Eq)]",
         )
@@ -842,6 +850,8 @@ fn main() {
             .blocklist_function("y0l")
             .blocklist_function("y1l")
             .blocklist_function("ynl")
+            .opaque_type("__mingw_ldbl_type_t")
+            .generate_comments(false)
             .rustified_enum("*")
             .prepend_enum_name(false)
             .derive_eq(true)
@@ -856,8 +866,10 @@ fn main() {
                 .header(search_include(&include_paths, "libavcodec/avcodec.h"))
                 .header(search_include(&include_paths, "libavcodec/dv_profile.h"))
                 .header(search_include(&include_paths, "libavcodec/avfft.h"))
-                .header(search_include(&include_paths, "libavcodec/vaapi.h"))
                 .header(search_include(&include_paths, "libavcodec/vorbis_parser.h"));
+            // if ffmpeg_major_version < 5 {
+            builder = builder.header(search_include(&include_paths, "libavcodec/vaapi.h"))
+            // }
         }
 
         if feature_env_set("avdevice") {

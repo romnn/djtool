@@ -1,0 +1,10 @@
+[packages]
+numpy = "*"
+scipy = "*"
+pyaudio = "*"
+librosa = "*"
+SimpleWebSocketServer = "*"
+matplotlib = "*"
+pandas = "*"
+jupyter = "*"
+notebook = "*"

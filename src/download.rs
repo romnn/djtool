@@ -10,7 +10,7 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use tempdir::TempDir;
@@ -105,7 +105,7 @@ pub struct Download {
 }
 
 impl Download {
-    pub async fn new(url: String, output_path: PathBuf) -> Result<Self> {
+    pub async fn new(url: &String, output_path: impl AsRef<Path>) -> Result<Self> {
         let client = Arc::new(reqwest::Client::new());
         let info = Self::preflight(&client, &url).await?;
         // println!("preflight check completed");
@@ -120,9 +120,9 @@ impl Download {
             client,
             temp_dir: TempDir::new("djtool")?,
             concurrency,
-            url,
+            url: url.to_string(),
             headers: HeaderMap::new(),
-            output_path,
+            output_path: output_path.as_ref().to_owned(),
             chunk_size,
             info,
             downloaded: 0,
