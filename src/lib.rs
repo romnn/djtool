@@ -6,6 +6,7 @@ pub mod download;
 pub mod ffmpeg;
 mod ffmpeg_sys;
 pub mod id3;
+pub mod matching;
 pub mod proto;
 pub mod sink;
 pub mod source;
@@ -18,7 +19,7 @@ use anyhow::Result;
 use config::Persist;
 use dirs;
 use download::Download;
-use futures::Stream;
+use futures::{Future, Stream};
 use futures_util::pin_mut;
 use futures_util::stream;
 use futures_util::{StreamExt, TryStreamExt};
@@ -36,13 +37,19 @@ use std::sync::Arc;
 use std::thread;
 use tauri::Event;
 use tempdir::TempDir;
-use tokio::sync::{mpsc, watch, Mutex, RwLock, Semaphore};
+use tokio::sync::{broadcast, mpsc, watch, Mutex, RwLock, Semaphore};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server as TonicServer, Code, Request, Response, Status};
 use warp::{Filter, Rejection, Reply};
 use youtube::Youtube;
 
-const DEFAULT_PORT: u16 = 21011;
+pub const SPLASH_LOGO: &str = r"
+
+ ___/ / (_) /____  ___  / /
+/ _  / / / __/ _ \/ _ \/ / 
+\_,_/_/ /\__/\___/\___/_/  
+   |___/                   
+";
 
 pub type SpotifyClient = Arc<spotify::Spotify>;
 pub type YoutubeClient = Arc<youtube::Youtube>;
@@ -57,13 +64,20 @@ pub struct DjTool {
     transcoder: Arc<Box<dyn transcode::Transcoder + Sync + Send>>,
     data_dir: Option<PathBuf>,
     config: Arc<RwLock<Option<config::Config>>>,
+    host: IpAddr,
+    port: u16,
 }
 
 impl DjTool {
-    pub async fn serve(&self, shutdown_rx: watch::Receiver<bool>) -> Result<()> {
-        let host = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        let grpc_addr = SocketAddr::new(host, 21022);
-        let http_addr = SocketAddr::new(host, 21011);
+    // host: Option<IpAddr::V4>, port: Option<u16>,
+    // watch::Receiver<bool>
+    pub async fn serve(
+        &self,
+        // shutdown_rx: impl Future<Output = ()> + Send + Clone + 'static,
+        mut shutdown_tx: broadcast::Sender<bool>,
+    ) -> Result<()> {
+        let grpc_addr = SocketAddr::new(self.host, 21022);
+        let http_addr = SocketAddr::new(self.host, self.port);
 
         println!("grpc listening at {}", grpc_addr);
         println!("frontend served at {}", http_addr);
@@ -83,7 +97,8 @@ impl DjTool {
             config.as_ref().map(|c| c.library.library_dir.to_owned())
         };
         let http_tool_clone = self.clone();
-        let shutdown_clone = shutdown_rx.clone();
+        let mut shutdown_rx = shutdown_tx.subscribe();
+
         let http_server = tokio::spawn(async move {
             let library = warp::path("library").and(warp::fs::dir(library_dir.unwrap()));
 
@@ -122,9 +137,10 @@ impl DjTool {
             println!("starting server now ...");
             let (_, server) = warp::serve(routes)
                 .try_bind_with_graceful_shutdown(http_addr, async move {
-                    shutdown_clone
-                        .clone()
-                        .changed()
+                    shutdown_rx
+                        // .clone()
+                        // .changed()
+                        .recv()
                         .await
                         .expect("failed to shutdown");
                 })
@@ -132,11 +148,14 @@ impl DjTool {
             server.await;
         });
 
+        let mut shutdown_rx = shutdown_tx.subscribe();
         grpc_server
-            .serve_with_shutdown(grpc_addr, async {
+            .serve_with_shutdown(grpc_addr, async move {
                 shutdown_rx
-                    .clone()
-                    .changed()
+                    // .subscribe()
+                    // .clone()
+                    // .changed()
+                    .recv()
                     .await
                     .expect("failed to shutdown");
             })
@@ -187,6 +206,8 @@ impl Default for DjTool {
             sources: Arc::new(RwLock::new(HashMap::new())),
             sinks: Arc::new(RwLock::new(sinks)),
             config: Arc::new(RwLock::new(None)),
+            host: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            port: 21011,
         }
     }
 }
@@ -225,7 +246,7 @@ impl DjTool {
         // todo: store the credentials in the spotify config
         let creds = spotify::auth::Credentials::pkce("893474f878934ae89fff417e4722e147");
         let oauth = spotify::auth::OAuth {
-            redirect_uri: format!("http://localhost:{}/spotify/pkce/callback", DEFAULT_PORT),
+            redirect_uri: format!("http://{}:{}/spotify/pkce/callback", self.host, self.port),
             scopes: scopes!("playlist-read-private"),
             ..Default::default()
         };

@@ -17,13 +17,11 @@ python3 compile-proto-grpcweb.py
 
 TODO:
 
+- make all implemented sources and sinks features
+- implement a CLI interface
+- implement generic matching interface that scores top n results
 - unify the start routine of the djtool with a shutdown channel
-- start working on the sync function with semaphores (in djtool, calling out to various parts)
-  - semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
-  - need its own transcoder(sem), downloader(sem), library copies to perform the tasks
-
 - build the UI using mock data
-- convert the full youtube results via an impl
 
 - add config struct that manages all the local assets in a persisted database
   - need a reindex method that builds the config from scratch!
@@ -32,6 +30,10 @@ TODO:
 
 Done:
 
+- convert the full youtube results via an impl
+- start working on the sync function with semaphores (in djtool, calling out to various parts)
+  - semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
+  - need its own transcoder(sem), downloader(sem), library copies to perform the tasks
 - refactor the transcoder and wrap it in a 
 - create a library in protobuf and add serde serialization to it
 - move djtool server code to lib
