@@ -157,8 +157,8 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
         //     .map(|arg| arg.to_owned().into_string().unwrap())
         //     .collect::<Vec<String>>()
         //     .join(" ");
-        println!("cargo:warning={:?}", build_env());
-        println!("cargo:warning={:?}", configure);
+        // println!("cargo:warning={:?}", build_env());
+        // println!("cargo:warning={:?}", configure);
         // println!("cargo:warning={}", cmd_str);
 
         // let output = configure
@@ -211,7 +211,7 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
                 continue;
             }
             println!("cargo:rustc-link-lib=static={}", feat.name);
-            println!("cargo:warning={}", feat.name);
+            // println!("cargo:warning={}", feat.name);
         }
     }
 

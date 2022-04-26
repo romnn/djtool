@@ -39,6 +39,15 @@ pub struct PlaylistId {
     #[prost(enumeration = "Service", tag = "10")]
     pub source: i32,
 }
+/// test
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaylistSyncRequest {}
+// message SyncRequest {
+
+// PlaylistSyncRequest playlist = 1;
+
+// }
+
 // message UserId {
 
 //   oneof id {

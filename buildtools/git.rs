@@ -20,11 +20,11 @@ impl GitRepository<'_> {
         }
 
         cmd.arg(self.url).arg(self.path.to_str().unwrap());
-        println!(
-            "cargo:warning=Cloning {} into {}",
-            self.url,
-            self.path.display()
-        );
+        // println!(
+        //     "cargo:warning=Cloning {} into {}",
+        //     self.url,
+        //     self.path.display()
+        // );
 
         if cmd.status()?.success() {
             Ok(())

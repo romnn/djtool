@@ -26,7 +26,7 @@ pub trait LibraryFeature {
 
     fn exists(&self) -> bool {
         let libs = vec![format!("{}.la", self.lib()), format!("{}.a", self.lib())];
-        println!("cargo:warning={:?}", libs);
+        // println!("cargo:warning={:?}", libs);
         libs.iter()
             .any(|lib| search().join("lib").join(lib).metadata().is_ok())
     }

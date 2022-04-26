@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 extern crate bindgen;
 extern crate cc;
 extern crate num_cpus;
@@ -197,11 +199,11 @@ fn check_features(
 
     let stdout = str::from_utf8(&check_output.stdout).unwrap();
 
-    println!(
-        "cargo:warning=stdout of {}={}",
-        executable.display(),
-        stdout
-    );
+    // println!(
+    //     "cargo:warning=stdout of {}={}",
+    //     executable.display(),
+    //     stdout
+    // );
 
     for &(_, feature, var) in &infos {
         let var_str = format!("[{var}]", var = var);
@@ -251,8 +253,8 @@ fn compile_protos() -> Result<()> {
     let _ = std::fs::remove_dir_all(&output_dir);
     let _ = std::fs::create_dir_all(&output_dir);
 
-    println!("cargo:warning=proto source dir is {:?}", source_dir);
-    println!("cargo:warning=proto output dir is {:?}", output_dir);
+    // println!("cargo:warning=proto source dir is {:?}", source_dir);
+    // println!("cargo:warning=proto output dir is {:?}", output_dir);
     tonic_build::configure()
         .type_attribute(
             "proto.djtool.TrackPreview",
@@ -309,10 +311,10 @@ fn compile_protos() -> Result<()> {
 fn main() {
     tauri_build::build();
 
-    println!("cargo:warning={}", output().display());
+    // println!("cargo:warning={}", output().display());
 
     if is_debug_build() {
-        println!("cargo:warning=is debug build");
+        // println!("cargo:warning=is debug build");
         println!(r#"cargo:rustc-cfg=feature="debug""#);
     }
 
@@ -323,7 +325,7 @@ fn main() {
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
 
-    println!("cargo:warning=need rebuild: {:?}", need_build);
+    // println!("cargo:warning=need rebuild: {:?}", need_build);
 
     let mut dependencies = DepGraph::new(
         LIBRARIES

@@ -119,7 +119,6 @@ impl Authenticator for PkceAuthenticator {
 
     async fn handle_user_login_callback(
         &self,
-        // data: spotify::auth::SpotifyLoginCallback,
         data: proto::djtool::SpotifyUserLoginCallback,
     ) -> Result<()> {
         match data.method {

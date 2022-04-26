@@ -145,11 +145,11 @@ where
         let (item_ready_tx, item_ready_rx) = crossbeam_channel::unbounded::<I>();
         let (item_done_tx, item_done_rx) = crossbeam_channel::unbounded::<I>();
 
-        println!("cargo:warning=deps: {:?}", deps.read().unwrap());
-        println!(
-            "cargo:warning=reverse deps: {:?}",
-            reverse_deps.read().unwrap()
-        );
+        // println!("cargo:warning=deps: {:?}", deps.read().unwrap());
+        // println!(
+        //     "cargo:warning=reverse deps: {:?}",
+        //     reverse_deps.read().unwrap()
+        // );
 
         // inject ready nodes
         ready_nodes
@@ -159,7 +159,7 @@ where
         // start dispatcher thread
         thread::spawn(move || -> Result<()> {
             while let Ok(id) = item_done_rx.recv() {
-                println!("cargo:warning=item done: {:?}", id);
+                // println!("cargo:warning=item done: {:?}", id);
                 // println!("cargo:warning=deps: {:?}", deps.read().unwrap());
                 // println!(
                 //     "cargo:warning=reverse deps: {:?}",
@@ -167,7 +167,7 @@ where
                 // );
                 // Remove the node from all reverse dependencies
                 let next_nodes = remove_node_id::<I>(id, &deps, &reverse_deps)?;
-                println!("cargo:warning=next nodes: {:?}", next_nodes);
+                // println!("cargo:warning=next nodes: {:?}", next_nodes);
 
                 // send the next available nodes to the channel
                 next_nodes
@@ -179,7 +179,7 @@ where
                     break;
                 }
             }
-            println!("cargo:warning=dispatcher end");
+            // println!("cargo:warning=dispatcher end");
             drop(item_ready_tx);
             Ok(())
         });

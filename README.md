@@ -17,8 +17,15 @@ python3 compile-proto-grpcweb.py
 
 TODO:
 
+- source, sink
+- sync: playlist/track, source, sink(s)
+  - if nothing specified: all
+
 - make all implemented sources and sinks features
 - implement a CLI interface
+- implement very fancy progress bar
+  - using a sync progress struct
+- use atomic usize for the stats durinc sync
 - implement generic matching interface that scores top n results
 - unify the start routine of the djtool with a shutdown channel
 - build the UI using mock data
@@ -34,7 +41,7 @@ Done:
 - start working on the sync function with semaphores (in djtool, calling out to various parts)
   - semaphore to control concurrency, otherwise high unordered buffering may be used because that is high IO bound (downloading and checking whether files exist)
   - need its own transcoder(sem), downloader(sem), library copies to perform the tasks
-- refactor the transcoder and wrap it in a 
+- refactor the transcoder and wrap it in a
 - create a library in protobuf and add serde serialization to it
 - move djtool server code to lib
 - allow of vec of sinks
@@ -58,7 +65,6 @@ Done:
 - the authentication methods should be traits
 - the spotify client should be a struct
 - depending on which the suitable auth method trait should be loaded
-
 
 #### Big issues to address
 

@@ -9,13 +9,6 @@
 #![allow(clippy::type_complexity)]
 
 extern crate libc;
-// use lazy_static::lazy_static;
-
-// lazy_static! {
-//     /// This is an example for using doc comment attributes
-//     static ref TEST: &'static str = concat!(env!("OUT_DIR"), "/bindings.rs");
-// }
-// panic!(format!("{}", TEST));
 
 #[allow(warnings, dead_code)]
 mod bindings {

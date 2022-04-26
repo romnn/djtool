@@ -39,7 +39,7 @@ pub fn build_mp3lame(rebuild: bool, version: &'static str) -> Result<()> {
         configure.arg("--disable-shared");
 
         // run ./configure
-        println!("cargo:warning={:?}", configure);
+        // println!("cargo:warning={:?}", configure);
         let output = configure
             .envs(&build_env())
             .output()

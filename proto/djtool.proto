@@ -1,12 +1,6 @@
 syntax = "proto3";
 package proto.djtool;
 
-/* import "proto/audio/analysis/analysis.proto"; */
-/* import "proto/grpc/connection.proto"; */
-/* import "proto/grpc/session.proto"; */
-/* import "proto/grpc/descriptors.proto"; */
-/* import "proto/grpc/remote.proto"; */
-
 service DjTool {
   // sync request
   rpc Sync(SyncRequest) returns (stream SyncProgressUpdate) {}
@@ -46,6 +40,15 @@ message PlaylistId {
   string id = 1;
   Service source = 10;
 }
+
+message PlaylistSyncRequest {
+// test
+}
+
+/* message SyncRequest { */
+/* PlaylistSyncRequest playlist = 1; */
+/* } */
+
 
 /* message UserId { */
 /*   oneof id { */

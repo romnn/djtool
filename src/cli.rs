@@ -1,6 +1,13 @@
 use clap::Parser;
 use std::path::PathBuf;
+// use djtool::spotify;
+// use crate::spotify;
+// #[cfg(feature = "spotify")]
+// use crate::spotify;
+// use super::spotify;
 // use djtool::{DjTool, SPLASH_LOGO};
+// use djtool;
+// use djtool::spotify;
 
 // #[derive(Debug, Clone)]
 // pub struct Config {
@@ -30,66 +37,27 @@ use std::path::PathBuf;
 // }
 
 #[derive(Parser, Debug, Clone)]
-pub struct SpotifyOpts {
-    // #[clap(short = 'd', long = "device")]
-// pub device: Option<String>,
+pub enum BackendCommand {
+    // #[clap(name = "start", about = "start the server")]
+    // Start(StartOpts),
+    // #[clap(name = "spotify", about = "spotify commands")]
+    // Spotify(SpotifyOpts),
+    // #[cfg(feature = "youtube")]
+    // #[clap(name = "youtube", about = "youtube commands")]
+    // Youtube(YoutubeOpts),
+}
+
+
+#[derive(Parser, Debug, Clone)]
+pub struct BackendOpts {
+    #[clap(subcommand)]
+    pub command: Option<BackendCommand>,
+    // #[clap(subcommand)]
+    // pub sink_command: Option<SinkCommand>,
 }
 
 #[derive(Parser, Debug, Clone)]
 pub struct YoutubeOpts {
     // #[clap(short = 'd', long = "device")]
-// pub device: Option<String>,
-}
-
-#[derive(Parser, Debug, Clone)]
-pub enum Command {
-    // #[clap(name = "start", about = "start the server")]
-    // Start(StartOpts),
-    #[cfg(feature = "spotify")]
-    #[clap(name = "spotify", about = "spotify commands")]
-    Spotify(SpotifyOpts),
-    #[cfg(feature = "youtube")]
-    #[clap(name = "youtube", about = "youtube commands")]
-    Youtube(YoutubeOpts),
-}
-
-#[derive(Parser, Debug, Clone)]
-#[clap(version = "1.0", author = "romnn <contact@romnn.com>")]
-pub struct Opts {
-    // #[cfg(feature = "record")]
-    // #[clap(short = 'i', long = "input-device")]
-    // pub input_device: Option<String>,
-
-    // #[cfg(feature = "record")]
-    // #[clap(short = 'o', long = "output-device")]
-    // pub output_device: Option<String>,
-
-    // #[cfg(feature = "record")]
-    // #[clap(long = "latency", default_value = "5")]
-    // pub latency: u32,
-
-    // #[cfg(use_jack)]
-    // #[clap(long = "jack", about = "use jack audio backend")]
-    // pub use_jack: bool,
-
-    // #[cfg(feature = "portaudio")]
-    // #[clap(long = "portaudio", about = "use portaudio audio backend")]
-    // pub use_portaudio: bool,
-    #[clap(short = 'p', long = "port", default_value = "21011")]
-    pub port: u16,
-    #[clap(long = "host")]
-    pub host: Option<String>,
-    #[clap(long = "cache")]
-    pub cache_dir: Option<PathBuf>,
-    #[clap(long = "library")]
-    pub library_dir: Option<PathBuf>,
-    // #[clap(short = 'q', long = "quality")]
-    // pub quality: Option<Quality>,
-    #[clap(long = "api")]
-    pub api: bool,
-    #[clap(long = "headless")]
-    pub headless: bool,
-
-    #[clap(subcommand)]
-    pub subcommand: Option<Command>,
+    // pub device: Option<String>,
 }

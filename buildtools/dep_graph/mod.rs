@@ -104,8 +104,8 @@ where
             panic!("has circles");
         }
 
-        println!("cargo:warning=deps: {:?}", deps);
-        println!("cargo:warning=reverse deps: {:?}", reverse_deps);
+        // println!("cargo:warning=deps: {:?}", deps);
+        // println!("cargo:warning=reverse deps: {:?}", reverse_deps);
 
         Ok(DepGraph {
             ready_nodes,

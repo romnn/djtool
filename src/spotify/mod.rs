@@ -1,10 +1,12 @@
 pub mod auth;
+pub mod cli;
 pub mod config;
 pub mod error;
 pub mod model;
 pub mod stream;
 
 use super::config::Persist;
+// use crate::config::Persist;
 use super::proto;
 use super::source::{PlaylistStream, Source, TrackStream};
 use super::utils::{random_string, Alphanumeric, PKCECodeVerifier};
@@ -78,7 +80,7 @@ impl Spotify {
             Err(err) => panic!("{}", err),
             Ok(_) => {}
         };
-        println!("authenticated");
+        // println!("authenticated");
 
         self.authenticator.auth_headers().await
     }
@@ -339,7 +341,17 @@ impl Source for Spotify {
         proto::djtool::Service::Spotify
     }
 
-    fn user_playlists_stream<'a>(&'a self, user_id: String) -> Result<PlaylistStream> {
+    async fn reauthenticate(&self) -> Result<Option<reqwest::Url>> {
+        match self.authenticator.reauthenticate().await {
+            Err(crate::spotify::error::Error::Auth(
+                crate::spotify::error::AuthError::RequireUserLogin { auth_url },
+            )) => Ok(Some(auth_url)),
+            Err(err) => Err(err.into()),
+            Ok(_) => Ok(None),
+        }
+    }
+
+    fn user_playlists_stream<'a>(&'a self, user_id: &'a String) -> Result<PlaylistStream> {
         let playlists = paginate(
             move |limit, offset| {
                 self.user_playlists_page(user_id.to_owned(), Some(limit), Some(offset))
