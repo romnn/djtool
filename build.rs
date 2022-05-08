@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use bindgen::callbacks::{
     EnumVariantCustomBehavior, EnumVariantValue, IntKind, MacroParsingBehavior, ParseCallbacks,
@@ -255,43 +256,73 @@ fn compile_protos() -> Result<()> {
 
     // println!("cargo:warning=proto source dir is {:?}", source_dir);
     // println!("cargo:warning=proto output dir is {:?}", output_dir);
-    tonic_build::configure()
+    println!("cargo:rerun-if-changed=proto/djtool.proto");
+    let builder = tonic_build::configure()
+        // .type_attribute(
+        //     "proto.djtool.TrackPreview",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.Artwork",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.TrackId",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.PlaylistId",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.UserId",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.SpotifyTrack",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.YoutubeTrack",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.krackinfo",
+        //     "#[derive(serialize, deserialize, hash, eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.TrackInfo",
+        //     "#[derive(Serialize, deserialize, hash, eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.track::Info",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.track.Info",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
         .type_attribute(
-            "proto.djtool.TrackPreview",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.Artwork",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.TrackId",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.PlaylistId",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.UserId",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.Track",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.Playlist",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.SourcePlaylists",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            "proto.djtool.Library",
-            "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        )
+            ".proto.djtool",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        );
+        // .type_attribute(
+        //     "proto.djtool.Track",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.Playlist",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.SourcePlaylists",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // )
+        // .type_attribute(
+        //     "proto.djtool.Library",
+        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
+        // );
+    builder
         // .type_attribute("proto.grpc.SessionToken", "#[derive(Hash, Eq)]")
         // .type_attribute("proto.grpc.AudioInputDescriptor", "#[derive(Hash, Eq)]")
         // .type_attribute("proto.grpc.AudioOutputDescriptor", "#[derive(Hash, Eq)]")
@@ -309,6 +340,7 @@ fn compile_protos() -> Result<()> {
 }
 
 fn main() {
+    let start = Instant::now();
     tauri_build::build();
 
     // println!("cargo:warning={}", output().display());
@@ -320,7 +352,7 @@ fn main() {
 
     #[cfg(all(feature = "proto-build", feature = "parallel-build"))]
     let proto_build_thread = thread::spawn(|| compile_protos().unwrap());
-    #[cfg(all(feature = "proto-build", not(feature = "parallel-build")))]
+    // #[cfg(all(feature = "proto-build", not(feature = "parallel-build")))]
     compile_protos().unwrap();
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
@@ -991,6 +1023,8 @@ fn main() {
     }
     #[cfg(all(feature = "proto-build", feature = "parallel-build"))]
     proto_build_thread.join().unwrap();
+
+    println!("cargo:warning=build script took: {:?}", start.elapsed());
 }
 
 // println!("cargo:rerun-if-changed=build.rs");

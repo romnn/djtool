@@ -15,6 +15,12 @@ pub trait Source {
     fn id(&self) -> proto::djtool::Service;
     // use protos for the interface types here
     // get user info (username, profile picture)
+
+    // get track and playlist info
+    async fn playlist_by_id(&self, id: &String) -> Result<Option<proto::djtool::Playlist>>;
+
+    async fn track_by_id(&self, id: &String) -> Result<Option<proto::djtool::Track>>;
+
     // get stream of playlists
     fn user_playlists_stream<'a>(&'a self, user_id: &'a String) -> Result<PlaylistStream>;
     // fn user_playlists_stream_test<'a>(&'a self, user_id: &'a str) -> Result<PlaylistStreamTest>;

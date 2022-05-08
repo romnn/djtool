@@ -142,9 +142,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shutdown_tx_signal = shutdown_tx.clone();
     let shutdown_tx_ui = shutdown_tx.clone();
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        // .enable_time()
-        // .enable_io()
+    let mut runtime = Arc::new(
+        // let runtime =
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("build tokio runtime"),
+    );
+
+    let mut runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("build tokio runtime");
@@ -166,29 +172,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match opts.subcommand {
         None => {
             let app = build_ui()?;
-            let _ = thread::spawn(move || {
-                runtime.block_on(async move {
-                    // let config_dir = dirs::home_dir().unwrap().join(".djtool");
-                    // println!("config dir: {}", config_dir.display());
-                    // let tool = DjTool::persistent(&config_dir).await.unwrap();
-                    let tool = Arc::new(DjTool::persistent(None::<PathBuf>).await.unwrap());
+            // let runtime_clone = runtime.clone();
+            runtime.spawn(async move {
+                // let _ = thread::spawn(move || {
+                // runtime_clone.block_on(async move {
+                // let config_dir = dirs::home_dir().unwrap().join(".djtool");
+                // println!("config dir: {}", config_dir.display());
+                // let tool = DjTool::persistent(&config_dir).await.unwrap();
+                let tool = Arc::new(DjTool::persistent(None::<PathBuf>).await.unwrap());
+                // tool.connect_sources().await;
+                let tool_clone = tool.clone();
+                tokio::task::spawn(async move {
+                    tool_clone.connect_sources().await;
                     // tool.connect_sources().await;
-                    let tool_clone = tool.clone();
-                    tokio::task::spawn(async move {
-                        tool_clone.connect_sources().await;
-                        // tool.connect_sources().await;
-                    });
-                    // println!("connected sources");
-
-                    // tool.sync_library().await.unwrap();
-                    tool.serve(shutdown_tx).await;
-                    std::process::exit(0);
-                    // tool.serve(async move {
-                    //     shutdown_rx.recv().await.expect("failed to shutdown");
-                    // })
-                    // .await;
                 });
+                // println!("connected sources");
+
+                // tool.sync_library().await.unwrap();
+                tool.serve(shutdown_tx).await;
+                std::process::exit(0);
+                // tool.serve(async move {
+                //     shutdown_rx.recv().await.expect("failed to shutdown");
+                // })
+                // .await;
             });
+            // });
 
             app.run(move |handle, event| {
                 match event {
@@ -220,11 +228,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // });
             // m.join_and_clear()?;
             // h1.join();
-            djtool::spotify::cli::CLI::parse(runtime, shutdown_tx, cfg);
+            // let runtime_clone = runtime.clone();
+            djtool::spotify::cli::CLI::parse(&runtime, shutdown_tx, cfg);
         }
         Some(Command::Youtube(cfg)) => {}
     };
-    println!("waiting for runtime to become idle");
-    // runtime.shutdown_on_idle().wait().unwrap();
+    // runtime.shutdown_timeout(Duration::from_secs(1));
+    // let rt = &*runtime;
+    // rt.shutdown_background();
+    runtime.shutdown_background();
+    // println!("waiting for runtime to become idle");
+    // let runtime = &*Arc::get_mut(&mut runtime).unwrap();
+    // runtime.shutdown_timeout(Duration::from_secs(1));
+    // match Arc::get_mut(&mut runtime) {
+    //     Some(&mut rt) => {
+    //         println!("shutting down runtime");
+    //         rt.shutdown_timeout(Duration::from_secs(1))
+    //     }
+    //     None => {}
+    // };
+    // (*runtime).shutdown_timeout(Duration::from_secs(1));
+    // .expect("expected runtime to become idle")
     Ok(())
 }

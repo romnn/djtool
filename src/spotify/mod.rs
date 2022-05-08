@@ -260,6 +260,23 @@ impl From<model::SimplifiedPlaylist> for proto::djtool::Playlist {
                 source: proto::djtool::Service::Spotify as i32,
                 id: playlist.id.id().to_string(),
             }),
+            total: playlist.tracks.total,
+            name: playlist.name,
+            tracks: Vec::new(),
+        }
+    }
+}
+
+impl From<model::FullPlaylist> for proto::djtool::Playlist {
+    fn from(playlist: model::FullPlaylist) -> proto::djtool::Playlist {
+        proto::djtool::Playlist {
+            id: Some(proto::djtool::PlaylistId {
+                source: proto::djtool::Service::Spotify as i32,
+                // id: "fuck".to_string(), // playlist.id.id(),
+                id: playlist.id.id().to_string(),
+                // id: playlist.id.id().to_string().strip_prefix("spotify:track:")
+            }),
+            total: playlist.tracks.total,
             name: playlist.name,
             tracks: Vec::new(),
         }
@@ -271,40 +288,42 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
 
     fn try_from(track: model::PlaylistItem) -> Result<proto::djtool::Track, Self::Error> {
         match track.track {
-            Some(model::PlayableItem::Track(track)) => Ok(proto::djtool::Track {
-                track_id: Some(proto::djtool::TrackId {
-                    source: proto::djtool::Service::Spotify as i32,
-                    // tracks dont need an ID if they are local
-                    id: track.id.map(|id| id.to_string()).unwrap(),
-                    playlist_id: None, // unknown at this point
-                }),
-                name: track.name,
-                artwork: {
-                    let mut images = track
-                        .album
-                        .images
-                        .into_iter()
-                        .map(proto::djtool::Artwork::from)
-                        .collect::<Vec<proto::djtool::Artwork>>();
-                    images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
-                    images.first().map(|a| a.to_owned())
-                },
-                preview: track
-                    .preview_url
-                    .map(|url| proto::djtool::TrackPreview { url }),
-                artist: track
-                    .artists
-                    .into_iter()
-                    .map(|a| a.name)
-                    .collect::<Vec<String>>()
-                    .join(", "),
-            }),
+            Some(model::PlayableItem::Track(track)) => Ok(track.into()),
+            //                 Ok(proto::djtool::Track {
+            //                 id: Some(proto::djtool::TrackId {
+            //                     source: proto::djtool::Service::Spotify as i32,
+            //                     // tracks dont need an ID if they are local
+            //                     id: track.id.map(|id| id.to_string()).unwrap(),
+            //                     playlist_id: None, // unknown at this point
+            //                 }),
+            //                 name: track.name,
+            //                 artwork: {
+            //                     let mut images = track
+            //                         .album
+            //                         .images
+            //                         .into_iter()
+            //                         .map(proto::djtool::Artwork::from)
+            //                         .collect::<Vec<proto::djtool::Artwork>>();
+            //                     images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
+            //                     images.first().map(|a| a.to_owned())
+            //                 },
+            //                 preview: track
+            //                     .preview_url
+            //                     .map(|url| proto::djtool::TrackPreview { url }),
+            //                 artist: track
+            //                     .artists
+            //                     .into_iter()
+            //                     .map(|a| a.name)
+            //                     .collect::<Vec<String>>()
+            //                     .join(", "),
+            //             }),
             Some(model::PlayableItem::Episode(ep)) => Ok(proto::djtool::Track {
-                track_id: Some(proto::djtool::TrackId {
+                id: Some(proto::djtool::TrackId {
                     source: proto::djtool::Service::Spotify as i32,
                     id: ep.id.to_string(), // episodes always have an ID
                     playlist_id: None,     // unknown at this point
                 }),
+                duration_secs: ep.duration.as_secs(),
                 artwork: {
                     let mut images = ep
                         .show
@@ -321,8 +340,47 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     .map(|url| proto::djtool::TrackPreview { url }),
                 name: ep.name,
                 artist: ep.show.publisher,
+                info: None,
             }),
             _ => Err(anyhow::anyhow!("not playable")),
+        }
+    }
+}
+
+impl From<model::FullTrack> for proto::djtool::Track {
+    fn from(track: model::FullTrack) -> proto::djtool::Track {
+        proto::djtool::Track {
+            id: Some(proto::djtool::TrackId {
+                source: proto::djtool::Service::Spotify as i32,
+                // tracks dont need an ID if they are local
+                id: track
+                    .id
+                    .map(|id| id.id().to_string())
+                    .unwrap_or("unknown".to_string()),
+                playlist_id: None, // unknown at this point
+            }),
+            name: track.name,
+            duration_secs: track.duration.as_secs(),
+            artwork: {
+                let mut images = track
+                    .album
+                    .images
+                    .into_iter()
+                    .map(proto::djtool::Artwork::from)
+                    .collect::<Vec<proto::djtool::Artwork>>();
+                images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
+                images.first().map(|a| a.to_owned())
+            },
+            preview: track
+                .preview_url
+                .map(|url| proto::djtool::TrackPreview { url }),
+            artist: track
+                .artists
+                .into_iter()
+                .map(|a| a.name)
+                .collect::<Vec<String>>()
+                .join(", "),
+            info: None,
         }
     }
 }
@@ -351,6 +409,44 @@ impl Source for Spotify {
         }
     }
 
+    async fn playlist_by_id(&self, id: &String) -> Result<Option<proto::djtool::Playlist>> {
+        let res = self
+            .client
+            .get(api!(format!("playlists/{}", id))?)
+            .headers(self.auth_headers().await)
+            .send()
+            .await?;
+        // println!("playlist by id: {:?}", res);
+        match res.status() {
+            reqwest::StatusCode::OK => {
+                let playlist = res.json::<model::FullPlaylist>().await?;
+                Ok(Some(playlist.into()))
+                // Ok(None)
+            }
+            reqwest::StatusCode::BAD_REQUEST => Ok(None),
+            _ => res.error_for_status().map_err(Into::into).map(|_| None),
+        }
+        // println!("response: {:?}", res.json::<serde_json::Value>().await);
+    }
+
+    async fn track_by_id(&self, id: &String) -> Result<Option<proto::djtool::Track>> {
+        let res = self
+            .client
+            .get(api!(format!("tracks/{}", id))?)
+            .headers(self.auth_headers().await)
+            .send()
+            .await?;
+        match res.status() {
+            reqwest::StatusCode::OK => {
+                let track = res.json::<model::FullTrack>().await?;
+                Ok(Some(track.into()))
+            }
+            reqwest::StatusCode::BAD_REQUEST => Ok(None),
+            _ => res.error_for_status().map_err(Into::into).map(|_| None),
+        }
+        // println!("response: {:?}", res.json::<serde_json::Value>().await);
+    }
+
     fn user_playlists_stream<'a>(&'a self, user_id: &'a String) -> Result<PlaylistStream> {
         let playlists = paginate(
             move |limit, offset| {
@@ -367,7 +463,7 @@ impl Source for Spotify {
         &'a self,
         playlist: proto::djtool::Playlist,
     ) -> Result<TrackStream> {
-        println!("playlist: {:?}", playlist);
+        // println!("playlist: {:?}", playlist);
         let playlist_clone = playlist.to_owned();
         let playlist_id_clone = Arc::new(playlist.id.to_owned());
         let tracks = paginate(
@@ -389,7 +485,7 @@ impl Source for Spotify {
                     if let Some(proto::djtool::TrackId {
                         ref mut playlist_id,
                         ..
-                    }) = t.track_id
+                    }) = t.id
                     {
                         *playlist_id = playlist_id_clone.deref().to_owned();
                     }

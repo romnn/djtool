@@ -1,3 +1,7 @@
+use crate::download;
+use crate::proto;
+use crate::sink;
+use crate::utils;
 use anyhow::Result;
 use clap::Parser;
 use futures::{Future, Stream};
@@ -5,12 +9,15 @@ use futures_util::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde_json;
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tempdir::TempDir;
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 #[derive(Parser, Debug, Clone)]
@@ -40,13 +47,24 @@ pub struct DownloadOptions {
 }
 
 #[derive(Parser, Debug, Clone)]
+pub struct ListOptions {
+    #[clap(long = "json", help = "json output file")]
+    pub json: Option<PathBuf>,
+    #[clap(long = "print", help = "print output in the end")]
+    pub print: bool,
+}
+
+#[derive(Parser, Debug, Clone)]
 pub struct TrackDownloadOptions {
     #[structopt(flatten)]
     download_opts: DownloadOptions,
 }
 
 #[derive(Parser, Debug, Clone)]
-pub struct TrackListOptions {}
+pub struct TrackListOptions {
+    #[structopt(flatten)]
+    list_opts: ListOptions,
+}
 
 #[derive(Parser, Debug, Clone)]
 pub struct PlaylistDownloadOptions {
@@ -55,7 +73,13 @@ pub struct PlaylistDownloadOptions {
 }
 
 #[derive(Parser, Debug, Clone)]
-pub struct PlaylistListOptions {}
+pub struct PlaylistListOptions {
+    #[structopt(flatten)]
+    list_opts: ListOptions,
+
+    #[clap(long = "limit")]
+    pub limit: Option<usize>,
+}
 
 #[derive(Parser, Debug, Clone)]
 pub enum TrackCommand {
@@ -77,6 +101,10 @@ pub enum PlaylistCommand {
 pub struct TrackOptions {
     #[clap(subcommand)]
     pub command: TrackCommand,
+    #[clap(long = "id")]
+    pub id: Option<String>,
+    #[clap(long = "name")]
+    pub name: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -84,7 +112,7 @@ pub struct PlaylistOptions {
     #[clap(subcommand)]
     pub command: PlaylistCommand,
 
-    #[clap(long = "id")]
+    #[clap(long = "id", alias = "playlist-id")]
     pub id: Option<String>,
     #[clap(long = "name")]
     pub name: Option<String>,
@@ -105,7 +133,7 @@ pub struct Options {
     #[clap(subcommand)]
     pub command: Command,
 
-    #[clap(long = "user-id")]
+    #[clap(long = "user-id", alias = "user")]
     pub user_id: Option<String>,
 
     #[clap(long = "api-token")]
@@ -143,44 +171,65 @@ pub struct Options {
 
 #[derive(Debug, Clone)]
 struct PlaylistFetchProgress {
-    bar: Arc<ProgressBar>,
+    // bar: Arc<ProgressBar>,
 }
 
 impl PlaylistFetchProgress {
-    pub fn new(mp: &MultiProgress) -> Self {
-        let bar = mp.add(ProgressBar::new_spinner());
+    pub fn style(bar: &ProgressBar) {
+        // let bar = mp.add(ProgressBar::new_spinner());
         let style = ProgressStyle::default_spinner()
             .template("{spinner:.cyan} [{elapsed_precise}] {wide_msg} ({per_sec})");
         // .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
         // .progress_chars("#-");
         bar.set_style(style);
-        Self { bar: Arc::new(bar) }
+        bar.enable_steady_tick(1_000 / 30);
+        // Self { bar: Arc::new(bar) }
     }
+
+    // pub fn new(mp: &MultiProgress) -> Self {
+    //     let bar = mp.add(ProgressBar::new_spinner());
+    //     let style = ProgressStyle::default_spinner()
+    //         .template("{spinner:.cyan} [{elapsed_precise}] {wide_msg} ({per_sec})");
+    //     // .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
+    //     // .progress_chars("#-");
+    //     bar.set_style(style);
+    //     Self { bar: Arc::new(bar) }
+    // }
 }
 
 #[derive(Debug)]
 struct TrackDownloadProgress {
-    bar: ProgressBar,
     // bar: ProgressBar,
-    // total: u64,
-    // downloaded: u64,
+// bar: ProgressBar,
+// total: u64,
+// downloaded: u64,
 }
 
 impl TrackDownloadProgress {
-    pub fn new(mp: &MultiProgress, total: u64) -> Self {
-        let bar = mp.add(ProgressBar::new(total));
-        let style = ProgressStyle::default_bar()
-            // .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+    pub fn style(bar: &ProgressBar) {
+        // let bar = mp.add(ProgressBar::new_spinner());
+        let style = ProgressStyle::default_spinner()
             .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
             .progress_chars("#-");
-
         bar.set_style(style);
-        Self {
-            bar,
-            // total,
-            // downloaded: 0,
-        }
+        bar.enable_steady_tick(1_000 / 30);
+        // Self { bar: Arc::new(bar) }
     }
+
+    // pub fn new(mp: &MultiProgress, total: u64) -> Self {
+    //     let bar = mp.add(ProgressBar::new(total));
+    //     let style = ProgressStyle::default_bar()
+    //         // .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+    //         .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
+    //         .progress_chars("#-");
+
+    //     bar.set_style(style);
+    //     Self {
+    //         bar,
+    //         // total,
+    //         // downloaded: 0,
+    //     }
+    // }
 
     // pub fn set_downloaded(&mut self, val: u64) {
     //     self.downloaded = val;
@@ -329,26 +378,18 @@ impl ProgressRenderer {
     }
 }
 
-// pub fn playlist_list(
-//     runtime: tokio::runtime::Runtime,
-//     mut shutdown_tx: broadcast::Sender<bool>,
-//     options: Options,
-// ) -> Result<()> {
-
-pub struct CLI {
+pub struct CLI<'a> {
     tool: crate::DjTool,
-    runtime: tokio::runtime::Runtime,
+    runtime: &'a tokio::runtime::Runtime,
     shutdown_tx: broadcast::Sender<bool>,
     options: Options,
-    // mp: MultiProgress,
-    // renderer: Arc<ProgressRenderer>,
     // progresses: Arc<RwLock<HashMap<String, Arc<Mutex<Progress>>>>>,
     // progresses: Arc<RwLock<HashMap<String, Box<dyn Progress + Sync + Send + 'static>>>>,
 }
 
-impl CLI {
+impl<'a> CLI<'a> {
     pub fn parse(
-        runtime: tokio::runtime::Runtime,
+        runtime: &'a tokio::runtime::Runtime,
         mut shutdown_tx: broadcast::Sender<bool>,
         options: Options,
     ) -> () {
@@ -395,17 +436,126 @@ impl CLI {
         cli.handle().unwrap();
     }
 
-    pub fn track_download(&self, mp: &MultiProgress) -> tokio::task::JoinHandle<()> {
+    pub fn track_download(
+        &self,
+        track_opts: TrackOptions,
+        dl_opts: TrackDownloadOptions,
+    ) -> Result<()> {
+        let mp = Arc::new(MultiProgress::new());
+        let mp_clone = mp.clone();
         let tool = self.tool.clone();
-        let options = self.options.clone();
-        // let renderer = self.renderer.clone();
-        // let progresses = self.progresses.clone();
-        // let mp = MultiProgress::new();
+        let spfy_opts = self.options.clone();
+
+        // let pb = TrackDownloadProgress::new(&mp, 100);
+        // pb.bar.tick();
+        // let bar = Arc::new(mp.add(ProgressBar::new_spinner()));
+        // TrackDownloadProgress::style(&bar);
+        // bar.tick();
+
+        let user_id = spfy_opts.user_id.unwrap();
+        // let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+
+        let handle = self.runtime.spawn(async move {
+            let res: Result<(), anyhow::Error> = async {
+                // find the spotify track
+                let sources = tool.sources.read().await;
+                let sinks = tool.sinks.read().await;
+                let source = &sources[&proto::djtool::Service::Spotify];
+                // todo: make this configurable
+                let sink = &sinks[&proto::djtool::Service::Youtube];
+
+                let mut track = None;
+                if let Some(track_id) = track_opts.id {
+                    track = source.track_by_id(&track_id).await?;
+                } else if let Some(track_name) = track_opts.name {
+                    // source.track_by_name(track_name);
+                }
+
+                let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+                // println!("track: {:?}", track);
+
+                // let title = track.name.to_owned();
+                // let artist = track.artist.to_owned();
+                let filename = format!("{} - {}", track.name, track.artist);
+                // let filename_clone = filename.clone();
+                // let filename = "test".to_string();
+                // println!("filename: {}", filename);
+
+                // let sinks_lock = sinks_lock.clone();
+
+                let filename = utils::sanitize_filename(&filename);
+                let temp_dir = TempDir::new(&filename)?;
+                // youtube by default
+                // let track = &sinks[&proto::djtool::Service::Youtube];
+                // let bar = Arc::new(mp_clone.add(ProgressBar::new_spinner()));
+                // TrackDownloadProgress::style(&bar);
+                // bar.tick();
+
+                let candidates = sink
+                    .candidates(
+                        &track,
+                        Box::new(|progress: sink::QueryProgress| {}),
+                        Some(10),
+                    )
+                    .await?;
+                println!("found {} candidates", candidates.len());
+
+                let download_track = candidates.first().ok_or(anyhow::anyhow!("no download"))?;
+
+                let downloaded = sink
+                    .download(
+                        &download_track,
+                        &temp_dir.path().to_path_buf().join("audio"),
+                        None,
+                        Box::new(|progress: download::DownloadProgress| {
+                            println!(
+                                "downloaded: {} {:?}",
+                                progress.downloaded,
+                                progress.total.unwrap()
+                            );
+                            io::stdout().flush().unwrap();
+                            io::stderr().flush().unwrap();
+                        }),
+                    )
+                    .await?;
+                println!("download done");
+                // transcode
+                // let library_dir = {
+                //     let config = self.config.read().await;
+                //     config.as_ref().map(|c| c.library.library_dir.to_owned())
+                // }
+                // .ok_or(anyhow::anyhow!("no library"))?;
+                Ok::<(), anyhow::Error>(())
+            }
+            .await;
+            // bar.finish();
+            res
+
+            // {
+            //     // print error
+            //     eprintln!("error: {}", err);
+            //     // pb.bar.finish();
+            //     // most importantly, clean up the progress
+            // };
+        });
+
+        // mp.join_and_clear()?;
+        self.runtime.block_on(async move { handle.await? })
+        // let playlist_stream = tool.all_playlists_stream(&user_id, &sources.deref());
+        // let playlist_stream = match opts.limit {
+        //     Some(limit) => playlist_stream.take(limit).into_inner(),
+        //     None => playlist_stream,
+        // };
+
+        // let playlists = Arc::new(RwLock::new(Vec::<super::proto::djtool::Playlist>::new()));
+        // let total = Arc::new(AtomicUsize::new(0));
+        // let pb = TrackDownloadProgress::new(&mp);
+        // pb.bar.tick();
 
         // let status = SpotifyProgress::Status(Status::new(mp.add(ProgressBar::new_spinner())));
         // let mut status = Status::new(mp.add(ProgressBar::new_spinner()));
-        let mut status = Status::new(&mp);
-        let mut downloaded = TrackDownloadProgress::new(&mp, 100);
+        // let mut status = Status::new(&mp);
+        // let mut downloaded = TrackDownloadProgress::new(&mp, 100);
         // ProgressBar::new_spinner());
         // mp.add(status.bar);
         // let status = Arc::new(mp.add(ProgressBar::new_spinner()));
@@ -413,305 +563,213 @@ impl CLI {
         // status.set_style(sty.clone());
         // let test = "some track";
         // status.set_message(format!("downloading #{}", test));
-
-        status.set_status("test".to_string());
-        for i in 0..100 {
-            // println!("downloaded {}", i);
-            // downloaded.set_downloaded(i);
-            downloaded.bar.tick();
-            status.bar.tick();
-            thread::sleep(Duration::from_secs(1));
-        }
-
-        self.runtime.spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-
-            // status.finish();
-            // mp.join_and_clear().expect("finish progress");
-        })
+        // mp.join_and_clear();
+        // mp.join();
+        // Ok(())
     }
 
-    // pub fn playlist_list(&self) -> tokio::task::JoinHandle<()> {
-    pub fn playlist_list(&self, concurrency: Option<usize>, limit: Option<usize>) -> Result<()> {
+    pub fn playlist_list(
+        &self,
+        plist_opts: PlaylistOptions,
+        list_opts: PlaylistListOptions,
+        concurrency: Option<usize>,
+    ) -> Result<()> {
         let mp = Arc::new(MultiProgress::new());
         let tool = self.tool.clone();
-        let options = self.options.clone();
-        // let renderer = self.renderer.clone();
-        // let progresses = self.progresses.clone();
-        let pb = PlaylistFetchProgress::new(&mp);
-        pb.bar.tick();
+        let spfy_opts = self.options.clone();
 
-        self.runtime.spawn(async move {
-            // let tool = crate::DjTool::persistent(None::<PathBuf>).await.unwrap();
+        let user_id = spfy_opts.user_id.unwrap();
+        let total = Arc::new(AtomicUsize::new(0));
+        let bar = Arc::new(mp.add(ProgressBar::new_spinner()));
+        PlaylistFetchProgress::style(&bar);
+        bar.tick();
 
-            // let tool_clone = tool.clone();
-            // let test = tokio::task::spawn(async move {
-            //     tool_clone.serve(self.shutdown_tx).await;
-            //     std::process::exit(0);
-            // });
+        let handle = self.runtime.spawn(async move {
+            let res: Result<(), anyhow::Error> = async {
+                let sources = tool.sources.read().await;
+                let source = &sources[&proto::djtool::Service::Spotify];
 
-            let tool_clone = tool.clone();
-            // tokio::task::spawn(async move {
+                if let Some(playlist_id) = plist_opts.id {
+                    // get the single playlist and its tracks
 
-            // let spotify_client =
-            //     crate::spotify::Spotify::pkce(&tool_clone.data_dir.as_ref().unwrap(), creds, oauth)
-            //         .await
-            //         .unwrap();
+                    // println!("tracks for playlist");
+                    let tracks = Arc::new(RwLock::new(Vec::<super::proto::djtool::Track>::new()));
+                    let playlist = source.playlist_by_id(&playlist_id).await?;
+                    let playlist = playlist.ok_or(anyhow::anyhow!("no playlist found"))?;
+                    let tracks_stream = source.user_playlist_tracks_stream(playlist)?;
+                    tracks_stream
+                        .filter_map(|track: Result<proto::djtool::Track>| {
+                            async {
+                                match track {
+                                    Ok(track) => Some(track),
+                                    Err(err) => {
+                                        eprintln!("track error: {}", err);
+                                        // {
+                                        //     let mut fp = tracks_failed.lock().await;
+                                        //     *fp += 1;
+                                        // };
+                                        None
+                                    }
+                                }
+                            }
+                        })
+                        .for_each_concurrent(
+                            concurrency,
+                            |(track): (super::proto::djtool::Track)| {
+                                let total = total.clone();
+                                let bar_clone = bar.clone();
+                                let tracks = tracks.clone();
+                                async move {
+                                    total.fetch_add(1, Ordering::SeqCst);
+                                    // bar_clone.println(format!(
+                                    //     "{}: {} ({})",
+                                    //     track
+                                    //         .id
+                                    //         .as_ref()
+                                    //         .map(|id| id.to_string())
+                                    //         .unwrap_or("".to_string()),
+                                    //     &track.name,
+                                    //     crate::cli::human_duration(chrono::Duration::seconds(
+                                    //         track.duration_secs as i64
+                                    //     ))
+                                    // ));
+                                    bar_clone.set_message(format!(
+                                        "Track: {} ({} done)",
+                                        &track.name,
+                                        total.load(Ordering::Relaxed)
+                                    ));
+                                    tracks.write().await.push(track);
+                                }
+                            },
+                        )
+                        .await;
 
-            // tool_clone.sources.write().await.insert(
-            //     crate::proto::djtool::Service::Spotify,
-            //     Arc::new(Box::new(spotify_client)),
-            // );
+                    let tracks = tracks.read().await;
+                    let result = serde_json::to_string_pretty(&tracks.deref()).unwrap();
+                    if list_opts.list_opts.print {
+                        let pretty = serde_json::to_string_pretty(&tracks.deref());
+                        pretty.map(|res| println!("{}", res));
+                    }
+                    if let Some(out) = list_opts.list_opts.json {
+                        OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .open(out)
+                            .map(|file| serde_json::to_writer_pretty(file, &tracks.deref()));
+                    }
+                } else {
+                    // get all playlists of the user
+                    let playlists =
+                        Arc::new(RwLock::new(Vec::<super::proto::djtool::Playlist>::new()));
+                    let playlist_stream = tool.all_playlists_stream(&user_id, &sources.deref());
+                    let playlist_stream = match list_opts.limit {
+                        Some(limit) => playlist_stream.take(limit).into_inner(),
+                        None => playlist_stream,
+                    };
 
-            // println!("connected");
-            let sources = tool_clone.sources.read().await;
-            // let client = &sources[&crate::proto::djtool::Service::Spotify];
-            // println!("reauthenticate");
-            // match client.reauthenticate().await {
-            //     Ok(Some(auth_url)) => {
-            //         tool_clone.request_user_login(auth_url).await.unwrap();
-            //     }
-            //     Err(err) => panic!("{}", err),
-            //     _ => {}
-            // };
-            // return ();
+                    playlist_stream
+                        .for_each_concurrent(
+                            concurrency,
+                            |(_, playlist): (_, super::proto::djtool::Playlist)| {
+                                let total = total.clone();
+                                let bar_clone = bar.clone();
+                                let playlists = playlists.clone();
+                                async move {
+                                    total.fetch_add(1, Ordering::SeqCst);
+                                    bar_clone.println(format!(
+                                        "{}: {} ({} tracks)",
+                                        playlist
+                                            .id
+                                            .as_ref()
+                                            .map(|id| id.to_string())
+                                            .unwrap_or("".to_string()),
+                                        &playlist.name,
+                                        &playlist.total
+                                    ));
+                                    bar_clone.set_message(format!(
+                                        "Playlist: {} ({} done)",
+                                        &playlist.name,
+                                        total.load(Ordering::Relaxed)
+                                    ));
+                                    playlists.write().await.push(playlist);
+                                }
+                            },
+                        )
+                        .await;
 
-            let user_id = options.user_id.unwrap();
-            let playlist_stream = tool_clone.all_playlists_stream(&user_id, &sources.deref());
-            // if let Some(limit) = limit {
-            //     let playlist_stream = playlist_stream.take(limit).into_inner();
+                    let playlists = playlists.read().await;
+                    let result = serde_json::to_string_pretty(&playlists.deref()).unwrap();
+                    if list_opts.list_opts.print {
+                        let pretty = serde_json::to_string_pretty(&playlists.deref());
+                        pretty.map(|res| println!("{}", res));
+                    }
+                    if let Some(out) = list_opts.list_opts.json {
+                        OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .open(out)
+                            .map(|file| serde_json::to_writer_pretty(file, &playlists.deref()));
+                    }
+                }
+                Ok::<(), anyhow::Error>(())
+            }
+            .await;
+            // let res = work.await
+            // {
+            //     eprintln!("sorry error: {}", err);
             // }
-            // let playlist_stream = match limit {
-            //     Some(limit) => ,
-            //     None => playlist_stream,
-            // };
-            let playlists = Arc::new(RwLock::new(Vec::<super::proto::djtool::Playlist>::new()));
-
-            let total = Arc::new(AtomicUsize::new(0));
-            // let total = Arc::new(AtomicUsize::new(0));
-            // tokio::task::spawn_blocking(move || {
-            //     status.set_message("hello test");
-            // });
-
-            // let item = ProgressItem::Status("status".to_string());
-            // let status = Arc::new(Mutex::new(Progress::Spinner(SpinnerProgress {
-            //     message: "test".to_string(),
-            // })));
-            // progresses.write().await.insert(item, status.clone());
-            // renderer.set_status("test".to_string());
-
-            // pb.inc(1);
-            playlist_stream
-                .for_each_concurrent(
-                    concurrency,
-                    |(_, playlist): (_, super::proto::djtool::Playlist)| {
-                        let playlists = playlists.clone();
-                        // let renderer = renderer.clone();
-                        // let progresses = progresses.clone();
-                        // let status = status.clone();
-                        let total = total.clone();
-                        let pb_clone = pb.clone();
-                        async move {
-                            // new entry
-
-                            // let bar = renderer.mp.add(ProgressBar::new(100));
-                            // bar.inc(1);
-                            // let style = ProgressStyle::default_bar();
-                            // bar.set_style(style.clone());
-                            // // bar.enable_steady_tick(100);
-                            // let id = playlist.id.as_ref().unwrap().id.clone();
-                            // renderer.bars.write().await.insert(id.clone(), bar);
-                            // let bar = &renderer.bars.read().await[&id];
-                            pb_clone
-                                .bar
-                                .set_message(format!("Playlist: {}", playlist.name));
-                            // pb_clone.bar.inc(1);
-                            total.fetch_add(1, Ordering::SeqCst);
-                            {
-                                // let mut s = status.lock().await;
-                                // if let Progress::Spinner(ref mut p) = s.deref_mut() {
-                                //     p.message = "test 2".to_string();
-                                // }
-                            }
-                            // renderer.update(progresses.read().await.deref()).await;
-                            // if !progresses.read().await.contains_key(&item) {
-                            //     // insert
-                            // }
-
-                            // let test = progresses.read().await;
-                            // match test.get_mut(&item) {
-                            //     Some(p) => {
-                            //         if let Progress::Spinner(pp) = p.lock().await.deref() {
-                            //             pp.message = "test 2".to_string();
-                            //         }
-                            //     }
-                            //     // Some(_) => {},
-                            //     None => {
-                            //         progresses.write().await.insert(
-                            //             item,
-                            //             Mutex::new(Progress::Spinner(SpinnerProgress {
-                            //                 message: "test".to_string(),
-                            //             })),
-                            //         );
-                            //     } // *x = "b";
-                            // };
-
-                            // println!("{}", total.load(Ordering::Relaxed));
-                            // tokio::task::spawn_blocking(move || {
-                            // pb.inc(1);
-                            // status.set_message(format!(
-                            //     "playlist {}/{}",
-                            //     total.load(Ordering::Relaxed),
-                            //     total.load(Ordering::Relaxed)
-                            // ));
-                            // });
-
-                            // simulate some processing time
-                            // tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-
-                            playlists.write().await.push(playlist);
-                            {
-                                // let mut s = status.lock().await;
-                                // if let Progress::Spinner(ref mut p) = s.deref_mut() {
-                                //     p.message = "test 2".to_string();
-                                // }
-                            }
-                            // renderer.update(progresses.deref());
-
-                            // bar.finish_with_message("done");
-                            // renderer.mp.remove(&bar);
-                            // renderer.bars.write().await.remove(&id);
-                        }
-                    },
-                )
-                .await;
-
-            let test = playlists.read().await;
-            let result = serde_json::to_string_pretty(&test.deref()).unwrap();
-            // println!("{}", result);
-            // println!("done");
-            pb.bar.finish();
-            // tokio::task::spawn_blocking(move || {
-            //     pb.finish_with_message("done");
-            //     status.finish_with_message("done");
-            // });
-            // });
-            // println!("done 2");
+            // io::stdout().flush().unwrap();
+            // io::stderr().flush().unwrap();
+            bar.finish();
+            res
+            // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         });
-        mp.join();
-        Ok(())
+        // println!("{}", bar_clone.is_finished());
+        // println!("waiting ...");
+        // mp.join()?;
+        mp.join_and_clear()?;
+        // let res: Result<_> = self.runtime.block_on(async move {
+        // if let Err(err) =
+        self.runtime.block_on(async move { handle.await? })
+        // eprintln!("sorry error: {}", err);
+        // }
+        // // println!("result: {:?}", res);
+        // Ok(())
     }
 
     pub fn handle(&self) -> Result<()> {
-        let task = match &self.options.command {
-            Command::Track(options) => {
-                println!("track options: {:?}", options);
-                match &options.command {
-                    TrackCommand::List(list) => {
-                        println!("track list options: {:?}", list);
-                        // self.track_list()
+        match &self.options.command {
+            Command::Track(track_opts) => {
+                println!("track options: {:?}", track_opts);
+                match &track_opts.command {
+                    TrackCommand::List(list_opts) => {
+                        println!("track list options: {:?}", list_opts);
+                        // self.track_list(list_opts.to_owned())
+                        Ok(())
                         // self.runtime.spawn(async move {})
                     }
-                    TrackCommand::Download(download) => {
-                        println!("track download options: {:?}", download);
-                        // self.track_download(&mp)
-                        // self.runtime.spawn(async move {})
-                    }
-                }
-            }
-            Command::Playlist(options) => {
-                println!("playlist options: {:?}", options);
-                match &options.command {
-                    PlaylistCommand::List(list) => {
-                        println!("playlist list options: {:?}", list);
-                        self.playlist_list(Some(8), None);
-                    }
-                    PlaylistCommand::Download(download) => {
-                        println!("playlist download options: {:?}", download);
+                    TrackCommand::Download(download_opts) => {
+                        println!("track download options: {:?}", download_opts);
+                        self.track_download(track_opts.to_owned(), download_opts.to_owned())
                         // self.runtime.spawn(async move {})
                     }
                 }
             }
-        };
-        // println!("waiting for the task to complete");
-        // self.runtime.block_on(async move {
-        //     task.await;
-        // });
-        return Ok(());
-
-        println!("waiting for the task to complete");
-        // let (tx, rx) = std::sync::mpsc::channel::<Box<dyn Progress + Sync + Send + 'static>>();
-        // let (tx, rx) = std::sync::mpsc::channel::<Option<u64>>();
-
-        // let status = mp.add(ProgressBar::new_spinner());
-        // let pb = Arc::new(mp.add(ProgressBar::new(128)));
-        // let pb = Arc::new(mp.add(ProgressBar::new(20)));
-        // let pb = Arc::new(ProgressBar::new(128));
-        // let mut pb = Box::new(TrackDownloadProgress::new(&mp, 20));
-        // let mut pb = TrackDownloadProgress::new(&mp, 20);
-        // pb.bar.tick();
-
-        // let ui = thread::spawn(move || {
-        //     // sender.send(expensive_computation()).unwrap();
-        //     println!("start");
-        //     for progress in rx {
-        //         pb.inc(progress);
-        //         // progress.update();
-        //         // progress.inc(1);
-        //     }
-        //     println!("done");
-        // });
-
-        // let send = tx.clone();
-        self.runtime.spawn(async move {
-            // let h1 = thread::spawn(move || {
-            // pb.bar.set_message(format!("download #{}", 12));
-            for i in 0..20 {
-                // println!("inc {}", i);
-                // pb.inc(1);
-                // pb.bar.inc(i);
-                // tx.send(pb.clone()).unwrap();
-                // tx.send(Some(1)).unwrap();
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                // thread::sleep(Duration::from_millis(15));
+            Command::Playlist(pl_opts) => {
+                println!("playlist options: {:?}", pl_opts);
+                match &pl_opts.command {
+                    PlaylistCommand::List(list_opts) => {
+                        println!("playlist list options: {:?}", list_opts);
+                        self.playlist_list(pl_opts.to_owned(), list_opts.to_owned(), Some(8))
+                    }
+                    PlaylistCommand::Download(dl_opts) => {
+                        println!("playlist download options: {:?}", dl_opts);
+                        Ok(())
+                        // self.runtime.spawn(async move {})
+                    }
+                }
             }
-            // pb.bar.finish();
-            // tx.send(None).unwrap();
-            // });
-            // m.join_and_clear()?;
-            // task.await;
-            // pb.finish_with_message("done");
-            // status.finish_with_message("done");
-            // let test = tokio::task::spawn_blocking(move || mp.join_and_clear().unwrap());
-            // test.await;
-        });
-        // mp.join_and_clear()?;
-        // test.join();
-
-        let ui = thread::spawn(move || {
-            // println!("start");
-            // for progress in rx {
-            //     match progress {
-            //         Some(p) => {
-            //             pb.inc(p);
-            //             pb.tick();
-            //         }
-            //         None => pb.finish(),
-            //     }
-            //     // progress.update();
-            //     // progress.inc(1);
-            // }
-        });
-        // mp.join();
-        // mp.join_and_clear();
-        // pb.finish();
-        println!("done");
-
-        ui.join();
-        println!("waiting for progress bars to complete");
-        // self.renderer.finish()?;
-        println!("end");
-        Ok(())
+        }
     }
 }
 

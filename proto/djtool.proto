@@ -42,13 +42,12 @@ message PlaylistId {
 }
 
 message PlaylistSyncRequest {
-// test
+  // test
 }
 
 /* message SyncRequest { */
 /* PlaylistSyncRequest playlist = 1; */
 /* } */
-
 
 /* message UserId { */
 /*   oneof id { */
@@ -94,19 +93,33 @@ message TrackPreview {
   string url = 1;
 }
 
+message SpotifyTrack {}
+
+message YoutubeTrack {}
+
 message Track {
   /* Source source = 1; */
   /* PlaylistId playlist_id = 1; */
-  TrackId track_id = 1;
+  TrackId id = 1;
   string name = 100;
   string artist = 101;
+  uint64 duration_secs = 102;
   Artwork artwork = 200;
   TrackPreview preview = 201;
+
+  // per source track options
+  // e.g. youtube for better ranking
+
+  oneof info {
+    SpotifyTrack spotify_track = 301;
+    YoutubeTrack youtube_track = 302;
+  }
 }
 
 message Playlist {
   PlaylistId id = 1;
   string name = 2;
+  uint32 total = 3;
   repeated Track tracks = 100;
 }
 

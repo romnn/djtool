@@ -1,39 +1,52 @@
-use super::model;
-use super::Youtube;
-use crate::proto;
-use crate::sink::Method;
-use anyhow::Result;
-use futures::stream::Stream;
-use futures_util::stream::{StreamExt, TryStreamExt};
+// use super::model;
+// use super::Youtube;
+// use crate::proto;
+// use crate::sink;
+// use anyhow::Result;
+// use futures::stream::Stream;
+// use futures_util::stream::{StreamExt, TryStreamExt};
 
-impl Youtube {
-    pub async fn find_best_video(
-        &self,
-        track: &proto::djtool::Track,
-        method: Method,
-    ) -> Result<String> {
-        let query = format!("{} {}", track.name, track.artist);
-        // println!("youtube query: {}", query);
-        let search_results = self
-            .search_stream(query)
-            .filter_map(|video: Result<model::YoutubeVideo>| {
-                // test
-                async move { video.ok() }
-            })
-            .take(10)
-            .collect::<Vec<model::YoutubeVideo>>()
-            .await;
+// impl From<model::YoutubeVideo> for proto::djtool::Track {
+//     fn from(video: model::YoutubeVideo) -> proto::djtool::Track {
+//         proto::djtool::Track {
+//             id: Some(proto::djtool::TrackId {
+//                 source: proto::djtool::Service::Youtube as i32,
+//                 id: video.video_id,
+//                 // .map(|id| id.id().to_string())
+//                 // .unwrap_or("unknown".to_string()),
+//                 playlist_id: None, // unknown at this point
+//             }),
+//             name: video.title,
+//             duration_secs: 0, // track.duration.as_secs(),
+//             artwork: None,
+//             preview: None,
+//             artist: "".to_string(),
+//             // artwork: {
+//             //     let mut images = track
+//             //         .album
+//             //         .images
+//             //         .into_iter()
+//             //         .map(proto::djtool::Artwork::from)
+//             //         .collect::<Vec<proto::djtool::Artwork>>();
+//             //     images.sort_by(|b, a| (a.width * a.height).cmp(&(b.width * b.height)));
+//             //     images.first().map(|a| a.to_owned())
+//             // },
+//             // preview: track
+//             //     .preview_url
+//             //     .map(|url| proto::djtool::TrackPreview { url }),
+//             // artist: track
+//             //     .artists
+//             //     .into_iter()
+//             //     .map(|a| a.name)
+//             //     .collect::<Vec<String>>()
+//             //     .join(", "),
+//         }
+//     }
+// }
 
-        // println!("youtube search results : {:?}", search_results);
-        let first_hit = search_results
-            .first()
-            .ok_or(anyhow::anyhow!("no results"))?;
-        // println!("youtube first hit: {:?}", first_hit);
-
-        Ok(first_hit.video_id.to_owned())
-    }
-
-    pub async fn rank_results(&self) -> Result<()> {
-        Ok(())
-    }
-}
+// impl Youtube {
+    
+//     pub async fn rank_results(&self) -> Result<()> {
+//         Ok(())
+//     }
+// }

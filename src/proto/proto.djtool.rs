@@ -16,14 +16,14 @@
 
 // }
 
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct UserId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
     #[prost(enumeration = "Service", tag = "10")]
     pub source: i32,
 }
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct TrackId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
@@ -32,7 +32,7 @@ pub struct TrackId {
     #[prost(enumeration = "Service", tag = "10")]
     pub source: i32,
 }
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct PlaylistId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
@@ -40,7 +40,7 @@ pub struct PlaylistId {
     pub source: i32,
 }
 /// test
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct PlaylistSyncRequest {}
 // message SyncRequest {
 
@@ -57,34 +57,34 @@ pub struct PlaylistSyncRequest {}
 //   }
 
 /// }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct SpotifyUserLoginCallbackPkce {
     #[prost(string, tag = "1")]
     pub code: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub state: ::prost::alloc::string::String,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct SpotifyUserLoginCallback {
     #[prost(oneof = "spotify_user_login_callback::Method", tags = "1")]
     pub method: ::core::option::Option<spotify_user_login_callback::Method>,
 }
 /// Nested message and enum types in `SpotifyUserLoginCallback`.
 pub mod spotify_user_login_callback {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Oneof)]
     pub enum Method {
         #[prost(message, tag = "1")]
         Pkce(super::SpotifyUserLoginCallbackPkce),
     }
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct UserLoginCallback {
     #[prost(oneof = "user_login_callback::Login", tags = "1")]
     pub login: ::core::option::Option<user_login_callback::Login>,
 }
 /// Nested message and enum types in `UserLoginCallback`.
 pub mod user_login_callback {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Oneof)]
     pub enum Login {
         #[prost(message, tag = "1")]
         SpotifyLogin(super::SpotifyUserLoginCallback),
@@ -110,7 +110,7 @@ pub mod user_login_callback {
 
 // }
 
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct Artwork {
     #[prost(string, tag = "1")]
     pub url: ::prost::alloc::string::String,
@@ -119,32 +119,57 @@ pub struct Artwork {
     #[prost(uint32, tag = "3")]
     pub height: u32,
 }
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct TrackPreview {
     #[prost(string, tag = "1")]
     pub url: ::prost::alloc::string::String,
 }
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
+pub struct SpotifyTrack {}
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
+pub struct YoutubeTrack {}
 /// Source source = 1;
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct Track {
     /// PlaylistId playlist_id = 1;
     #[prost(message, optional, tag = "1")]
-    pub track_id: ::core::option::Option<TrackId>,
+    pub id: ::core::option::Option<TrackId>,
     #[prost(string, tag = "100")]
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "101")]
     pub artist: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "102")]
+    pub duration_secs: u64,
     #[prost(message, optional, tag = "200")]
     pub artwork: ::core::option::Option<Artwork>,
     #[prost(message, optional, tag = "201")]
     pub preview: ::core::option::Option<TrackPreview>,
+    // per source track options
+    // e.g. youtube for better ranking
+    #[prost(oneof = "track::Info", tags = "301, 302")]
+    pub info: ::core::option::Option<track::Info>,
 }
-#[derive(Serialize, Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
+/// Nested message and enum types in `Track`.
+pub mod track {
+    // per source track options
+    // e.g. youtube for better ranking
+
+    #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Oneof)]
+    pub enum Info {
+        #[prost(message, tag = "301")]
+        SpotifyTrack(super::SpotifyTrack),
+        #[prost(message, tag = "302")]
+        YoutubeTrack(super::YoutubeTrack),
+    }
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct Playlist {
     #[prost(message, optional, tag = "1")]
     pub id: ::core::option::Option<PlaylistId>,
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub total: u32,
     #[prost(message, repeated, tag = "100")]
     pub tracks: ::prost::alloc::vec::Vec<Track>,
 }
@@ -166,7 +191,7 @@ pub struct Playlist {
 
 // }
 
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct TrackSyncDesc {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
@@ -175,7 +200,7 @@ pub struct TrackSyncDesc {
     #[prost(string, tag = "3")]
     pub sink: ::prost::alloc::string::String,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct PlaylistSyncDesc {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
@@ -185,9 +210,9 @@ pub struct PlaylistSyncDesc {
     pub sink: ::prost::alloc::string::String,
 }
 /// todo oneof
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct SyncProgressUpdate {}
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
 pub struct SyncRequest {
     #[prost(string, repeated, tag = "1")]
     pub sources: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
@@ -197,7 +222,19 @@ pub struct SyncRequest {
     #[prost(message, repeated, tag = "3")]
     pub playlists: ::prost::alloc::vec::Vec<PlaylistSyncDesc>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
 #[repr(i32)]
 pub enum Service {
     Spotify = 0,

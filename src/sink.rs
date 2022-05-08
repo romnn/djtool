@@ -1,3 +1,4 @@
+use super::download;
 use super::proto;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -42,6 +43,12 @@ pub struct DownloadedTrack {
     pub output_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct QueryProgress {
+    // pub track: proto::djtool::Track,
+// pub output_path: PathBuf,
+}
+
 #[async_trait]
 pub trait Sink {
     async fn download(
@@ -49,5 +56,13 @@ pub trait Sink {
         track: &proto::djtool::Track,
         output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Option<Method>,
+        progress: Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>,
     ) -> Result<DownloadedTrack>;
+
+    async fn candidates(
+        &self,
+        track: &proto::djtool::Track,
+        progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
+        limit: Option<usize>,
+    ) -> Result<Vec<proto::djtool::Track>>;
 }

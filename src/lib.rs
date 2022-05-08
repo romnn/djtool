@@ -22,8 +22,6 @@ pub mod youtube;
 use anyhow::Result;
 use config::Persist;
 use dirs;
-// use source::TrackStream;
-use download::Download;
 use futures::{Future, Stream};
 use futures_util::pin_mut;
 use futures_util::stream;
@@ -779,7 +777,12 @@ impl DjTool {
                         // youtube by default
                         let sink = &sinks_lock[&proto::djtool::Service::Youtube];
                         let downloaded = sink
-                            .download(&track, &temp_dir.path().to_path_buf().join("audio"), None)
+                            .download(
+                                &track,
+                                &temp_dir.path().to_path_buf().join("audio"),
+                                None,
+                                Box::new(|progress: download::DownloadProgress| {}),
+                            )
                             .await?;
                         // println!("downloaded to {}", downloaded.output_path.display());
 
@@ -815,8 +818,12 @@ impl DjTool {
                         if let Some(artwork) = track.artwork {
                             let artwork_path = async {
                                 let dest = temp_dir.path().join("artwork.jpg");
-                                let mut download = Download::new(&artwork.url, &dest).await?;
-                                download.start().await?;
+                                let mut download =
+                                    download::Download::new(&artwork.url, &dest).await?;
+                                download
+                                    .start(|progress: download::DownloadProgress| {})
+                                    .await?;
+                                // download.start().await?;
                                 Ok::<PathBuf, anyhow::Error>(dest)
                             }
                             .await;

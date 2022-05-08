@@ -29,7 +29,7 @@ impl Downloader {
 }
 
 struct PreflightDownloadInfo {
-    content_length: u64,
+    content_length: usize,
     #[allow(dead_code)]
     content_disposition_name: Option<String>,
     #[allow(dead_code)]
@@ -41,9 +41,9 @@ struct Chunk {
     headers: HeaderMap,
     url: String,
     path: PathBuf,
-    range_start: u64,
-    range_end: u64,
-    downloaded: u64,
+    range_start: usize,
+    range_end: usize,
+    downloaded: usize,
 }
 
 impl Chunk {
@@ -82,11 +82,16 @@ impl Chunk {
             // output_file.start_seek(chunk.range_start).await?;
             chunk_file.write(&byte_chunk).await?;
             let _ = progress.send(Ok(byte_chunk.len())).await;
-            self.downloaded += byte_chunk.len() as u64;
+            self.downloaded += byte_chunk.len();
         }
         // chunk_file.close()?;
         Ok(())
     }
+}
+
+pub struct DownloadProgress {
+    pub downloaded: usize,
+    pub total: Option<usize>,
 }
 
 pub struct Download {
@@ -96,10 +101,10 @@ pub struct Download {
     url: String,
     headers: HeaderMap,
     output_path: PathBuf,
-    chunk_size: u64,
+    chunk_size: usize,
     info: PreflightDownloadInfo,
     #[allow(dead_code)]
-    downloaded: u64,
+    downloaded: usize,
     chunks: Arc<Mutex<Vec<Chunk>>>,
     started_at: Instant,
 }
@@ -134,7 +139,7 @@ impl Download {
     }
 
     #[allow(dead_code)]
-    fn set_chunk_size(&mut self, chunk_size: u64) {
+    fn set_chunk_size(&mut self, chunk_size: usize) {
         self.chunk_size = chunk_size;
         // we do not worry about too much concurrency for too little chunks, as this wont create
         // additional overhead
@@ -142,7 +147,7 @@ impl Download {
     }
 
     #[allow(dead_code)]
-    fn set_concurrency(&mut self, concurrency: usize, min: Option<u64>, max: Option<u64>) {
+    fn set_concurrency(&mut self, concurrency: usize, min: Option<usize>, max: Option<usize>) {
         self.chunk_size = Self::default_chunk_size(&self.info, concurrency, min, max);
         self.compute_chunks();
     }
@@ -159,13 +164,13 @@ impl Download {
     fn default_chunk_size(
         info: &PreflightDownloadInfo,
         concurrency: usize,
-        min: Option<u64>,
-        max: Option<u64>,
-    ) -> u64 {
+        min: Option<usize>,
+        max: Option<usize>,
+    ) -> usize {
         // let cs: f32 = NumCast::from(info.content_length).unwrap();
         // let cs: f32 = cs / NumCast::from(concurrency).unwrap();
         // let mut cs: u64 = NumCast::from(cs).unwrap();
-        let mut cs = (info.content_length as f32 / concurrency as f32) as u64;
+        let mut cs = (info.content_length as f32 / concurrency as f32) as usize;
 
         // if chunk size >= 102400000 bytes set default to (chunk size / 2)
         if cs >= 102400000 {
@@ -173,7 +178,7 @@ impl Download {
         }
 
         // set default min chunk size to 2M, or file size / 2
-        let mut min = min.unwrap_or(2097152u64);
+        let mut min = min.unwrap_or(2097152usize);
         if min >= info.content_length {
             min = info.content_length / 2;
         }
@@ -220,7 +225,8 @@ impl Download {
             }
         }
         Ok(PreflightDownloadInfo {
-            content_length,
+            content_length: content_length.try_into().unwrap(),
+            // content_length,
             // range_length,
             content_disposition_name,
             rangeable,
@@ -235,9 +241,9 @@ impl Download {
             num_chunks
                 .into_iter()
                 .map(|chunk| {
-                    let range_start = chunk as u64 * self.chunk_size;
+                    let range_start = chunk * self.chunk_size;
                     let range_end =
-                        ((chunk as u64 + 1) * self.chunk_size - 1).min(self.info.content_length);
+                        ((chunk + 1) * self.chunk_size - 1).min(self.info.content_length);
                     let chunk_name = format!(
                         "{}.{}-{}.chunk",
                         self.output_path
@@ -264,9 +270,12 @@ impl Download {
         ));
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(
+        &mut self,
+        // progress: Option<impl Fn(DownloadProgress) -> () + 'static>,
+        progress: impl Fn(DownloadProgress) -> () + 'static,
+    ) -> Result<()> {
         self.started_at = Instant::now();
-        let chunks_clone = self.chunks.clone();
 
         let (tx, mut rx) = mpsc::channel::<Result<usize>>(100);
         // println!("starting download with {} chunks", chunks.len());
@@ -288,6 +297,8 @@ impl Download {
         let client = self.client.clone();
         let output_path = self.output_path.clone();
         let headers = self.headers.clone();
+
+        let chunks_clone = self.chunks.clone();
         let download = tokio::spawn(async move {
             let mut chunks = chunks_clone.lock().await;
             stream::iter(chunks.iter_mut())
@@ -309,19 +320,23 @@ impl Download {
                 .await;
         });
 
-        let mut downloaded = 0;
+        // let mut downloaded = 0;
         // let (_, rx) = &mut self.progress;
         while let Some(chunk_downloaded) = rx.recv().await {
             match chunk_downloaded {
                 Ok(chunk_downloaded) => {
-                    downloaded += chunk_downloaded;
-                    // println!("downloaded: {}", downloaded);
+                    self.downloaded += chunk_downloaded;
+                    (progress)(DownloadProgress {
+                        downloaded: self.downloaded,
+                        total: Some(self.info.content_length),
+                    });
+                    // println!("downloaded: {}", self.downloaded);
                 }
                 Err(err) => eprintln!("chunk failed: {}", err),
             }
         }
         download.await?;
-        // println!("download completed: {}", downloaded);
+        // println!("download completed: {}", self.downloaded);
 
         // concat = tokio::spawn(async move {
 
