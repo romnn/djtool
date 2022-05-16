@@ -13,7 +13,9 @@ use crate::sink::{DownloadedTrack, Method, Sink};
 use crate::utils;
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::future;
 use futures::stream::Stream;
+use futures::task::Poll;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use reqwest;
 use std::path::{Path, PathBuf};
@@ -31,7 +33,7 @@ impl From<model::YoutubeVideo> for proto::djtool::Track {
                 playlist_id: None, // unknown at this point
             }),
             name: video.title,
-            duration_secs: 0, // track.duration.as_secs(),
+            duration_millis: 0,
             artwork: None,
             preview: None,
             artist: "".to_string(),
@@ -129,10 +131,9 @@ impl Sink for Youtube {
         &self,
         // track: TrackDescription,
         track: &proto::djtool::Track,
-        // output_path: &PathBuf,
         output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Option<Method>,
-        progress: Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>,
+        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>>,
         // progress: impl Fn(download::DownloadProgress) -> () + 'static,
     ) -> Result<DownloadedTrack> {
         // search the video first
@@ -181,9 +182,14 @@ impl Sink for Youtube {
         let stream_url = self.get_stream_url(&video, &format).await?;
         //     println!("stream url: {}", stream_url);
         let mut download = download::Download::new(&stream_url, &output_path).await?;
+        if let Some(progress) = progress {
+            // download.on_progress(|progress: download::DownloadProgress| {});
+            download.on_progress(progress);
+        };
         download
             // .start(progress) // |progress: download::DownloadProgress| {})
-            .start(|progress: download::DownloadProgress| {})
+            // .start(|progress: download::DownloadProgress| {})
+            .start()
             .await?;
 
         Ok(DownloadedTrack {
@@ -197,7 +203,7 @@ impl Sink for Youtube {
                 artist: track.artist.to_owned(),
                 artwork: None,
                 preview: None,
-                duration_secs: 0, // todo
+                duration_millis: 0, // todo
                 info: None,
             },
             output_path: output_path.as_ref().to_owned(),
@@ -219,19 +225,60 @@ impl Sink for Youtube {
     ) -> Result<Vec<proto::djtool::Track>> {
         let query = format!("{} {}", track.name, track.artist);
         // println!("youtube query: {}", query);
-        let search_result_stream = self
+        let mut found = 0;
+        // let found = AtomicUsize::new(42);
+        // let mut stream: Box<dyn Stream<Item = model::YoutubeVideo> + Send> = Box::new(
+        let stream = self
             .search_stream(query)
-            .take(10)
-            .filter_map(|video: Result<model::YoutubeVideo>| async move { video.ok() });
-        let search_result_stream = match limit {
-            Some(limit) => search_result_stream.take(limit).into_inner(),
-            None => search_result_stream,
-        };
-        let search_results = search_result_stream
-            // .collect::<Vec<model::YoutubeVideo>>()
-            .map(|video: model::YoutubeVideo| video.into())
-            .collect::<Vec<proto::djtool::Track>>()
-            .await;
+            .filter_map(|video: Result<model::YoutubeVideo>| async move {
+                crate::debug!(&video);
+                video.ok()
+            })
+            .map(|video: model::YoutubeVideo| video.into());
+
+        // let search_result_stream = self
+        // let search_results = stream
+        //     // .search_stream(query)
+        //     // .filter_map(|video: Result<model::YoutubeVideo>| async move {
+        //     //     crate::debug!(&video);
+        //     //     video.ok()
+        //     // })
+        //     // .for_each(|item| {
+        //     //     crate::debug!(item);
+        //     //     future::ready(())
+        //     // });
+        //     .take_until(future::poll_fn(|_cx| {
+        //         // let search_result_stream = search_result_stream.take_until(future::poll_fn(|_cx| {
+        //         found += 1;
+        //         // return Poll::Pending;
+        //         limit
+        //             .map(|limit| {
+        //                 if found >= 1000 {
+        //                     Poll::Ready(())
+        //                 } else {
+        //                     Poll::Pending
+        //                 }
+        //             })
+        //             .unwrap_or(Poll::Pending)
+        //     }))
+        //     // search_result_stream
+        //     //     .for_each(|item| {
+        //     //         crate::debug!(item);
+        //     //         future::ready(())
+        //     //     })
+        //     //     .await;
+        //     // let search_result_stream = match limit {
+        //     //     Some(limit) => {
+        //     //         println!("taking 10");
+        //     //         search_result_stream.take(limit) // .into_inner()
+        //     //     }
+        //     //     None => search_result_stream, // .take(10),
+        //     // };
+        //     // let search_results = search_result_stream
+        //     .collect::<Vec<proto::djtool::Track>>()
+        //     .await;
+        // crate::debug!(found);
+        // crate::debug!(&search_results);
 
         // println!("youtube search results : {:?}", search_results);
         // let first_hit = search_results
@@ -239,9 +286,16 @@ impl Sink for Youtube {
         //     .ok_or(anyhow::anyhow!("no results"))?;
         // let candidates = search_results[0..limit.unwrap_or(10).min(search_results.len() - 1)];
 
+        match limit {
+            Some(limit) => Ok(stream
+                .take(limit)
+                .collect::<Vec<proto::djtool::Track>>()
+                .await),
+            None => Ok(stream.collect::<Vec<proto::djtool::Track>>().await),
+        }
         // println!("youtube first hit: {:?}", first_hit);
         // Ok(first_hit.video_id.to_owned())
-        Ok(search_results)
+        // Ok(search_results)
     }
 
     // pub async fn download(

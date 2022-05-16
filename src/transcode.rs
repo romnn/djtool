@@ -16,6 +16,7 @@ pub type ProgressHandlerFunc = dyn FnMut(TranscodeProgress) -> ();
 #[derive(Debug, Clone)]
 pub enum Codec {
     MP3,
+    PCM,
     // todo: add more codecs in the future
 }
 
@@ -23,6 +24,7 @@ impl Codec {
     fn codec(&self) -> codec::id::Id {
         match self {
             MP3 => codec::id::Id::MP3,
+            PCM => codec::id::Id::PCM_S16LE,
         }
     }
 }
@@ -42,6 +44,16 @@ impl TranscoderOptions<'_> {
             bitrate_kbps: Some(192),
             sample_rate: None,
             filter_spec: Some("loudnorm"),
+        }
+    }
+
+    pub fn matching() -> Self {
+        Self {
+            codec: Some(Codec::PCM),
+            bitrate_kbps: None,
+            // most importantly, we resample
+            sample_rate: Some(22_050),
+            filter_spec: None,
         }
     }
 }

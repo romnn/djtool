@@ -323,7 +323,7 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     id: ep.id.to_string(), // episodes always have an ID
                     playlist_id: None,     // unknown at this point
                 }),
-                duration_secs: ep.duration.as_secs(),
+                duration_millis: ep.duration.as_millis() as u64,
                 artwork: {
                     let mut images = ep
                         .show
@@ -360,7 +360,7 @@ impl From<model::FullTrack> for proto::djtool::Track {
                 playlist_id: None, // unknown at this point
             }),
             name: track.name,
-            duration_secs: track.duration.as_secs(),
+            duration_millis: track.duration.as_millis() as u64,
             artwork: {
                 let mut images = track
                     .album

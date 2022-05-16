@@ -56,7 +56,7 @@ pub trait Sink {
         track: &proto::djtool::Track,
         output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Option<Method>,
-        progress: Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>,
+        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>>,
     ) -> Result<DownloadedTrack>;
 
     async fn candidates(

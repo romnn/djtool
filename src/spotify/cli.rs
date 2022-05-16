@@ -1,9 +1,12 @@
 use crate::download;
 use crate::proto;
 use crate::sink;
+use crate::transcode;
 use crate::utils;
 use anyhow::Result;
 use clap::Parser;
+use dialoguer::{theme::ColorfulTheme, MultiSelect};
+use futures::future;
 use futures::{Future, Stream};
 use futures_util::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -58,6 +61,10 @@ pub struct ListOptions {
 pub struct TrackDownloadOptions {
     #[structopt(flatten)]
     download_opts: DownloadOptions,
+    #[clap(long = "choose", help = "manually choose the download candidate")]
+    pub choose: bool,
+    #[clap(long = "limit", help = "maximum number of candidates to consider")]
+    pub limit: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -182,7 +189,8 @@ impl PlaylistFetchProgress {
         // .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
         // .progress_chars("#-");
         bar.set_style(style);
-        bar.enable_steady_tick(1_000 / 30);
+        bar.set_draw_rate(30);
+        // bar.enable_steady_tick(1_000 / 30);
         // Self { bar: Arc::new(bar) }
     }
 
@@ -208,11 +216,12 @@ struct TrackDownloadProgress {
 impl TrackDownloadProgress {
     pub fn style(bar: &ProgressBar) {
         // let bar = mp.add(ProgressBar::new_spinner());
-        let style = ProgressStyle::default_spinner()
-            .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
+        let style = ProgressStyle::default_bar()
+            // .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {msg} ({bytes_per_sec}, {eta})")
             .progress_chars("#-");
         bar.set_style(style);
-        bar.enable_steady_tick(1_000 / 30);
+        bar.set_draw_rate(30);
+        // bar.enable_steady_tick(1_000 / 30);
         // Self { bar: Arc::new(bar) }
     }
 
@@ -455,70 +464,185 @@ impl<'a> CLI<'a> {
         let user_id = spfy_opts.user_id.unwrap();
         // let track = track.ok_or(anyhow::anyhow!("no track found"))?;
 
+        let (track, selected) = self.runtime.block_on(async move {
+            // let res: Result<(), anyhow::Error> = async {
+            // find the spotify track
+            // todo: make this configurable
+            let sources = tool.sources.read().await;
+            let sinks = tool.sinks.read().await;
+            // let sinks = Arc::new(tool.sinks.read().await);
+            let source = &sources[&proto::djtool::Service::Spotify];
+
+            let mut track = None;
+            if let Some(track_id) = track_opts.id {
+                track = source.track_by_id(&track_id).await?;
+            } else if let Some(track_name) = track_opts.name {
+                // source.track_by_name(track_name);
+            }
+
+            let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+            // println!("track: {:?}", track);
+
+            // let title = track.name.to_owned();
+            // let artist = track.artist.to_owned();
+            // let filename_clone = filename.clone();
+            // let filename = "test".to_string();
+            // println!("filename: {}", filename);
+
+            // let sinks_lock = sinks_lock.clone();
+
+            // youtube by default
+            // let track = &sinks[&proto::djtool::Service::Youtube];
+            // let bar = Arc::new(mp_clone.add(ProgressBar::new_spinner()));
+            // TrackDownloadProgress::style(&bar);
+            // bar.tick();
+
+            let sink = &sinks[&proto::djtool::Service::Youtube];
+            let candidates = sink
+                .candidates(
+                    &track,
+                    Box::new(|progress: sink::QueryProgress| {}),
+                    Some(dl_opts.limit.unwrap_or(10)),
+                )
+                .await?;
+            println!("found {} candidates", candidates.len());
+
+            // let user choose
+
+            // let selected = if dl_opts.choose {
+            if dl_opts.choose {
+                return Ok((
+                    track,
+                    MultiSelect::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Choose video")
+                        .items(
+                            candidates
+                                .iter()
+                                .map(|c| &c.name)
+                                .collect::<Vec<&String>>()
+                                .as_slice(),
+                        )
+                        .defaults(&[vec![true], vec![false; candidates.len() - 1]].concat())
+                        .interact()?
+                        .into_iter()
+                        .map(|idx| candidates[idx].to_owned())
+                        .collect::<Vec<proto::djtool::Track>>(),
+                ));
+            };
+            Ok::<_, anyhow::Error>((track, candidates))
+            // Ok(candidates)
+            // let download_track = candidates.first().ok_or(anyhow::anyhow!("no download"))?;
+        })?;
+        println!("selected candidates: {}", selected.len());
+
+        let tool = self.tool.clone();
         let handle = self.runtime.spawn(async move {
             let res: Result<(), anyhow::Error> = async {
-                // find the spotify track
                 let sources = tool.sources.read().await;
                 let sinks = tool.sinks.read().await;
+                // let sinks = Arc::new(tool.sinks.read().await);
                 let source = &sources[&proto::djtool::Service::Spotify];
-                // todo: make this configurable
-                let sink = &sinks[&proto::djtool::Service::Youtube];
 
-                let mut track = None;
-                if let Some(track_id) = track_opts.id {
-                    track = source.track_by_id(&track_id).await?;
-                } else if let Some(track_name) = track_opts.name {
-                    // source.track_by_name(track_name);
-                }
-
-                let track = track.ok_or(anyhow::anyhow!("no track found"))?;
-                // println!("track: {:?}", track);
-
-                // let title = track.name.to_owned();
-                // let artist = track.artist.to_owned();
-                let filename = format!("{} - {}", track.name, track.artist);
-                // let filename_clone = filename.clone();
-                // let filename = "test".to_string();
-                // println!("filename: {}", filename);
-
-                // let sinks_lock = sinks_lock.clone();
-
-                let filename = utils::sanitize_filename(&filename);
+                let filename =
+                    utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
                 let temp_dir = TempDir::new(&filename)?;
-                // youtube by default
-                // let track = &sinks[&proto::djtool::Service::Youtube];
-                // let bar = Arc::new(mp_clone.add(ProgressBar::new_spinner()));
-                // TrackDownloadProgress::style(&bar);
-                // bar.tick();
 
-                let candidates = sink
-                    .candidates(
-                        &track,
-                        Box::new(|progress: sink::QueryProgress| {}),
-                        Some(10),
-                    )
-                    .await?;
-                println!("found {} candidates", candidates.len());
+                // let sinks = tool.sinks.read().await;
+                let downloads = selected
+                    .into_iter()
+                    .map(|c| {
+                        let sinks = sinks.clone();
+                        let transcoder = tool.transcoder.clone();
+                        // let temp_dir_clone = temp_dir.clone();
+                        // let candidate_dir = temp_dir
+                        //     .path()
+                        //     .to_path_buf()
+                        //     .join(format!("candidate_utils::sanitize_filename(&filename));
+                        // fs::create_dir_all(candidate_dir).await?;
+                        let candidate_filename =
+                            utils::sanitize_filename(&format!("{} - {}", c.name, c.artist));
 
-                let download_track = candidates.first().ok_or(anyhow::anyhow!("no download"))?;
+                        let candidate_dir =
+                            TempDir::new_in(&temp_dir, &candidate_filename).unwrap();
 
-                let downloaded = sink
-                    .download(
-                        &download_track,
-                        &temp_dir.path().to_path_buf().join("audio"),
-                        None,
-                        Box::new(|progress: download::DownloadProgress| {
-                            println!(
-                                "downloaded: {} {:?}",
-                                progress.downloaded,
-                                progress.total.unwrap()
-                            );
-                            io::stdout().flush().unwrap();
-                            io::stderr().flush().unwrap();
-                        }),
-                    )
-                    .await?;
-                println!("download done");
+                        let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
+                        TrackDownloadProgress::style(&bar);
+                        bar.tick();
+
+                        tokio::task::spawn(async move {
+                            let sink = &sinks[&proto::djtool::Service::Youtube];
+
+                            let bar_clone = bar.clone();
+                            let downloaded = sink
+                                .download(
+                                    &c,
+                                    &candidate_dir
+                                        .path()
+                                        .join(format!("original_{}", &candidate_filename)),
+                                    None,
+                                    Some(Box::new(move |progress: download::DownloadProgress| {
+                                        bar_clone.set_message("downloading".to_string());
+                                        bar_clone.set_position(progress.downloaded as u64);
+                                        bar_clone.set_length(progress.total.unwrap() as u64);
+                                        bar_clone.tick();
+
+                                        // println!(
+                                        //     "downloaded: {} {:?}",
+                                        //     progress.downloaded,
+                                        //     progress.total.unwrap()
+                                        // );
+                                        // io::stdout().flush().unwrap();
+                                        // io::stderr().flush().unwrap();
+                                    })),
+                                )
+                                .await?;
+                            // println!("download done");
+
+                            // let temp_dir_transcode = TempDir::new(&filename)?;
+                            // let mut transcoded_path = temp_dir_clone.path().join(&filename);
+                            let mut transcoded_path = candidate_dir
+                                .path()
+                                .join(format!("audio_{}", &candidate_filename));
+                            transcoded_path.set_extension("mp3");
+
+                            // let mut output_path = library_dir.join(&filename);
+                            // output_path.set_extension("mp3");
+
+                            // println!("transcoding to {}", transcoded_path.display());
+                            // let transcoded_path_clone = transcoded_path.to_owned();
+                            let options = transcode::TranscoderOptions::mp3();
+                            let bar_clone = bar.clone();
+                            let res = tokio::task::spawn_blocking(move || {
+                                transcoder.transcode_blocking(
+                                    &downloaded.output_path,
+                                    &transcoded_path,
+                                    Some(&options),
+                                    &Box::new(move |progress: transcode::TranscodeProgress| {
+                                        // todo: sample rate * seconds
+                                        bar_clone.set_message("transcoding".to_string());
+                                        bar_clone.set_position(progress.frame_count as u64);
+                                        bar_clone.set_length(
+                                            (options.sample_rate.unwrap_or(44100) as f64
+                                                * (track.duration_millis as f64 / 1000.0))
+                                                as u64,
+                                        );
+                                        bar_clone.tick();
+
+                                        println!("{}", progress.frame_count);
+                                    }),
+                                );
+                                Ok::<(), anyhow::Error>(())
+                            })
+                            .await?;
+                            bar.finish();
+                            Ok::<(), anyhow::Error>(())
+                        })
+                    })
+                    .collect::<Vec<tokio::task::JoinHandle<Result<()>>>>();
+
+                let downloaded = future::join_all(downloads).await;
+                println!("all downloads done");
+
                 // transcode
                 // let library_dir = {
                 //     let config = self.config.read().await;
@@ -528,18 +652,12 @@ impl<'a> CLI<'a> {
                 Ok::<(), anyhow::Error>(())
             }
             .await;
-            // bar.finish();
             res
-
-            // {
-            //     // print error
-            //     eprintln!("error: {}", err);
-            //     // pb.bar.finish();
-            //     // most importantly, clean up the progress
-            // };
         });
 
-        // mp.join_and_clear()?;
+        println!("rendering");
+        mp.join_and_clear()?;
+        println!("rendering done");
         self.runtime.block_on(async move { handle.await? })
         // let playlist_stream = tool.all_playlists_stream(&user_id, &sources.deref());
         // let playlist_stream = match opts.limit {
@@ -621,18 +739,18 @@ impl<'a> CLI<'a> {
                                 let tracks = tracks.clone();
                                 async move {
                                     total.fetch_add(1, Ordering::SeqCst);
-                                    // bar_clone.println(format!(
-                                    //     "{}: {} ({})",
-                                    //     track
-                                    //         .id
-                                    //         .as_ref()
-                                    //         .map(|id| id.to_string())
-                                    //         .unwrap_or("".to_string()),
-                                    //     &track.name,
-                                    //     crate::cli::human_duration(chrono::Duration::seconds(
-                                    //         track.duration_secs as i64
-                                    //     ))
-                                    // ));
+                                    bar_clone.println(format!(
+                                        "{}: {} ({})",
+                                        track
+                                            .id
+                                            .as_ref()
+                                            .map(|id| id.to_string())
+                                            .unwrap_or("".to_string()),
+                                        &track.name,
+                                        crate::cli::human_duration(chrono::Duration::milliseconds(
+                                            track.duration_millis as i64
+                                        ))
+                                    ));
                                     bar_clone.set_message(format!(
                                         "Track: {} ({} done)",
                                         &track.name,
@@ -645,7 +763,6 @@ impl<'a> CLI<'a> {
                         .await;
 
                     let tracks = tracks.read().await;
-                    let result = serde_json::to_string_pretty(&tracks.deref()).unwrap();
                     if list_opts.list_opts.print {
                         let pretty = serde_json::to_string_pretty(&tracks.deref());
                         pretty.map(|res| println!("{}", res));

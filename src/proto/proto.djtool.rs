@@ -139,7 +139,7 @@ pub struct Track {
     #[prost(string, tag = "101")]
     pub artist: ::prost::alloc::string::String,
     #[prost(uint64, tag = "102")]
-    pub duration_secs: u64,
+    pub duration_millis: u64,
     #[prost(message, optional, tag = "200")]
     pub artwork: ::core::option::Option<Artwork>,
     #[prost(message, optional, tag = "201")]

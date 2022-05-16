@@ -17,6 +17,8 @@ python3 compile-proto-grpcweb.py
 
 TODO:
 
+- implement a cmd based transcoder that does not need to build with ffmpeg
+- make transcoders dynamic dispatch
 - source, sink
 - sync: playlist/track, source, sink(s)
   - if nothing specified: all
