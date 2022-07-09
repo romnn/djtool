@@ -137,6 +137,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", SPLASH_LOGO);
+
+    // load environment variables
+    dotenv::dotenv().ok();
+
     let opts = Opts::parse();
     let (shutdown_tx, _) = broadcast::channel(10);
     let shutdown_tx_signal = shutdown_tx.clone();

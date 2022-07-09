@@ -94,5 +94,5 @@ pub struct BackendOpts {
 #[derive(Parser, Debug, Clone)]
 pub struct YoutubeOpts {
     // #[clap(short = 'd', long = "device")]
-// pub device: Option<String>,
+    // pub device: Option<String>,
 }

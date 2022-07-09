@@ -101,9 +101,9 @@ pub enum PlaylistCommand {
 pub struct TrackOptions {
     #[clap(subcommand)]
     pub command: TrackCommand,
-    #[clap(long = "id")]
+    #[clap(long = "track-id", alias = "id", env = "SPOTIFY_TRACK_ID")]
     pub id: Option<String>,
-    #[clap(long = "name")]
+    #[clap(long = "name", env = "SPOTIFY_TRACK_NAME")]
     pub name: Option<String>,
 }
 
@@ -112,9 +112,9 @@ pub struct PlaylistOptions {
     #[clap(subcommand)]
     pub command: PlaylistCommand,
 
-    #[clap(long = "id", alias = "playlist-id")]
+    #[clap(long = "playlist-id", alias = "id", env = "SPOTIFY_PLAYLIST_ID")]
     pub id: Option<String>,
-    #[clap(long = "name")]
+    #[clap(long = "name", env = "SPOTIFY_PLAYLIST_NAME")]
     pub name: Option<String>,
 }
 
@@ -133,10 +133,10 @@ pub struct Options {
     #[clap(subcommand)]
     pub command: Command,
 
-    #[clap(long = "user-id", alias = "user")]
+    #[clap(long = "user-id", alias = "user", env = "SPOTIFY_USER_ID")]
     pub user_id: Option<String>,
 
-    #[clap(long = "api-token")]
+    #[clap(long = "api-token", env = "SPOTIFY_API_TOKEN")]
     pub api_token: Option<String>,
 }
 
@@ -621,18 +621,18 @@ impl<'a> CLI<'a> {
                                 let tracks = tracks.clone();
                                 async move {
                                     total.fetch_add(1, Ordering::SeqCst);
-                                    // bar_clone.println(format!(
-                                    //     "{}: {} ({})",
-                                    //     track
-                                    //         .id
-                                    //         .as_ref()
-                                    //         .map(|id| id.to_string())
-                                    //         .unwrap_or("".to_string()),
-                                    //     &track.name,
-                                    //     crate::cli::human_duration(chrono::Duration::seconds(
-                                    //         track.duration_secs as i64
-                                    //     ))
-                                    // ));
+                                    bar_clone.println(format!(
+                                        "{}: {} ({})",
+                                        track
+                                            .id
+                                            .as_ref()
+                                            .map(|id| id.to_string())
+                                            .unwrap_or("".to_string()),
+                                        &track.name,
+                                        crate::cli::human_duration(chrono::Duration::seconds(
+                                            track.duration_secs as i64
+                                        ))
+                                    ));
                                     bar_clone.set_message(format!(
                                         "Track: {} ({} done)",
                                         &track.name,
