@@ -12,6 +12,33 @@ use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use warp::{Filter, Rejection, Reply};
 
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! debug {
+    ($x:expr) => {
+        dbg!($x)
+    };
+}
+
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! debug {
+    ($x:expr) => {
+        std::convert::identity($x)
+    };
+}
+
+#[macro_export]
+macro_rules! debug_to_file {
+    ($file:expr, $x:expr) => {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open($file)
+            .map(|file| serde_json::to_writer_pretty(file, $x));
+    };
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct DebugSpotifyPlaylistsQuery {
     user_id: String,

@@ -138,6 +138,13 @@ impl Youtube {
         let search_response = self
             .search_page_response(search_query, continuation, None)
             .await?;
+        crate::debug_to_file!(
+            format!(
+                "./debug/youtube_search_result_{}.json",
+                uuid::Uuid::new_v4()
+            ),
+            &search_response
+        );
         let slr_contents = vec![
             get!(
                 &search_response,
@@ -155,13 +162,19 @@ impl Youtube {
                 "continuationItems"
             ),
         ];
+        // crate::debug!(&slr_contents);
         let slr_contents = slr_contents
             .into_iter()
             .filter_map(|x| x)
             .collect::<Vec<&Value>>();
-        let slr_contents = slr_contents.first().unwrap().to_owned().to_owned();
+        let slr_contents = slr_contents
+            .first()
+            .ok_or(anyhow::anyhow!("no slr contents"))?
+            .to_owned()
+            .to_owned();
         let parsed: model::SearchResultPage =
             serde_json::from_value(json!({ "results": slr_contents }))?;
+        // crate::debug!(&parsed);
         let parsed = parsed.parse()?;
         Ok(parsed)
     }

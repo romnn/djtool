@@ -172,7 +172,7 @@ impl fmt::Debug for VideoRenderer {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemSectionRendererItem {
-    pub video_renderer: VideoRenderer,
+    pub video_renderer: Option<VideoRenderer>,
     // pub playlist_renderer: PlaylistRenderer,
     // pub playlist_renderer: PlaylistRenderer,
 }
@@ -244,12 +244,13 @@ impl SearchResultPage {
                 SearchResult::ItemSectionRenderer { contents, .. } => Some(contents.to_owned()),
                 _ => None,
             })
-            .unwrap();
+            .ok_or(anyhow::anyhow!("no search contents"))?;
         let results: Vec<YoutubeVideo> = results
             .iter()
-            .map(|item| YoutubeVideo {
-                title: item.video_renderer.title.to_str().unwrap_or("").to_string(),
-                video_id: item.video_renderer.video_id.to_owned(),
+            .filter_map(|item| item.video_renderer.as_ref())
+            .map(|video_renderer: &VideoRenderer| YoutubeVideo {
+                title: video_renderer.title.to_str().unwrap_or("").to_string(),
+                video_id: video_renderer.video_id.to_owned(),
             })
             .collect();
         Ok(Page {

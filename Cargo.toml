@@ -24,6 +24,7 @@ tokio = { version = "1.14.0", features = ["full"] }
 tokio-stream = "0.1.8"
 sanitize-filename = "0.3.0"
 rand = "0.8.4"
+uuid = { version = "1.0.0", features = ["v4"] }
 futures-util = "0.3.13"
 rustfft = "6.0.1"
 indicatif = "0.16.2"
@@ -32,6 +33,7 @@ url = "2.2.2"
 clap = { version = "3", features = [ "derive", "env" ] }
 rayon = "1.5.1"
 rodio = "0.15.0"
+dialoguer = "0.10.0"
 strsim = "0.10"
 ndarray = { version = "0.15.4" , features = ["approx", "rayon"]}
 Boa = "0.13.0"

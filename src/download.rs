@@ -103,10 +103,10 @@ pub struct Download {
     output_path: PathBuf,
     chunk_size: usize,
     info: PreflightDownloadInfo,
-    #[allow(dead_code)]
     downloaded: usize,
     chunks: Arc<Mutex<Vec<Chunk>>>,
     started_at: Instant,
+    progress: Option<Box<dyn Fn(DownloadProgress) -> () + Send + 'static>>,
 }
 
 impl Download {
@@ -133,13 +133,21 @@ impl Download {
             downloaded: 0,
             chunks: Arc::new(Mutex::new(Vec::<Chunk>::new())),
             started_at: Instant::now(),
+            progress: None,
         };
         download.compute_chunks();
         Ok(download)
     }
 
+    pub fn on_progress(
+        &mut self,
+        callback: impl Fn(DownloadProgress) -> () + Send + 'static,
+    ) {
+        self.progress = Some(Box::new(callback));
+    }
+
     #[allow(dead_code)]
-    fn set_chunk_size(&mut self, chunk_size: usize) {
+    pub fn set_chunk_size(&mut self, chunk_size: usize) {
         self.chunk_size = chunk_size;
         // we do not worry about too much concurrency for too little chunks, as this wont create
         // additional overhead
@@ -147,12 +155,12 @@ impl Download {
     }
 
     #[allow(dead_code)]
-    fn set_concurrency(&mut self, concurrency: usize, min: Option<usize>, max: Option<usize>) {
+    pub fn set_concurrency(&mut self, concurrency: usize, min: Option<usize>, max: Option<usize>) {
         self.chunk_size = Self::default_chunk_size(&self.info, concurrency, min, max);
         self.compute_chunks();
     }
 
-    fn default_concurrency() -> usize {
+    pub fn default_concurrency() -> usize {
         let mut c = num_cpus::get() * 3;
         c = c.min(20);
         if c <= 2 {
@@ -273,7 +281,7 @@ impl Download {
     pub async fn start(
         &mut self,
         // progress: Option<impl Fn(DownloadProgress) -> () + 'static>,
-        progress: impl Fn(DownloadProgress) -> () + 'static,
+        // progress: impl Fn(DownloadProgress) -> () + 'static,
     ) -> Result<()> {
         self.started_at = Instant::now();
 
@@ -326,10 +334,12 @@ impl Download {
             match chunk_downloaded {
                 Ok(chunk_downloaded) => {
                     self.downloaded += chunk_downloaded;
-                    (progress)(DownloadProgress {
-                        downloaded: self.downloaded,
-                        total: Some(self.info.content_length),
-                    });
+                    if let Some(progress) = &self.progress {
+                        (progress)(DownloadProgress {
+                            downloaded: self.downloaded,
+                            total: Some(self.info.content_length),
+                        });
+                    }
                     // println!("downloaded: {}", self.downloaded);
                 }
                 Err(err) => eprintln!("chunk failed: {}", err),

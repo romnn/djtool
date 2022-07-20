@@ -210,6 +210,7 @@ impl Default for DjTool {
             data_dir: None,
             transcoder: Arc::new(Box::new(transcoder)),
             // sources: Arc::new(RwLock::new(Arc::new(HashMap::new()))),
+            // transcoder: Arc::new(RwLock::new(HashMap::new())),
             sources: Arc::new(RwLock::new(HashMap::new())),
             sinks: Arc::new(RwLock::new(sinks)),
             config: Arc::new(RwLock::new(None)),
@@ -781,7 +782,8 @@ impl DjTool {
                                 &track,
                                 &temp_dir.path().to_path_buf().join("audio"),
                                 None,
-                                Box::new(|progress: download::DownloadProgress| {}),
+                                // None,
+                                Some(Box::new(|progress: download::DownloadProgress| {})),
                             )
                             .await?;
                         // println!("downloaded to {}", downloaded.output_path.display());
@@ -806,8 +808,8 @@ impl DjTool {
                                 &downloaded.output_path,
                                 &transcoded_path_clone,
                                 Some(&transcode::TranscoderOptions::mp3()),
-                                &Box::new(|progress: transcode::TranscodeProgress| {
-                                    println!("{}", progress.frame_count);
+                                &mut Box::new(|progress: transcode::TranscodeProgress| {
+                                    println!("{}", progress.frame);
                                 }),
                             );
                             Ok::<(), anyhow::Error>(())
@@ -820,10 +822,7 @@ impl DjTool {
                                 let dest = temp_dir.path().join("artwork.jpg");
                                 let mut download =
                                     download::Download::new(&artwork.url, &dest).await?;
-                                download
-                                    .start(|progress: download::DownloadProgress| {})
-                                    .await?;
-                                // download.start().await?;
+                                download.start().await?;
                                 Ok::<PathBuf, anyhow::Error>(dest)
                             }
                             .await;
@@ -916,7 +915,7 @@ impl DjTool {
         //         &output_file,
         //         None,
         //         &Box::new(|progress: transcode::TranscodeProgress| {
-        //             println!("{}", progress.frame_count);
+        //             println!("{}", progress.frame);
         //         }),
         //     );
         //     // let mut transcoder = Transcoder::new(audio.audio_file, output_file).unwrap();

@@ -103,7 +103,7 @@ message Track {
   TrackId id = 1;
   string name = 100;
   string artist = 101;
-  uint64 duration_secs = 102;
+  uint64 duration_millis = 102;
   Artwork artwork = 200;
   TrackPreview preview = 201;
 
