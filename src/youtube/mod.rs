@@ -19,6 +19,7 @@ use futures::task::Poll;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use reqwest;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
 use stream::paginate;
 
@@ -222,7 +223,22 @@ impl Sink for Youtube {
         track: &proto::djtool::Track,
         progress: Box<dyn Fn(sink::QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> Result<Vec<proto::djtool::Track>> {
+    ) -> Vec<proto::djtool::Track> {
+        let stream = self.candidates_stream(track, progress, limit);
+        stream.collect::<Vec<proto::djtool::Track>>().await
+    }
+
+    fn candidates_stream<'b, 'a>(
+        &'a self,
+        track: &'b proto::djtool::Track,
+        progress: Box<dyn Fn(sink::QueryProgress) -> () + Send + 'static>,
+        limit: Option<usize>,
+        // ) -> impl Stream<Item = Result<proto::djtool::Track>> + 'a + Send {
+        // ) -> impl Stream<Item = Result<proto::djtool::Track>> + Send + Unpin {
+    ) -> Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>> {
+        // ) -> Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>> {
+        // ) -> impl Stream<Item = Result<proto::djtool::Track>> + 'a + Send {
+        // ) -> Result<Vec<proto::djtool::Track>> {
         let query = format!("{} {}", track.name, track.artist);
         // println!("youtube query: {}", query);
         let mut found = 0;
@@ -235,64 +251,31 @@ impl Sink for Youtube {
                 video.ok()
             })
             .map(|video: model::YoutubeVideo| video.into());
-
-        // let search_result_stream = self
-        // let search_results = stream
-        //     // .search_stream(query)
-        //     // .filter_map(|video: Result<model::YoutubeVideo>| async move {
-        //     //     crate::debug!(&video);
-        //     //     video.ok()
-        //     // })
-        //     // .for_each(|item| {
-        //     //     crate::debug!(item);
-        //     //     future::ready(())
-        //     // });
-        //     .take_until(future::poll_fn(|_cx| {
-        //         // let search_result_stream = search_result_stream.take_until(future::poll_fn(|_cx| {
-        //         found += 1;
-        //         // return Poll::Pending;
-        //         limit
-        //             .map(|limit| {
-        //                 if found >= 1000 {
-        //                     Poll::Ready(())
-        //                 } else {
-        //                     Poll::Pending
-        //                 }
-        //             })
-        //             .unwrap_or(Poll::Pending)
-        //     }))
-        //     // search_result_stream
-        //     //     .for_each(|item| {
-        //     //         crate::debug!(item);
-        //     //         future::ready(())
-        //     //     })
-        //     //     .await;
-        //     // let search_result_stream = match limit {
-        //     //     Some(limit) => {
-        //     //         println!("taking 10");
-        //     //         search_result_stream.take(limit) // .into_inner()
-        //     //     }
-        //     //     None => search_result_stream, // .take(10),
-        //     // };
-        //     // let search_results = search_result_stream
-        //     .collect::<Vec<proto::djtool::Track>>()
-        //     .await;
-        // crate::debug!(found);
-        // crate::debug!(&search_results);
-
-        // println!("youtube search results : {:?}", search_results);
-        // let first_hit = search_results
-        //     .first()
-        //     .ok_or(anyhow::anyhow!("no results"))?;
-        // let candidates = search_results[0..limit.unwrap_or(10).min(search_results.len() - 1)];
-
         match limit {
-            Some(limit) => Ok(stream
-                .take(limit)
-                .collect::<Vec<proto::djtool::Track>>()
-                .await),
-            None => Ok(stream.collect::<Vec<proto::djtool::Track>>().await),
+            Some(limit) => {
+                Box::pin(stream.take(limit))
+                // Ok(stream
+                // .take(limit)
+                // .collect::<Vec<proto::djtool::Track>>()
+                // .await),
+            }
+            None => Box::pin(stream),
+            // Ok(stream.collect::<Vec<proto::djtool::Track>>().await),
         }
+
+        // let stream: Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>> = match limit {
+        //     Some(limit) => {
+        //         Box::pin(stream.take(limit))
+        //         // Ok(stream
+        //         // .take(limit)
+        //         // .collect::<Vec<proto::djtool::Track>>()
+        //         // .await),
+        //     }
+        //     None => Box::pin(stream),
+        //     // Ok(stream.collect::<Vec<proto::djtool::Track>>().await),
+        // };
+        // stream
+        // Box::pin(stream)
         // println!("youtube first hit: {:?}", first_hit);
         // Ok(first_hit.video_id.to_owned())
         // Ok(search_results)

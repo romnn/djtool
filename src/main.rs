@@ -21,6 +21,7 @@ use djtool::{DjTool, SPLASH_LOGO};
 use futures::Stream;
 use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -31,17 +32,13 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::thread;
-use tauri::Event;
-use tauri::Manager;
+use std::time::Duration;
 use tempdir::TempDir;
 use tokio::signal;
 use tokio::sync::{broadcast, mpsc, watch, Mutex, RwLock, Semaphore};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server as TonicServer, Code, Request, Response, Status};
 use warp::{Filter, Rejection, Reply};
-// remove
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::time::Duration;
 
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
@@ -204,7 +201,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             app.run(move |handle, event| {
                 match event {
-                    Event::ExitRequested { api, .. } => {
+                    tauri::RunEvent::ExitRequested { api, .. } => {
                         let _ = shutdown_tx_ui.send(true);
                         // .unwrap();
                         println!("exiting");

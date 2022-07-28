@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
@@ -20,24 +19,32 @@ pub struct Config {
     pub library: Library,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("io error reading or writing config: {0}")]
+    IO(#[from] std::io::Error),
+    #[error("failed to parse config: {0}")]
+    ParseError(#[from] serde_json::Error),
+}
+
 #[async_trait]
 pub trait Persist: Serialize + DeserializeOwned {
-    async fn load<P: AsRef<Path> + Send + Sync>(config_file: P) -> Result<Self> {
+    async fn load<P: AsRef<Path> + Send + Sync>(config_file: P) -> Result<Self, ConfigError> {
         let mut file = tokio::fs::File::open(config_file).await?;
         let mut buf = String::new();
         file.read_to_string(&mut buf).await?;
         let test = buf.to_owned();
-        let deser = serde_json::from_str::<Self>(&test)?;
+        let deser =
+            serde_json::from_str::<Self>(&test).map_err(|err| ConfigError::ParseError(err))?;
         Ok(deser)
     }
 
-    async fn save<P: AsRef<Path> + Send + Sync>(&self, config_file: P) -> Result<()> {
+    async fn save<P: AsRef<Path> + Send + Sync>(&self, config_file: P) -> Result<(), ConfigError> {
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(config_file)?;
-        // let writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&file, &self)?;
         Ok(())
     }
@@ -46,7 +53,7 @@ pub trait Persist: Serialize + DeserializeOwned {
 impl Persist for Library {}
 
 impl Config {
-    pub async fn open<T: AsRef<Path> + Send + Sync>(config_dir: T) -> Result<Self> {
+    pub async fn open<T: AsRef<Path> + Send + Sync>(config_dir: T) -> Result<Self, ConfigError> {
         let debug_dir = config_dir.as_ref().join("debug");
         let config_file = config_dir.as_ref().join("config.json");
 

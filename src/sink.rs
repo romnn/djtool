@@ -3,7 +3,9 @@ use super::proto;
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{Date, Utc};
+use futures::stream::Stream;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
 // #[derive(Debug, Clone)]
 // pub struct OutputVideo {
@@ -44,13 +46,10 @@ pub struct DownloadedTrack {
 }
 
 #[derive(Debug, Clone)]
-pub struct QueryProgress {
-    // pub track: proto::djtool::Track,
-// pub output_path: PathBuf,
-}
+pub struct QueryProgress {}
 
 #[async_trait]
-pub trait Sink {
+pub trait Sink: Send + Sync + 'static {
     async fn download(
         &self,
         track: &proto::djtool::Track,
@@ -64,5 +63,15 @@ pub trait Sink {
         track: &proto::djtool::Track,
         progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> Result<Vec<proto::djtool::Track>>;
+    ) -> Vec<proto::djtool::Track>;
+
+    fn candidates_stream<'b, 'a>(
+        &'a self,
+        track: &'b proto::djtool::Track,
+        progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
+        limit: Option<usize>,
+        // ) -> Result<Vec<proto::djtool::Track>>;
+    ) -> Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>>;
+    // ) -> Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>>;
+    // ) -> impl Stream<Item = Result<proto::djtool::Track>> + Send + Unpin;
 }

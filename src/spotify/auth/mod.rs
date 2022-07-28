@@ -47,7 +47,7 @@ pub trait Authenticator {
     async fn handle_user_login_callback(
         &self,
         data: proto::djtool::SpotifyUserLoginCallback,
-    ) -> Result<()>;
+    ) -> Result<(), spotify::error::Error>;
 }
 
 #[derive(Debug, Clone, Default)]

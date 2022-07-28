@@ -1,11 +1,12 @@
+use crate::config::ConfigError;
 use crate::config::Persist;
 use crate::proto;
 use crate::spotify;
 use crate::spotify::auth::{join_scopes, Authenticator, Credentials, OAuth};
 use crate::spotify::config::Config;
+use crate::spotify::error::{ApiError, AuthError, Error};
 use crate::spotify::model::Token;
 use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
-use anyhow::Result;
 use async_trait::async_trait;
 use base64;
 use chrono::{DateTime, Duration, Utc};
@@ -20,7 +21,6 @@ use std::io::{Read, Write};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use webbrowser;
 
@@ -70,13 +70,14 @@ impl spotify::Spotify {
         config_dir: P,
         creds: Credentials,
         oauth: OAuth,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let config_file = config_dir.as_ref().join("spotify-config.json");
         let config = Config::load(&config_file).await;
         let config = match config {
             Err(_) => {
                 let empty = Config::default();
-                empty.save(&config_file).await?;
+                // empty.save(&config_file).await.map_err(Error::from)?;
+                // .map_err(|err| Error::Config())?;
                 empty
             }
             Ok(config) => config,
@@ -113,14 +114,14 @@ impl Authenticator for PkceAuthenticator {
         headers
     }
 
-    async fn reauthenticate(&self) -> std::result::Result<(), spotify::error::Error> {
+    async fn reauthenticate(&self) -> std::result::Result<(), Error> {
         self.authenticate().await
     }
 
     async fn handle_user_login_callback(
         &self,
         data: proto::djtool::SpotifyUserLoginCallback,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         match data.method {
             Some(proto::djtool::spotify_user_login_callback::Method::Pkce(
                 proto::djtool::SpotifyUserLoginCallbackPkce { code, state },
@@ -133,7 +134,7 @@ impl Authenticator for PkceAuthenticator {
                 println!("handled");
                 Ok(())
             }
-            _ => panic!("not implemented"),
+            other => Err(Error::Auth(AuthError::Unsupported(other))),
         }
     }
 }
@@ -166,7 +167,7 @@ impl PkceAuthenticator {
     pub async fn get_authorize_url(
         &self,
         verifier_bytes: Option<usize>,
-    ) -> std::result::Result<reqwest::Url, spotify::error::Error> {
+    ) -> std::result::Result<reqwest::Url, Error> {
         let scopes = join_scopes(&self.oauth.scopes);
         let verifier_bytes = verifier_bytes.unwrap_or(43);
         let (verifier, challenge) = self.generate_codes(verifier_bytes);
@@ -190,10 +191,10 @@ impl PkceAuthenticator {
         payload.insert(param::STATE, &self.oauth.state);
         payload.insert(param::SCOPE, &scopes);
 
-        Url::parse_with_params(api::AUTHORIZE, payload).map_err(spotify::error::Error::BadUrl)
+        Url::parse_with_params(api::AUTHORIZE, payload).map_err(Error::BadUrl)
     }
 
-    async fn read_config(&self) -> Result<()> {
+    async fn read_config(&self) -> Result<(), Error> {
         let new_config = Config::load(&self.config_file).await?;
         {
             let mut config = self.config.write().await;
@@ -203,17 +204,12 @@ impl PkceAuthenticator {
         Ok(())
     }
 
-    async fn write_config(
-        &self,
-        config: &Config,
-    ) -> std::result::Result<(), spotify::error::Error> {
-        // let config = self.config.read().await;
-        config.save(&self.config_file).await.map_err(|err| {
-            spotify::error::Error::Config(spotify::error::ConfigError::WriteError(err))
-        })
+    async fn write_config(&self, config: &Config) -> std::result::Result<(), Error> {
+        config.save(&self.config_file).await.map_err(Error::from)
+        // .map_err(|err| Error::Config(err))
     }
 
-    async fn request_token(&self, code: &str) -> std::result::Result<(), spotify::error::Error> {
+    async fn request_token(&self, code: &str) -> std::result::Result<(), Error> {
         println!("Requesting PKCE Auth Code token");
 
         let verifier = {
@@ -239,7 +235,7 @@ impl PkceAuthenticator {
         // self.write_config().await
     }
 
-    pub async fn authenticate(&self) -> std::result::Result<(), spotify::error::Error> {
+    pub async fn authenticate(&self) -> std::result::Result<(), Error> {
         let cached_token = {
             let config = self.config.read().await;
             // println!("got the read lock");
@@ -278,16 +274,14 @@ impl PkceAuthenticator {
         let mut auth_url = self.get_authorize_url(None).await?.to_owned();
         auth_url.query_pairs_mut().append_pair("target", "_blank");
         println!("auth url: {}", auth_url);
-        Err(spotify::error::Error::Auth(
-            spotify::error::AuthError::RequireUserLogin { auth_url },
-        ))
+        Err(Error::Auth(AuthError::RequireUserLogin { auth_url }))
     }
 
     async fn fetch_access_token(
         &self,
         form: &HashMap<&str, String>,
         headers: Option<HeaderMap>,
-    ) -> std::result::Result<Token, spotify::error::Error> {
+    ) -> std::result::Result<Token, Error> {
         let response = self
             .client
             .post(api::TOKEN)
@@ -295,7 +289,7 @@ impl PkceAuthenticator {
             .form(&form)
             .send()
             .await
-            .map_err(|err| spotify::error::Error::Api(err))?;
+            .map_err(|err| Error::Api(ApiError::Http(err)))?;
         // invalid grant refresh token revoked
         // println!(
         //     "fetch access token response: {}",
@@ -304,7 +298,7 @@ impl PkceAuthenticator {
         let mut token: Token = response
             .json()
             .await
-            .map_err(|err| spotify::error::Error::Api(err))?;
+            .map_err(|err| Error::Api(ApiError::Http(err)))?;
         // let mut token = Token::default();
         println!("{:?}: {:?}", api::TOKEN, token);
         token.expires_at = Utc::now().checked_add_signed(token.expires_in);

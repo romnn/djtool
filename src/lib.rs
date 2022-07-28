@@ -376,7 +376,7 @@ impl DjTool {
                 },
             )
             .flat_map(|playlist_stream| playlist_stream)
-            .filter_map(|playlist: Result<proto::djtool::Playlist>| {
+            .filter_map(|playlist: Result<proto::djtool::Playlist, _>| {
                 // let playlists_failed = playlists_failed.clone();
                 let source_id = playlist
                     .as_ref()
@@ -479,7 +479,7 @@ impl DjTool {
             // let track_stream = track_stream .take(100);
             .flat_map(|track_stream| track_stream)
             // let track
-            .filter_map(|track: Result<proto::djtool::Track>| {
+            .filter_map(|track: Result<proto::djtool::Track, _>| {
                 // let tracks_failed = tracks_failed.clone();
                 async move {
                     match track {

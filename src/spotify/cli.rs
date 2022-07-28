@@ -1,13 +1,16 @@
+use crate::cli;
 use crate::download;
 use crate::proto;
 use crate::sink;
+use crate::source;
 use crate::transcode;
 use crate::utils;
 use anyhow::Result;
+// use async_stream::stream;
 use clap::Parser;
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use futures::future;
-use futures::{Future, Stream};
+use futures::{stream, Future, Stream};
 use futures_util::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::Serialize;
@@ -17,6 +20,7 @@ use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -107,12 +111,19 @@ pub enum PlaylistCommand {
 
 #[derive(Parser, Debug, Clone)]
 pub struct TrackOptions {
+    #[structopt(flatten)]
+    common: cli::TrackOptions,
     #[clap(subcommand)]
-    pub command: TrackCommand,
-    #[clap(long = "track-id", alias = "id", env = "SPOTIFY_TRACK_ID")]
-    pub id: Option<String>,
-    #[clap(long = "name", env = "SPOTIFY_TRACK_NAME")]
-    pub name: Option<String>,
+    pub command: TrackCommand, // #[clap(long = "track-id", alias = "id", env = "SPOTIFY_TRACK_ID")]
+                               // pub id: Option<String>,
+                               // #[clap(long = "name", env = "SPOTIFY_TRACK_NAME")]
+                               // pub name: Option<String>,
+                               // #[clap(long = "artist", env = "SPOTIFY_TRACK_ARTIST")]
+                               // pub artist: Option<String>,
+                               // #[clap(long = "source-limit", env = "SPOTIFY_TRACK_SOURCE_LIMIT")]
+                               // pub source_limit: Option<usize>,
+                               // #[clap(long = "sink-limit", env = "SPOTIFY_TRACK_SINK_LIMIT")]
+                               // pub source_limit: Option<usize>
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -481,98 +492,111 @@ impl<'a> CLI<'a> {
         cli.handle().unwrap();
     }
 
-    pub fn track_download(
+    // pub fn generic_track_download(
+    pub fn generic_track_download(
         &self,
+        user_id: String,
         track_opts: TrackOptions,
         dl_opts: TrackDownloadOptions,
+        source_id: crate::proto::djtool::Service,
+        sink_id: crate::proto::djtool::Service,
     ) -> Result<()> {
+        let tool = self.tool.clone();
         let mp = Arc::new(MultiProgress::new());
         let mp_clone = mp.clone();
-        let tool = self.tool.clone();
-        let spfy_opts = self.options.clone();
 
-        // let pb = TrackDownloadProgress::new(&mp, 100);
-        // pb.bar.tick();
-        // let bar = Arc::new(mp.add(ProgressBar::new_spinner()));
-        // TrackDownloadProgress::style(&bar);
-        // bar.tick();
+        let selected: Vec<(proto::djtool::Track, proto::djtool::Track)> =
+            self.runtime.block_on(async move {
+                // let candidate_stream: Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send>> = self.runtime.block_on(async move {
+                // find the spotify track
+                let sources = tool.sources.read().await;
+                let sinks = tool.sinks.read().await;
 
-        let user_id = spfy_opts.user_id.unwrap();
-        // let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+                let source = &sources[&source_id];
+                let sink = &sinks[&sink_id];
 
-        let (track, selected) = self.runtime.block_on(async move {
-            // let res: Result<(), anyhow::Error> = async {
-            // find the spotify track
-            // todo: make this configurable
-            let sources = tool.sources.read().await;
-            let sinks = tool.sinks.read().await;
-            // let sinks = Arc::new(tool.sinks.read().await);
-            let source = &sources[&proto::djtool::Service::Spotify];
+                //         // let mut track = None;
+                let source_track_stream: Pin<
+                    Box<dyn Stream<Item = Result<proto::djtool::Track, _>>>,
+                > = if let Some(ref track_id) = track_opts.common.id {
+                    let track = source
+                        .track_by_id(track_id)
+                        .await
+                        .and_then(|track| track.ok_or(source::Error::NotFound));
+                    // Box::pin(stream!(track).flat_map(|track| track))
+                    // .filter_map(|track| async {track})
+                    // stream::iter(vec![track].into_iter().filter_map(|track| track)).boxed()
+                    stream::iter(vec![track]).boxed()
+                    // .ok_or(anyhow::anyhow!("no track found")))
+                } else if let Some(ref track_name) = track_opts.common.name {
+                    // this should be a stream
+                    // if choose, then allow the user to select the correct track, else take the first
+                    // 2? hits
+                    let query = source::SearchQuery::track(track_name, None);
+                    source.search_stream(query, Box::new(|progress| {}), Some(3))
+                } else {
+                    stream::empty().boxed()
+                    // Box::pin(stream::empty())
+                };
 
-            let mut track = None;
-            if let Some(track_id) = track_opts.id {
-                track = source.track_by_id(&track_id).await?;
-            } else if let Some(track_name) = track_opts.name {
-                // source.track_by_name(track_name);
-            }
+                //         // let track = source.track_by_id(&track_opts.id.unwrap()).await?;
+                //         // let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+                //         // println!("track: {:?}", track);
 
-            let track = track.ok_or(anyhow::anyhow!("no track found"))?;
-            // println!("track: {:?}", track);
+                //         // let title = track.name.to_owned();
+                //         // let artist = track.artist.to_owned();
+                //         // let filename_clone = filename.clone();
+                //         // let filename = "test".to_string();
+                //         // println!("filename: {}", filename);
 
-            // let title = track.name.to_owned();
-            // let artist = track.artist.to_owned();
-            // let filename_clone = filename.clone();
-            // let filename = "test".to_string();
-            // println!("filename: {}", filename);
+                //         // let sinks_lock = sinks_lock.clone();
 
-            // let sinks_lock = sinks_lock.clone();
-
-            // youtube by default
-            // let track = &sinks[&proto::djtool::Service::Youtube];
-            // let bar = Arc::new(mp_clone.add(ProgressBar::new_spinner()));
-            // TrackDownloadProgress::style(&bar);
-            // bar.tick();
-
-            let sink = &sinks[&proto::djtool::Service::Youtube];
-            let candidates = sink
-                .candidates(
-                    &track,
-                    Box::new(|progress: sink::QueryProgress| {}),
-                    Some(dl_opts.limit.unwrap_or(10)),
-                )
-                .await?;
-            // println!("found {} candidates", candidates.len());
-
-            // let user choose
-
-            // let selected = if dl_opts.choose {
-            if dl_opts.choose {
-                return Ok((
-                    track,
-                    MultiSelect::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Choose download candidates [djtool will try to find the best match out of selection]")
-                        .items(
-                            candidates
-                                .iter()
-                                .map(|c| &c.name)
-                                .collect::<Vec<&String>>()
-                                .as_slice(),
+                //         // todo: make this a stream so it can be intertwined with the track by name stream for
+                //         // letting the user make a
+                //         // let candidate_stream = sink
+                let sink_track_stream = source_track_stream
+                    .filter_map(|track| async move { track.ok() })
+                    .flat_map(move |track| {
+                        sink.candidates_stream(
+                            &track,
+                            Box::new(|progress: sink::QueryProgress| {}),
+                            Some(dl_opts.limit.unwrap_or(10)),
                         )
-                        .defaults(&[vec![true], vec![false; candidates.len() - 1]].concat())
-                        .interact()?
-                        .into_iter()
-                        .map(|idx| candidates[idx].to_owned())
-                        .collect::<Vec<proto::djtool::Track>>(),
-                ));
-            };
-            Ok::<_, anyhow::Error>((track, candidates))
-            // Ok(candidates)
-            // let download_track = candidates.first().ok_or(anyhow::anyhow!("no download"))?;
-        })?;
+                        .map(move |candidate| (track.clone(), candidate))
+                    });
+                let candidates = sink_track_stream
+                    .collect::<Vec<(proto::djtool::Track, proto::djtool::Track)>>()
+                    .await;
+                // println!("found {} candidates", selected.len());
+
+                // let user choose
+                if dl_opts.choose {
+                    return MultiSelect::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Choose download candidates [djtool will try to find the best match out of selection]")
+                            .items(
+                                candidates
+                                    .iter()
+                .map(|(track, candidate)| format!("{}: {}", &track.name, &candidate.name))
+                                    .collect::<Vec<String>>()
+                                    .as_slice(),
+                            )
+                            .defaults(&[vec![true], vec![false; candidates.len() - 1]].concat())
+                            .interact().unwrap()
+                            .into_iter()
+                            .map(|idx| candidates[idx].to_owned())
+                            .collect::<Vec<(proto::djtool::Track, proto::djtool::Track)>>();
+                };
+
+                // Ok::<_, anyhow::Error>((track, selected))
+                // create total progress bar
+                // Ok::<_, anyhow::Error>(Box::pin(candidates))
+                // Ok::<_, anyhow::Error>(Box::pin(candidates))
+                // Ok::<_, io::Error>(candidates)
+                candidates
+                // vec![]
+            });
         // println!("selected candidates: {}", selected.len());
 
-        // create progress bars for all
-        // let selected =
         let total = Arc::new(mp_clone.add(ProgressBar::new(selected.len() as u64)));
         OverallProgress::style(&total);
         total.tick();
@@ -582,17 +606,12 @@ impl<'a> CLI<'a> {
             let res: Result<(), anyhow::Error> = async {
                 let sources = tool.sources.read().await;
                 let sinks = tool.sinks.read().await;
-                // let sinks = Arc::new(tool.sinks.read().await);
-                let source = &sources[&proto::djtool::Service::Spotify];
-
-                let filename =
-                    utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
-                let temp_dir = TempDir::new(&filename)?;
+                let source = &sources[&source_id];
 
                 // let sinks = tool.sinks.read().await;
                 let tracks = selected
                     .into_iter()
-                    .map(|c| {
+                    .map(|(track, candidate)| {
                         let mp_clone = mp_clone.clone();
                         let sinks = sinks.clone();
                         let transcoder = tool.transcoder.clone();
@@ -602,8 +621,14 @@ impl<'a> CLI<'a> {
                         //     .to_path_buf()
                         //     .join(format!("candidate_utils::sanitize_filename(&filename));
                         // fs::create_dir_all(candidate_dir).await?;
-                        let candidate_filename =
-                            utils::sanitize_filename(&format!("{} - {}", c.name, c.artist));
+                        let candidate_filename = utils::sanitize_filename(&format!(
+                            "{} - {}",
+                            candidate.name, candidate.artist
+                        ));
+                        let filename =
+                            utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
+                        let temp_dir = TempDir::new(&filename).unwrap();
+
                         // crate::debug!(&candidate_filename);
 
                         let candidate_dir =
@@ -620,7 +645,7 @@ impl<'a> CLI<'a> {
                             let bar_clone = bar.clone();
                             let downloaded = sink
                                 .download(
-                                    &c,
+                                    &candidate,
                                     &candidate_dir
                                         .path()
                                         .join(format!("original_{}", &candidate_filename)),
@@ -703,10 +728,243 @@ impl<'a> CLI<'a> {
             res
         });
 
-        // println!("rendering");
         mp.join_and_clear()?;
-        // println!("rendering done");
         self.runtime.block_on(async move { handle.await? })
+    }
+
+    pub fn track_download(
+        &self,
+        track_opts: TrackOptions,
+        dl_opts: TrackDownloadOptions,
+    ) -> Result<()> {
+        let mp = Arc::new(MultiProgress::new());
+        let mp_clone = mp.clone();
+        let tool = self.tool.clone();
+        let spfy_opts = self.options.clone();
+        let user_id = spfy_opts.user_id.unwrap();
+
+        // let sources = tool.sources.read().await;
+        // let sinks = tool.sinks.read().await;
+        // // let sinks = Arc::new(tool.sinks.read().await);
+        // let source = &sources[&proto::djtool::Service::Spotify];
+        // let sink = &sinks[&proto::djtool::Service::Youtube];
+
+        self.generic_track_download(
+            user_id,
+            track_opts,
+            dl_opts,
+            proto::djtool::Service::Spotify,
+            proto::djtool::Service::Youtube,
+        )?;
+        return Ok(());
+
+        // // everything from here should be generic
+        // // inputs: source, sink, user_id
+        // let (track, selected) = self.runtime.block_on(async move {
+        //     // find the spotify track
+        //     let sources = tool.sources.read().await;
+        //     let sinks = tool.sinks.read().await;
+        //     // let sinks = Arc::new(tool.sinks.read().await);
+        //     let source = &sources[&proto::djtool::Service::Spotify];
+
+        //     let mut track = None;
+        //     if let Some(track_id) = track_opts.id {
+        //         track = source.track_by_id(&track_id).await?;
+        //     } else if let Some(track_name) = track_opts.name {
+        //         // source.track_by_name(track_name);
+        //     }
+
+        //     let track = track.ok_or(anyhow::anyhow!("no track found"))?;
+        //     // println!("track: {:?}", track);
+
+        //     // let title = track.name.to_owned();
+        //     // let artist = track.artist.to_owned();
+        //     // let filename_clone = filename.clone();
+        //     // let filename = "test".to_string();
+        //     // println!("filename: {}", filename);
+
+        //     // let sinks_lock = sinks_lock.clone();
+
+        //     // youtube by default
+        //     // let track = &sinks[&proto::djtool::Service::Youtube];
+        //     // let bar = Arc::new(mp_clone.add(ProgressBar::new_spinner()));
+        //     // TrackDownloadProgress::style(&bar);
+        //     // bar.tick();
+
+        //     let sink = &sinks[&proto::djtool::Service::Youtube];
+        //     let candidates = sink
+        //         .candidates(
+        //             &track,
+        //             Box::new(|progress: sink::QueryProgress| {}),
+        //             Some(dl_opts.limit.unwrap_or(10)),
+        //         )
+        //         .await?;
+        //     // println!("found {} candidates", candidates.len());
+
+        //     // let user choose
+
+        //     // let selected = if dl_opts.choose {
+        //     if dl_opts.choose {
+        //         return Ok((
+        //             track,
+        //             MultiSelect::with_theme(&ColorfulTheme::default())
+        //                 .with_prompt("Choose download candidates [djtool will try to find the best match out of selection]")
+        //                 .items(
+        //                     candidates
+        //                         .iter()
+        //                         .map(|c| &c.name)
+        //                         .collect::<Vec<&String>>()
+        //                         .as_slice(),
+        //                 )
+        //                 .defaults(&[vec![true], vec![false; candidates.len() - 1]].concat())
+        //                 .interact()?
+        //                 .into_iter()
+        //                 .map(|idx| candidates[idx].to_owned())
+        //                 .collect::<Vec<proto::djtool::Track>>(),
+        //         ));
+        //     };
+        //     Ok::<_, anyhow::Error>((track, candidates))
+        //     // Ok(candidates)
+        //     // let download_track = candidates.first().ok_or(anyhow::anyhow!("no download"))?;
+        // })?;
+        // // println!("selected candidates: {}", selected.len());
+
+        // // create progress bars for all
+        // // let selected =
+        // let total = Arc::new(mp_clone.add(ProgressBar::new(selected.len() as u64)));
+        // OverallProgress::style(&total);
+        // total.tick();
+
+        // let tool = self.tool.clone();
+        // let handle = self.runtime.spawn(async move {
+        //     let res: Result<(), anyhow::Error> = async {
+        //         let sources = tool.sources.read().await;
+        //         let sinks = tool.sinks.read().await;
+        //         // let sinks = Arc::new(tool.sinks.read().await);
+        //         let source = &sources[&proto::djtool::Service::Spotify];
+
+        //         let filename =
+        //             utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
+        //         let temp_dir = TempDir::new(&filename)?;
+
+        //         // let sinks = tool.sinks.read().await;
+        //         let tracks = selected
+        //             .into_iter()
+        //             .map(|c| {
+        //                 let mp_clone = mp_clone.clone();
+        //                 let sinks = sinks.clone();
+        //                 let transcoder = tool.transcoder.clone();
+        //                 // let temp_dir_clone = temp_dir.clone();
+        //                 // let candidate_dir = temp_dir
+        //                 //     .path()
+        //                 //     .to_path_buf()
+        //                 //     .join(format!("candidate_utils::sanitize_filename(&filename));
+        //                 // fs::create_dir_all(candidate_dir).await?;
+        //                 let candidate_filename =
+        //                     utils::sanitize_filename(&format!("{} - {}", c.name, c.artist));
+        //                 // crate::debug!(&candidate_filename);
+
+        //                 let candidate_dir =
+        //                     TempDir::new_in(&temp_dir, &candidate_filename).unwrap();
+        //                 // crate::debug!(&candidate_dir);
+
+        //                 let total = total.clone();
+        //                 tokio::task::spawn(async move {
+        //                     let sink = &sinks[&proto::djtool::Service::Youtube];
+        //                     let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
+        //                     TrackDownloadProgress::style(&bar);
+        //                     bar.tick();
+
+        //                     let bar_clone = bar.clone();
+        //                     let downloaded = sink
+        //                         .download(
+        //                             &c,
+        //                             &candidate_dir
+        //                                 .path()
+        //                                 .join(format!("original_{}", &candidate_filename)),
+        //                             None,
+        //                             Some(Box::new(move |progress: download::DownloadProgress| {
+        //                                 bar_clone.set_message("downloading".to_string());
+        //                                 bar_clone.set_position(progress.downloaded as u64);
+        //                                 bar_clone.set_length(progress.total.unwrap() as u64);
+        //                                 bar_clone.tick();
+
+        //                                 // println!(
+        //                                 //     "downloaded: {} {:?}",
+        //                                 //     progress.downloaded,
+        //                                 //     progress.total.unwrap()
+        //                                 // );
+        //                                 // io::stdout().flush().unwrap();
+        //                                 // io::stderr().flush().unwrap();
+        //                             })),
+        //                         )
+        //                         .await?;
+        //                     // println!("download done");
+
+        //                     // let temp_dir_transcode = TempDir::new(&filename)?;
+        //                     // let mut transcoded_path = temp_dir_clone.path().join(&filename);
+        //                     let mut transcoded_path = candidate_dir
+        //                         .path()
+        //                         .join(format!("audio_{}", &candidate_filename));
+        //                     transcoded_path.set_extension("mp3");
+
+        //                     // let mut output_path = library_dir.join(&filename);
+        //                     // output_path.set_extension("mp3");
+
+        //                     // println!("transcoding to {}", transcoded_path.display());
+        //                     // let transcoded_path_clone = transcoded_path.to_owned();
+        //                     let options = transcode::TranscoderOptions::mp3();
+
+        //                     // bar.finish_and_clear();
+        //                     // mp_clone.remove(&bar);
+
+        //                     // let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
+        //                     TrackTranscodeProgress::style(&bar);
+        //                     bar.tick();
+
+        //                     let bar_clone = bar.clone();
+
+        //                     let res = tokio::task::spawn_blocking(move || {
+        //                         transcoder.transcode_blocking(
+        //                             &downloaded.output_path,
+        //                             &transcoded_path,
+        //                             Some(&options),
+        //                             &mut Box::new(move |progress: transcode::TranscodeProgress| {
+        //                                 bar_clone.set_message("transcoding".to_string());
+        //                                 bar_clone.set_position(progress.timestamp.as_secs());
+        //                                 bar_clone.set_length(progress.duration.as_secs());
+        //                                 bar_clone.tick();
+        //                                 // crate::debug!(progress);
+        //                             }),
+        //                         );
+        //                         Ok::<(), anyhow::Error>(())
+        //                     })
+        //                     .await?;
+        //                     bar.finish_and_clear();
+        //                     total.inc(1);
+        //                     Ok::<(), anyhow::Error>(())
+        //                 })
+        //             })
+        //             .collect::<Vec<tokio::task::JoinHandle<Result<()>>>>();
+
+        //         let downloaded = future::join_all(tracks).await;
+        //         total.finish_and_clear();
+        //         // transcode
+        //         // let library_dir = {
+        //         //     let config = self.config.read().await;
+        //         //     config.as_ref().map(|c| c.library.library_dir.to_owned())
+        //         // }
+        //         // .ok_or(anyhow::anyhow!("no library"))?;
+        //         Ok::<(), anyhow::Error>(())
+        //     }
+        //     .await;
+        //     res
+        // });
+
+        // // println!("rendering");
+        // mp.join_and_clear()?;
+        // // println!("rendering done");
+        // self.runtime.block_on(async move { handle.await? })
         // let playlist_stream = tool.all_playlists_stream(&user_id, &sources.deref());
         // let playlist_stream = match opts.limit {
         //     Some(limit) => playlist_stream.take(limit).into_inner(),
@@ -765,7 +1023,7 @@ impl<'a> CLI<'a> {
                     let playlist = playlist.ok_or(anyhow::anyhow!("no playlist found"))?;
                     let tracks_stream = source.user_playlist_tracks_stream(playlist)?;
                     tracks_stream
-                        .filter_map(|track: Result<proto::djtool::Track>| {
+                        .filter_map(|track: Result<proto::djtool::Track, _>| {
                             async {
                                 match track {
                                     Ok(track) => Some(track),

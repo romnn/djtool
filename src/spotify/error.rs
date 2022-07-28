@@ -1,10 +1,9 @@
-// use anyhow::Result;
-// use reqwest::{header::HeaderMap, Error as HttpError};
-use reqwest;
+use super::model;
+use super::proto;
+use crate::config::ConfigError;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum AuthError {
     #[error("missing client_id")]
     MissingClientID(),
@@ -12,26 +11,40 @@ pub enum AuthError {
     MissingUserID(),
     #[error("user must login at: {auth_url}")]
     RequireUserLogin { auth_url: reqwest::Url },
+    #[error("auth method \"`{0:?}`\"unsupported")]
+    Unsupported(Option<proto::djtool::spotify_user_login_callback::Method>),
 }
 
-#[derive(Debug, Error)]
-pub enum ConfigError {
-    #[error("failed to write: {0}")]
-    WriteError(anyhow::Error),
-    #[error("failed to read: {0}")]
-    ReadError(anyhow::Error),
+#[derive(thiserror::Error, Debug)]
+pub enum ApiError {
+    #[error("http error: `{0:?}`")]
+    Http(#[from] reqwest::Error),
+    #[error("url parse error: `{0:?}`")]
+    ParseError(#[from] url::ParseError),
+    #[error("invalid id: `{0:?}`")]
+    InvalidID(#[from] model::IdError),
+    #[error("invalid media type (neither track or episode)")]
+    InvalidMediaType,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("auth: {0}")]
-    Auth(AuthError),
+    Auth(#[from] AuthError),
     #[error("config: {0}")]
-    Config(ConfigError),
+    Config(#[from] ConfigError),
     #[error("bad url: {0}")]
-    BadUrl(url::ParseError),
+    BadUrl(#[from] url::ParseError),
     #[error("api request error: {0}")]
-    Api(reqwest::Error),
+    Api(#[from] ApiError),
+
+    #[error("not found")]
+    NotFound,
+
+    #[error("search result is not of type `{0:?}`")]
+    InvalidSearchResultType(model::SearchType),
+    #[error("unknown spotify error: `{0:?}`")]
+    Unknown(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 // #[derive(Debug, Error, Deserialize)]

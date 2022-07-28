@@ -12,6 +12,21 @@ use std::path::PathBuf;
 // #[derive(Debug, Clone)]
 // pub struct Config {
 // }
+#[derive(Parser, Debug, Clone)]
+pub struct TrackOptions {
+    #[clap(long = "track-id", alias = "id", env = "TRACK_ID")]
+    pub id: Option<String>,
+    #[clap(long = "name", env = "TRACK_NAME")]
+    pub name: Option<String>,
+    #[clap(long = "artist", env = "TRACK_ARTIST")]
+    pub artist: Option<String>,
+    #[clap(long = "source-limit", env = "TRACK_SOURCE_LIMIT")]
+    pub source_limit: Option<usize>,
+    #[clap(long = "sink-limit", env = "TRACK_SINK_LIMIT")]
+    pub sink_limit: Option<usize>,
+}
+
+
 pub fn human_duration(d: chrono::Duration) -> String {
     // let mut owned_string: String = "hello ".to_owned();
     // let mut res = String::new();
