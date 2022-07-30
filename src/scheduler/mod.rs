@@ -3,10 +3,16 @@ pub mod error;
 pub mod job;
 
 use async_trait::async_trait;
+use std::cell::RefCell;
+use std::pin::Pin;
+use std::rc::Rc;
+// use std::ops::Deref;
 // pub use builder::SchedulerBuilder;
 pub use error::{Error, ScheduleError};
 use futures::stream::{FuturesUnordered, StreamExt};
-use job::{IntoTask, Task};
+// use futures_util::{Stream, StreamExt};
+// use job::{IntoTask, Task};
+use job::{IntoTask, Task, TaskNode};
 use std::cmp::Eq;
 use std::collections::hash_map::{Entry, HashMap};
 use std::collections::HashSet;
@@ -16,16 +22,39 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[async_trait]
-pub trait Policy {
-    async fn schedule(&self) -> u32;
+pub trait Policy // <P, I, C, O, E>
+{
+    async fn arbitrate<'a, P, I, C, O, E>(
+        &self,
+        scheduler: &Scheduler<'a, P, I, C, O, E>,
+    ) -> Option<I>
+    where
+        P: Policy + Send + Sync,
+        C: Send + Sync + 'static,
+        O: Send + Sync + 'static,
+        E: 'static,
+        I: Clone + Eq + Hash + Send + Sync + std::fmt::Debug;
 }
 
 pub struct GreedyPolicy {}
 
+// <P, I, C, O, E>
+// <I, C, O, E>
 #[async_trait]
 impl Policy for GreedyPolicy {
-    async fn schedule(&self) -> u32 {
-        23
+    async fn arbitrate<'a, P, I, C, O, E>(
+        &self,
+        scheduler: &Scheduler<'a, P, I, C, O, E>,
+    ) -> Option<I>
+    where
+        P: Policy + Send + Sync,
+        C: Send + Sync + 'static,
+        O: Send + Sync + 'static,
+        E: 'static,
+        I: Clone + Eq + Hash + Send + Sync + std::fmt::Debug,
+    {
+        let ready = scheduler.ready().await;
+        ready.into_iter().next()
     }
 }
 
@@ -36,9 +65,11 @@ impl GreedyPolicy {
 }
 
 // #[derive(Debug)]
-pub struct Scheduler<'a, P, I, L, C, O, E>
+// pub struct Scheduler<'a, P, I, L, C, O, E>
+pub struct Scheduler<'a, P, I, C, O, E>
 where
-    P: Policy,
+    P: Policy + Send + Sync,
+    I: std::fmt::Debug,
     // F: Future<Output = Result<O, E>>,
 {
     // phantom1: std::marker::PhantomData<P>,
@@ -48,45 +79,113 @@ where
     // phantom5: std::marker::PhantomData<O>,
     // phantom6: std::marker::PhantomData<E>,
     // pool: FuturesUnordered<Box<dyn Future<Output = Result<O, E>>>,
-    pool: RwLock<FuturesUnordered<Box<dyn Future<Output = Result<O, E>>>>>,
+    // pool: RwLock<FuturesUnordered<Box<mut dyn Future<Output = Result<O, E>> + Send + Sync>>>,
+    pool: RwLock<FuturesUnordered<Pin<Box<dyn Future<Output = Result<(I, O), E>> + Send + Sync>>>>,
+    // pool: RwLock<FuturesUnordered<Pin<Box<dyn Future<Output = Result<O, E>>>>>>,
     // constraints: Vec<Box<dyn Fn(&Scheduler) -> bool>>,
     // arbitrator: Box<dyn Fn(&Scheduler) -> bool>,
     policy: P,
-    ctx_factory: Box<dyn FnMut() -> C + 'a>,
-    tasks: RwLock<HashMap<I, Task<I, L, C, O, E>>>,
+    ctx_factory: Box<dyn FnMut() -> C + Send + Sync + 'a>,
+    // ctx_factory: Box<dyn FnMut() -> C + 'a>,
+    schedule: RwLock<Schedule<I, C, O, E>>,
+    // schedule: RwLock<Schedule<I, L, C, O, E>>,
 }
 
 // type InnerGraph<I> = HashMap<I, HashSet<I>>;
 // type DAG<I> = Arc<RwLock<InnerGraph<I>>>;
 type DAG<I> = HashMap<I, HashSet<I>>;
 
-#[derive(Debug)]
-pub struct Schedule<I> {
-    ready_nodes: HashSet<I>,
+// #[derive(Debug)]
+// pub struct Schedule<I, L, C, O, E> {
+pub struct Schedule<I, C, O, E> {
+    // tasks: HashMap<I, Box<dyn Task<I, L, C, O, E>>>,
+    tasks: HashMap<I, Task<I, C, O, E>>,
+    // tasks: HashMap<I, Rc<RefCell<Task<I, C, O, E>>>>,
+    ready: HashSet<I>,
     deps: DAG<I>,
     reverse_deps: DAG<I>,
 }
 
-impl<I> Schedule<I>
-where
-    I: Clone + Eq + Hash,
-{
+// impl<I, L, C, O, E> Schedule<I, L, C, O, E> {
+impl<I, C, O, E> Schedule<I, C, O, E> {
     pub fn new() -> Self {
         Self {
-            ready_nodes: HashSet::new(),
+            ready: HashSet::new(),
             deps: HashMap::new(),
             reverse_deps: HashMap::new(),
+            tasks: HashMap::new(),
         }
     }
+}
 
+// impl<I, L, C, O, E> Schedule<I, L, C, O, E>
+impl<I, C, O, E> Schedule<I, C, O, E>
+where
+    I: Clone + Eq + Hash + std::fmt::Debug,
+{
+    // pub fn add_task<T: IntoTask<I, L, C, O, E>>(
+    pub fn completed(&mut self, id: I) -> Result<(), ScheduleError<I>> {
+        if let Some(dependants) = self.rev_deps.get(&id) {};
+        Ok(())
+        // .ok_or(UnsatisfiedDependencies(HashSet<I>)ScheduleError
+    }
+
+    // pub fn add_task<T: IntoTask<I, L, C, O, E>>(
+    pub fn add_task<T: IntoTask<I, C, O, E>>(&mut self, task: T) -> Result<(), ScheduleError<I>> {
+        let deps: DAG<I> = HashMap::new();
+        let mut seen = HashSet::<I>::new();
+        // let mut stack = Vec::<Box<dyn Task<I, L, C, O, E>>>::new();
+        // let mut stack = Vec::<TaskNode<I, L, C, O, E>>::new();
+        let mut stack = Vec::<TaskNode<I, C, O, E>>::new();
+        // Vec::<Task<I, L, C, O, E>>::new();
+
+        // let root = task.into_task();
+        // let root_id = root.id.clone();
+        // self.tasks.insert(root.id.clone(), task.into_task());
+        // stack.push(&self.tasks[&root_id]);
+        // stack.push(Box::new(task));
+        stack.push(Box::new(task).into_task());
+
+        while let Some(current) = stack.pop() {
+            // let current_task = current.into_task();
+            // let id = current.task.id();
+            seen.insert(current.task.id());
+            // let id = current.id();
+            let mut deps = deps.entry(current.task.id()).or_insert(HashSet::new());
+
+            // let current_id = current.id();
+            for dep in current.dependencies.into_iter() {
+                let dep_task = dep.into_task();
+                // let dep_task_id = dep_task.id.clone();
+                deps.insert(dep_task.task.id());
+                // self.tasks.insert(dep_task_id.clone(), dep_task);
+                if !seen.contains(&dep_task.task.id()) {
+                    stack.push(dep_task);
+                }
+            }
+            self.tasks.insert(
+                current.task.id(),
+                // Rc::new(RefCell::new(current.task)),
+                current.task,
+                // Task {
+                //     // move all but the dependencies
+                //     id: current.id(),
+                //     labels: current.labels,
+                //     task: current.task,
+                // },
+            );
+        }
+        self.extend(deps)?;
+        Ok(())
+    }
+}
+
+// impl<I, L, C, O, E> Schedule<I, L, C, O, E>
+impl<I, C, O, E> Schedule<I, C, O, E>
+where
+    I: Clone + Eq + Hash + std::fmt::Debug,
+{
     pub fn extend(&mut self, nodes: DAG<I>) -> Result<(), ScheduleError<I>> {
-        // think: new nodes must be disjoint components of a graph
-        // cannot have dependencies to
-        // new nodes must not exist before but can have dependencies to existing nodes
-        // assume node exists already
-        // new node: always okay to insert (can have existing dep)
-        // existing node: only okay if does not have any new dependencies, since it might have been
-        // scheduled already
         for (node, new_deps) in nodes.into_iter() {
             match self.deps.entry(node.clone()) {
                 Entry::Occupied(_) => {
@@ -105,18 +204,9 @@ where
                 }
             }?;
 
-            // if let Err(OccupiedError { value }) = self.deps.try_insert(node.clone(), new_deps) {
-            //     // if node existed, check if there are any new dependencies
-            //     if !diff.is_empty() {
-            //         return Err(ScheduleError::UnsatisfiedDependencies(diff));
-            //     }
-            // }
-            // let mut deps = self.deps.entry(node.clone()).or_insert(HashSet::new());
-            // deps.extend(new_deps);
-
             let deps = self.deps.get(&node).unwrap();
             if deps.is_empty() {
-                self.ready_nodes.insert(node.clone());
+                self.ready.insert(node.clone());
             }
 
             // this should be fine?
@@ -155,9 +245,9 @@ where
     }
 
     pub fn schedule(&mut self, node: I) -> Result<(), ScheduleError<I>> {
-        self.ready_nodes.remove(&node);
+        self.ready.remove(&node);
         let next_nodes = self.remove(&node)?;
-        self.ready_nodes.extend(next_nodes);
+        self.ready.extend(next_nodes);
         Ok(())
     }
 }
@@ -166,12 +256,15 @@ where
 // where
 //     P: Policy,
 //     F: Future<Output = Result<O, E>>,
-pub type GreedyScheduler<'a, I, L, O, E> = Scheduler<'a, GreedyPolicy, I, L, (), O, E>;
+// pub type GreedyScheduler<'a, I, L, O, E> = Scheduler<'a, GreedyPolicy, I, L, (), O, E>;
+pub type GreedyScheduler<'a, I, O, E> = Scheduler<'a, GreedyPolicy, I, (), O, E>;
 
-impl<'a, I, L, O, E> Scheduler<'a, GreedyPolicy, I, L, (), O, E>
+// impl<'a, I, L, O, E> Scheduler<'a, GreedyPolicy, I, L, (), O, E>
+impl<'a, I, O, E> Scheduler<'a, GreedyPolicy, I, (), O, E>
 // impl Scheduler<'static, GreedyPolicy, _, _, _, (), _, _>
-// where
-//     F: Future<Output = Result<O, E>>,
+where
+    I: std::fmt::Debug,
+    //     F: Future<Output = Result<O, E>>,
 {
     pub fn new() -> Self
 // where
@@ -188,11 +281,12 @@ impl<'a, I, L, O, E> Scheduler<'a, GreedyPolicy, I, L, (), O, E>
             // constraints: Vec::new(),
             policy: GreedyPolicy::new(),
             ctx_factory: Box::new(|| ()),
-            tasks: RwLock::new(HashMap::new()),
+            // tasks: RwLock::new(HashMap::new()),
+            schedule: RwLock::new(Schedule::new()),
             // <I, Task<I, L, C, O, E>>>,
             // deps: InnerGraph::<I>::new(),
             // reverse_deps: InnerGraph::<I>::new(),
-            // ready_nodes: HashSet::<I>::new(),
+            // ready: HashSet::<I>::new(),
         }
     }
 }
@@ -244,48 +338,126 @@ impl<'a, I, L, O, E> Scheduler<'a, GreedyPolicy, I, L, (), O, E>
 // where
 //     P: Policy,
 
-impl<'a, P, I, L, C, O, E> Scheduler<'a, P, I, L, C, O, E>
+// impl<'a, P, I, L, C, O, E> Scheduler<'a, P, I, L, C, O, E>
+impl<'a, P, I, C, O, E> Scheduler<'a, P, I, C, O, E>
 where
-    P: Policy,
+    P: Policy + Send + Sync,
     // F: Future<Output = Result<O, E>>,
-    I: Copy + Hash + Eq,
+    C: Send + Sync + 'static,
+    O: Send + Sync + 'static,
+    E: 'static,
+    I: Clone + Eq + Hash + Send + Sync + std::fmt::Debug,
 {
-    pub async fn add_task<J: IntoTask<I, L, C, O, E>>(&self, task: J) -> Result<(), Error<E>> {
+    // pub async fn add_task<T: IntoTask<I, L, C, O, E>>(&self, task: T) -> Result<(), Error<E, I>> {
+    pub async fn add_task<T: IntoTask<I, C, O, E>>(&self, task: T) -> Result<(), Error<E, I>> {
         // add to graph here
-        let task = task.into_task();
-        let id = task.id;
-        let mut tasks = self.tasks.write().await;
-        tasks.insert(id, task);
+        // let task = task.into_task();
+        let mut schedule = self.schedule.write().await;
+        schedule.add_task(task)?;
+        // let mut tasks = self.tasks.write().await;
+        // tasks.insert(task.id.clone(), task);
 
         // let mut deps = InnerGraph::<I>::default();
         // let mut reverse_deps = InnerGraph::<I>::default();
-        // let mut ready_nodes = HashSet::<I>::default();
+        // let mut ready= HashSet::<I>::default();
 
         Ok(())
     }
 
-    pub async fn shutdown(&self) -> Result<(), Error<E>> {
+    pub async fn shutdown(&self) -> Result<(), Error<E, I>> {
         Ok(())
     }
 
-    pub async fn trace(&self) -> Result<usize, Error<E>> {
-        // let pool = self.pool.read().await;
-        // Ok(pool.len())
-        Ok(0)
+    pub async fn trace(&self) -> Result<usize, Error<E, I>> {
+        let pool = self.pool.read().await;
+        Ok(pool.len())
+        // Ok(0)
     }
 
-    pub async fn running(&self) -> Result<usize, Error<E>> {
-        // let pool = self.pool.read().await;
-        // Ok(pool.len())
-        Ok(0)
+    pub async fn running(&self) -> usize {
+        let pool = self.pool.read().await;
+        pool.len()
+        // Ok(0)
     }
 
-    pub async fn run(&self) -> Result<(), Error<E>> {
-        // todo
+    // pub async fn mark_complete(&self) -> usize {
+    //     let pool = self.pool.read().await;
+    //     pool.len()
+    //     // Ok(0)
+    // }
+
+    // pub async fn ready(&self) -> Result<HashSet<I>, Error<E, I>> {
+    pub async fn ready(&self) -> HashSet<I> {
+        // let scheduler = self.scheduler.read().await;
+        let schedule = self.schedule.read().await;
+        // &self.schedule.read().await.ready
+        // scheduler.ready.map(|id: I| s
+        schedule.ready.iter().cloned().collect()
+        // .iter().cloned().collect()
+        // Ok(schedule.ready.iter().cloned().collect())
+        // Ok(0)
+    }
+
+    /// Marks a job as completed and updates the ready queue with any new jobs that
+    /// are now ready to execute as a result.
+    async fn mark_complete(&mut self, id: I, res: Result<O, E>) {
+        // self.results
+        // self.jobs[job_idx].state = match res {
+        //     Ok(outcome) => State::Success(outcome),
+        //     Err(err) => State::Failed(err),
+        // };
+
+        let schedule = self.schedule.write().await;
+        schedule.completed(id);
+        // for dep_idx in &self.jobs[job_idx].dependents {
+        //     let is_ready = self.jobs[*dep_idx]
+        //         .dependencies
+        //         .iter()
+        //         .all(|i| self.jobs[*i].state.success());
+        //     if is_ready {
+        //         self.ready.push(*dep_idx);
+        //     }
+        // }
+    }
+    pub async fn run(&mut self) -> Result<(), Error<E, I>> {
+        loop {
+            while let Some(id) = self.policy.arbitrate(&self).await {
+                let ctx = (self.ctx_factory)();
+                let mut schedule = self.schedule.write().await;
+                // this task is now owned
+                let mut task = schedule
+                    .tasks
+                    .remove(&id)
+                    .ok_or(ScheduleError::NoTask(id.clone()))?;
+
+                let mut pool = self.pool.write().await;
+                pool.push(Box::pin(async move {
+                    // todo: get the dependencies results
+                    let id = task.id();
+                    let res = (task.task)(ctx, vec![]).await;
+                    (id, res)
+                }));
+            }
+
+            if self.running().await == 0 {
+                // run exists when all tasks are complete
+                break;
+            }
+
+            match self.pool.write().await.next().await {
+                Some((id, res)) => {
+                    self.mark_complete(id, res).await;
+                }
+                _ => {
+                    panic!("job pool unexpectedly empty");
+                }
+            }
+        }
+
         Ok(())
     }
 
-    pub async fn start(&self) -> Result<(), Error<E>> {
+    pub async fn start(&self) -> Result<(), Error<E, I>> {
         let handle = tokio::spawn(async move {
             loop {
                 // replace with constraint
@@ -364,16 +536,17 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use std::future::Future;
+    use std::pin::Pin;
     // use super::builder::SchedulerBUilder*;
 
-    struct CustomPolicy {}
+    // struct CustomPolicy {}
 
-    #[async_trait]
-    impl Policy for CustomPolicy {
-        async fn schedule(&self) -> u32 {
-            23
-        }
-    }
+    // #[async_trait]
+    // impl Policy for CustomPolicy {
+    //     async fn schedule(&self) -> u32 {
+    //         23
+    //     }
+    // }
 
     #[derive(thiserror::Error, Debug)]
     enum CustomError {
@@ -381,14 +554,23 @@ mod tests {
         Test,
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Eq, PartialEq, Hash, Debug)]
     enum CustomLabel {
         A,
         B,
         C,
     }
 
-    type CustomId = usize;
+    #[derive(Clone, Hash, Eq, PartialEq, Debug)]
+    struct CustomId<L>
+    where
+        L: Clone + Hash + Eq + PartialEq,
+    {
+        id: usize,
+        labels: Vec<L>,
+    }
+
+    // type CustomId = usize;
     type CustomResult = usize;
 
     // #[derive(Debug)]
@@ -403,18 +585,49 @@ mod tests {
 
     // #[derive(Debug)]
     struct CustomTask {
-        id: CustomId,
-        labels: Vec<CustomLabel>,
-        dependencies: Vec<Box<dyn IntoTask<CustomId, CustomLabel, (), CustomResult, CustomError>>>,
+        id: CustomId<CustomLabel>,
+        // labels: Vec<CustomLabel>,
+        dependencies: Vec<Box<dyn IntoTask<CustomId<CustomLabel>, (), CustomResult, CustomError>>>,
     }
 
-    impl IntoTask<CustomId, CustomLabel, (), CustomResult, CustomError> for CustomTask {
-        fn into_task(self) -> Task<CustomId, CustomLabel, (), CustomResult, CustomError> {
-            Task {
-                id: self.id,
-                labels: self.labels,
-                dependencies: self.dependencies,
-                task: Box::new(move |ctx, prereqs| Box::pin(async move { Ok(self.id) })),
+    #[async_trait]
+    impl IntoTask<CustomId<CustomLabel>, (), CustomResult, CustomError> for CustomTask {
+        // fn id(&self) -> CustomId {
+        //     self.id
+        // }
+
+        // fn labels(&self) -> &Vec<CustomLabel> {
+        //     &self.labels
+        // }
+
+        // fn dependencies(
+        //     &self,
+        // ) -> &Vec<Box<dyn Task<CustomId, CustomLabel, (), CustomResult, CustomError>>> {
+        //     self.dependencies.cloned()
+        // }
+
+        // async fn task(
+        //     self,
+        //     ctx: (),
+        //     prereqs: Vec<CustomResult>,
+        // ) -> Pin<Box<dyn Future<Output = Result<CustomResult, CustomError>> + Send + Sync>>
+        // {
+        //     Box::pin(async move { Ok(12) })
+        // }
+
+        fn into_task(
+            self: Box<Self>,
+            // self: Self,
+        ) -> TaskNode<CustomId<CustomLabel>, (), CustomResult, CustomError> {
+            let id = self.id.id.clone();
+            TaskNode {
+                task: Task {
+                    id: self.id,
+                    // labels: self.labels, // .iter().cloned().collect(),
+                    task: Box::new(move |ctx, prereqs| Box::pin(async move { Ok(id) })),
+                },
+                dependencies: self.dependencies, // .iter().cloned().collect(),
+                                                 // dependencies: vec![],
             }
         }
     }
@@ -452,19 +665,16 @@ mod tests {
         //     let running = scheduler.running().await?;
         //     Ok::<(), anyhow::Error>(())
         // })?;
-        let scheduler: GreedyScheduler<
-            // dyn Future<Output = Result<CustomResult, CustomError>>,
-            CustomId,
-            CustomLabel,
-            CustomResult,
-            CustomError,
-        > = Scheduler::new();
+        let mut scheduler: GreedyScheduler<CustomId<CustomLabel>, CustomResult, CustomError> =
+            Scheduler::new();
         // let running = scheduler.running().await?;
 
         scheduler
             .add_task(CustomTask {
-                id: 0,
-                labels: vec![],
+                id: CustomId {
+                    id: 0,
+                    labels: vec![],
+                },
                 dependencies: vec![],
             })
             .await?;
@@ -476,6 +686,7 @@ mod tests {
         // let (trace, err) = TestPlan::new(vec![(true, vec![])]).trace().await;
         // assert!(err.is_none());
         // assert_eq!(trace[0], Some(0));
+        assert_eq!(0, 1);
         Ok(())
     }
 }

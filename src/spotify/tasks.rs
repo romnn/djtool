@@ -1,4 +1,5 @@
-use crate::scheduler::job::{IntoTask, Task, TaskFun};
+// use crate::scheduler::job::{IntoTask, Task, TaskFun};
+// use crate::scheduler::job::Task;
 use crate::scheduler::Policy;
 use async_trait::async_trait;
 use futures_util::FutureExt;
@@ -56,47 +57,47 @@ pub(super) struct DownloadSpotifyTrack {
 //     }
 // }
 
-impl IntoTask<TaskId, TaskLabel, (), TaskResult, Error> for DownloadSpotifyTrack
-// where
-//     D: IntoTask<I, L, C, O, E>,
-{
-    // fn id(&self) -> I {
-    //     // must return a unique id for each task here
+// impl IntoTask<TaskId, TaskLabel, (), TaskResult, Error> for DownloadSpotifyTrack
+// // where
+// //     D: IntoTask<I, L, C, O, E>,
+// {
+//     fn id(&self) -> TaskId {
+//         // must return a unique id for each task here
+//         TaskId::Test
+//     }
 
-    // }
+//     fn into_task(self) -> Task<TaskId, TaskLabel, (), TaskResult, Error> {
+//         // let task: TaskFun<(), TaskResult, Error> = Box::new(|ctx, prereqs| {
+//         //     Box::pin(async move {
+//         //         // copy the final result out
+//         //         Ok(TaskResult::Test)
+//         //     })
+//         // });
+//         let dependencies = vec![
+//             // add dependencies
+//         ];
+//         Task {
+//             id: TaskId::Test,
+//             labels: vec![TaskLabel::Download],
+//             dependencies,
+//             task: Box::new(|ctx, prereqs| {
+//                 Box::pin(async move {
+//                     // copy the final result out
+//                     Ok(TaskResult::Test)
+//                 })
+//             }),
+//         }
+//     }
 
-    fn into_task(self) -> Task<TaskId, TaskLabel, (), TaskResult, Error> {
-        // let task: TaskFun<(), TaskResult, Error> = Box::new(|ctx, prereqs| {
-        //     Box::pin(async move {
-        //         // copy the final result out
-        //         Ok(TaskResult::Test)
-        //     })
-        // });
-        let dependencies = vec![
-            // add dependencies
-        ];
-        Task {
-            id: TaskId::Test,
-            labels: vec![TaskLabel::Download],
-            dependencies,
-            task: Box::new(|ctx, prereqs| {
-                Box::pin(async move {
-                    // copy the final result out
-                    Ok(TaskResult::Test)
-                })
-            }),
-        }
-    }
-
-    // fn dependencies(&self) -> Vec<Dependency> {
-    //     let mut dep = Dependency::new(&self);
-    //     // for each candidate, transcode it
-    //     // self.candidate, candidate_dir.path().join(format!("original_{}", &candidate_filename)),
-    //     // dep.add_dep();
-    //     dep
-    //     // subdep.id.clone());
-    // }
-}
+//     // fn dependencies(&self) -> Vec<Dependency> {
+//     //     let mut dep = Dependency::new(&self);
+//     //     // for each candidate, transcode it
+//     //     // self.candidate, candidate_dir.path().join(format!("original_{}", &candidate_filename)),
+//     //     // dep.add_dep();
+//     //     dep
+//     //     // subdep.id.clone());
+//     // }
+// }
 
 // impl IntoTask<(), TaskResult, Error> for DownloadFileTask {
 //     fn into_task(&self) -> Task<(), TaskResult, Error> {
