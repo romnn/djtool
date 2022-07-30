@@ -20,12 +20,19 @@ pub struct TrackOptions {
     pub name: Option<String>,
     #[clap(long = "artist", env = "TRACK_ARTIST")]
     pub artist: Option<String>,
-    #[clap(long = "source-limit", env = "TRACK_SOURCE_LIMIT")]
+    #[clap(
+        long = "source-limit",
+        help = "maximum number of source candidates to consider",
+        env = "TRACK_SOURCE_LIMIT"
+    )]
     pub source_limit: Option<usize>,
-    #[clap(long = "sink-limit", env = "TRACK_SINK_LIMIT")]
+    #[clap(
+        long = "sink-limit",
+        help = "maximum number of sink candidates to consider",
+        env = "TRACK_SINK_LIMIT"
+    )]
     pub sink_limit: Option<usize>,
 }
-
 
 pub fn human_duration(d: chrono::Duration) -> String {
     // let mut owned_string: String = "hello ".to_owned();
@@ -109,5 +116,5 @@ pub struct BackendOpts {
 #[derive(Parser, Debug, Clone)]
 pub struct YoutubeOpts {
     // #[clap(short = 'd', long = "device")]
-    // pub device: Option<String>,
+// pub device: Option<String>,
 }

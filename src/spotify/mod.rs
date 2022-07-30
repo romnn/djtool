@@ -3,6 +3,7 @@ pub mod cli;
 pub mod config;
 pub mod error;
 pub mod model;
+pub mod tasks;
 pub mod stream;
 
 use super::config::Persist;

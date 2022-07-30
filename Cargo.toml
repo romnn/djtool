@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 # edition = "2018"
 
+[lib]
 # Disable doctests as a workaround for https://github.com/rust-lang/rust-bindgen/issues/1313
 doctest = false
+
 
 [profile.release]
 # opt-level = 's'  # Optimize for size.
@@ -41,6 +43,7 @@ futures = "0.3.17"
 num_cpus = "1.13.0"
 num = "0.4"
 http = "0.2.5"
+downcast-rs = "1.2"
 tempdir = "0.3.7"
 libc = "0.2"
 bitflags = "1.2"

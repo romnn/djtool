@@ -68,8 +68,8 @@ pub struct TrackDownloadOptions {
     download_opts: DownloadOptions,
     #[clap(long = "choose", help = "manually choose the download candidate")]
     pub choose: bool,
-    #[clap(long = "limit", help = "maximum number of candidates to consider")]
-    pub limit: Option<usize>,
+    // #[clap(long = "limit", help = "maximum number of candidates to consider")]
+    // pub limit: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -507,15 +507,13 @@ impl<'a> CLI<'a> {
 
         let selected: Vec<(proto::djtool::Track, proto::djtool::Track)> =
             self.runtime.block_on(async move {
-                // let candidate_stream: Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send>> = self.runtime.block_on(async move {
-                // find the spotify track
                 let sources = tool.sources.read().await;
                 let sinks = tool.sinks.read().await;
 
                 let source = &sources[&source_id];
                 let sink = &sinks[&sink_id];
 
-                //         // let mut track = None;
+                // let source_limit = 
                 let source_track_stream: Pin<
                     Box<dyn Stream<Item = Result<proto::djtool::Track, _>>>,
                 > = if let Some(ref track_id) = track_opts.common.id {
@@ -523,51 +521,30 @@ impl<'a> CLI<'a> {
                         .track_by_id(track_id)
                         .await
                         .and_then(|track| track.ok_or(source::Error::NotFound));
-                    // Box::pin(stream!(track).flat_map(|track| track))
-                    // .filter_map(|track| async {track})
-                    // stream::iter(vec![track].into_iter().filter_map(|track| track)).boxed()
                     stream::iter(vec![track]).boxed()
-                    // .ok_or(anyhow::anyhow!("no track found")))
                 } else if let Some(ref track_name) = track_opts.common.name {
-                    // this should be a stream
-                    // if choose, then allow the user to select the correct track, else take the first
-                    // 2? hits
                     let query = source::SearchQuery::track(track_name, None);
-                    source.search_stream(query, Box::new(|progress| {}), Some(3))
+                    source.search_stream(query, Box::new(|progress| {}), Some(track_opts.common.source_limit.unwrap_or(3)))
                 } else {
                     stream::empty().boxed()
-                    // Box::pin(stream::empty())
                 };
 
-                //         // let track = source.track_by_id(&track_opts.id.unwrap()).await?;
-                //         // let track = track.ok_or(anyhow::anyhow!("no track found"))?;
-                //         // println!("track: {:?}", track);
-
-                //         // let title = track.name.to_owned();
-                //         // let artist = track.artist.to_owned();
-                //         // let filename_clone = filename.clone();
-                //         // let filename = "test".to_string();
-                //         // println!("filename: {}", filename);
-
-                //         // let sinks_lock = sinks_lock.clone();
-
-                //         // todo: make this a stream so it can be intertwined with the track by name stream for
-                //         // letting the user make a
-                //         // let candidate_stream = sink
                 let sink_track_stream = source_track_stream
                     .filter_map(|track| async move { track.ok() })
                     .flat_map(move |track| {
+                        let sink_limit = track_opts.common.sink_limit.unwrap_or_else(|| if track_opts.common.id.is_some() { 10 } else { 3 });
                         sink.candidates_stream(
                             &track,
                             Box::new(|progress: sink::QueryProgress| {}),
-                            Some(dl_opts.limit.unwrap_or(10)),
+                            Some(sink_limit),
                         )
                         .map(move |candidate| (track.clone(), candidate))
                     });
+
                 let candidates = sink_track_stream
                     .collect::<Vec<(proto::djtool::Track, proto::djtool::Track)>>()
                     .await;
-                // println!("found {} candidates", selected.len());
+                println!("found {} candidates", candidates.len());
 
                 // let user choose
                 if dl_opts.choose {
@@ -587,15 +564,9 @@ impl<'a> CLI<'a> {
                             .collect::<Vec<(proto::djtool::Track, proto::djtool::Track)>>();
                 };
 
-                // Ok::<_, anyhow::Error>((track, selected))
-                // create total progress bar
-                // Ok::<_, anyhow::Error>(Box::pin(candidates))
-                // Ok::<_, anyhow::Error>(Box::pin(candidates))
-                // Ok::<_, io::Error>(candidates)
                 candidates
-                // vec![]
             });
-        // println!("selected candidates: {}", selected.len());
+        println!("selected {} candidates", selected.len());
 
         let total = Arc::new(mp_clone.add(ProgressBar::new(selected.len() as u64)));
         OverallProgress::style(&total);
@@ -607,6 +578,27 @@ impl<'a> CLI<'a> {
                 let sources = tool.sources.read().await;
                 let sinks = tool.sinks.read().await;
                 let source = &sources[&source_id];
+
+                // todo: add what files to downlaod
+                // - youtube track, spotify preview, spotify artwork
+                // add what files to transcode
+                // - high quality version of youtube, low quality of preview and youtube
+                // add what files to compare with what file
+                // - compare all low quality youtube files with the low quality preview
+                // what files to add id3 metadata
+                // - highest match youtube version
+                // what files to export 
+                // - highest quality youtube video with id3
+                //
+                // do this in a generic DAG structure
+                // task items can be asynchronously added to this processing dag
+                // scheduler handles scheduling at most x downloads / transcodes / id3 metadata
+                // all paths etc should be known in advance
+                // maybe difficult to drive the progress bars like this?
+                // tasks of the same group must be given the same progress bar, but then how to
+                // deal with multiple tasks reusing the same progress bar?
+                // need a wrapper for each group that keeps track of the different task progresses
+                // and handles displaying the longest running task
 
                 // let sinks = tool.sinks.read().await;
                 let tracks = selected

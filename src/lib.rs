@@ -18,6 +18,7 @@ pub mod spotify;
 pub mod transcode;
 pub mod utils;
 pub mod youtube;
+pub mod scheduler;
 
 use anyhow::Result;
 use config::Persist;

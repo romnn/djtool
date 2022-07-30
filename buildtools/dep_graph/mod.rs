@@ -22,35 +22,6 @@ use std::sync::{
 type InnerGraph<I> = HashMap<I, HashSet<I>>;
 type Graph<I> = Arc<RwLock<InnerGraph<I>>>;
 
-// #[derive(Debug)]
-// pub enum DepGraphError {
-//     CloseNodeError(String, &'static str),
-//     /// The list of dependencies is empty
-//     EmptyListError,
-//     IteratorDropped,
-//     NoAvailableNodeError,
-//     ResolveGraphError(&'static str),
-// }
-
-// impl fmt::Display for DepGraphError {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             Self::CloseNodeError(name, reason) => {
-//                 write!(f, "Failed to close node {}: {}", name, reason)
-//             }
-//             Self::EmptyListError => write!(f, "The dependency list is empty"),
-//             Self::IteratorDropped => write!(
-//                 f,
-//                 "The iterator attached to the coordination thread dropped"
-//             ),
-//             Self::NoAvailableNodeError => write!(f, "No node are currently available"),
-//             Self::ResolveGraphError(reason) => write!(f, "Failed to resolve the graph: {}", reason),
-//         }
-//     }
-// }
-
-// impl error::Error for DepGraphError {}
-
 #[derive(Clone, Debug)]
 pub struct Dependency<I>
 where
@@ -114,6 +85,7 @@ where
         })
     }
 
+    /// set of all recursive dependencies for node
     pub fn reacheable(&self, node: &I) -> HashSet<I> {
         let mut seen = HashSet::<I>::new();
         let mut stack = Vec::<I>::new();
@@ -178,13 +150,29 @@ where
 
             for node_dep in node.deps() {
                 if !reverse_deps.contains_key(node_dep) {
-                    let mut dep_reverse_deps = HashSet::new();
-                    dep_reverse_deps.insert(node.id().clone());
-                    reverse_deps.insert(node_dep.clone(), dep_reverse_deps.clone());
-                } else {
-                    let dep_reverse_deps = reverse_deps.get_mut(node_dep).unwrap();
-                    dep_reverse_deps.insert(node.id().clone());
+                    reverse_deps.insert(
+                        node_dep.clone(),
+                        HashSet::from_iter(vec![node.id().clone()]),
+                    );
                 }
+
+                // if !reverse_deps.contains_key(node_dep) {
+                //     // let mut dep_reverse_deps = HashSet::new();
+                //     // dep_reverse_deps.insert(node.id().clone());
+                //     reverse_deps.insert(
+                //         node_dep.clone(),
+                //         HashSet::from_iter(vec![node.id().clone()]),
+                //     );
+                //     // dep_reverse_deps.clone());
+                // } else {
+                //     let dep_reverse_deps = reverse_deps.get_mut(node_dep).unwrap();
+                //     dep_reverse_deps.insert(node.id().clone());
+                // }
+                // let dep_reverse_deps = reverse_deps.get_mut(node_dep).unwrap();
+                reverse_deps
+                    .get_mut(node_dep)
+                    .unwrap()
+                    .insert(node.id().clone());
             }
         }
 
