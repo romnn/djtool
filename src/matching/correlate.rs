@@ -146,52 +146,52 @@ mod tests {
         assert_abs_diff_eq!(peak.0 as f32, 400.0f32, epsilon = 1.0);
     }
 
-    #[test]
-    fn test_correlation_for_file() {
-        let start = Instant::now();
-        let total_bytes = include_bytes!("../../experimental/audio-samples/muse_uprising.mp3");
-        let total = Cursor::new(total_bytes.as_ref());
-        let total_source = Decoder::new(total).unwrap().convert_samples::<f32>();
+    // #[test]
+    // fn test_correlation_for_file() {
+    //     let start = Instant::now();
+    //     let total_bytes = include_bytes!("../../experimental/audio-samples/muse_uprising.mp3");
+    //     let total = Cursor::new(total_bytes.as_ref());
+    //     let total_source = Decoder::new(total).unwrap().convert_samples::<f32>();
 
-        let preview_bytes = include_bytes!("../../experimental/audio-samples/muse_preview.mp3");
-        let preview = Cursor::new(preview_bytes.as_ref());
-        let preview_source = Decoder::new(preview).unwrap().convert_samples::<f32>();
+    //     let preview_bytes = include_bytes!("../../experimental/audio-samples/muse_preview.mp3");
+    //     let preview = Cursor::new(preview_bytes.as_ref());
+    //     let preview_source = Decoder::new(preview).unwrap().convert_samples::<f32>();
 
-        assert!(total_source.sample_rate() == preview_source.sample_rate());
-        println!("decoded in {:?}", start.elapsed());
+    //     assert!(total_source.sample_rate() == preview_source.sample_rate());
+    //     println!("decoded in {:?}", start.elapsed());
 
-        let start = Instant::now();
-        let within_sample_rate = total_source.sample_rate();
-        let within_channels = total_source.channels();
-        let within: Vec<f32> = total_source.collect();
-        let (r, c) = (
-            within.len() / (within_channels as usize),
-            within_channels as usize,
-        );
-        let mut within: Array2<f32> = Array::from_iter(within).into_shape([r, c]).unwrap();
-        within.par_mapv_inplace(|v| v.abs());
-        let within = Zip::from(within.axis_iter(Axis(0)))
-            .par_map_collect(|row| row.iter().fold(0f32, |acc, v| acc.max(*v)));
-        println!("within done in {:?}", start.elapsed());
+    //     let start = Instant::now();
+    //     let within_sample_rate = total_source.sample_rate();
+    //     let within_channels = total_source.channels();
+    //     let within: Vec<f32> = total_source.collect();
+    //     let (r, c) = (
+    //         within.len() / (within_channels as usize),
+    //         within_channels as usize,
+    //     );
+    //     let mut within: Array2<f32> = Array::from_iter(within).into_shape([r, c]).unwrap();
+    //     within.par_mapv_inplace(|v| v.abs());
+    //     let within = Zip::from(within.axis_iter(Axis(0)))
+    //         .par_map_collect(|row| row.iter().fold(0f32, |acc, v| acc.max(*v)));
+    //     println!("within done in {:?}", start.elapsed());
 
-        let start = Instant::now();
-        let find_sample_rate = preview_source.sample_rate();
-        let find_channels = preview_source.channels();
-        let find: Vec<f32> = preview_source.collect();
-        let (r, c) = (
-            find.len() / (find_channels as usize),
-            find_channels as usize,
-        );
-        let mut find: Array2<f32> = Array::from_iter(find).into_shape([r, c]).unwrap();
-        find.par_mapv_inplace(|v| v.abs());
-        let find = Zip::from(find.axis_iter(Axis(0)))
-            .par_map_collect(|row| row.iter().fold(0f32, |acc, v| acc.max(*v)));
-        println!("find done in {:?}", start.elapsed());
+    //     let start = Instant::now();
+    //     let find_sample_rate = preview_source.sample_rate();
+    //     let find_channels = preview_source.channels();
+    //     let find: Vec<f32> = preview_source.collect();
+    //     let (r, c) = (
+    //         find.len() / (find_channels as usize),
+    //         find_channels as usize,
+    //     );
+    //     let mut find: Array2<f32> = Array::from_iter(find).into_shape([r, c]).unwrap();
+    //     find.par_mapv_inplace(|v| v.abs());
+    //     let find = Zip::from(find.axis_iter(Axis(0)))
+    //         .par_map_collect(|row| row.iter().fold(0f32, |acc, v| acc.max(*v)));
+    //     println!("find done in {:?}", start.elapsed());
 
-        println!("within: {} seconds", within.len() as u32 / find_sample_rate);
-        println!("find: {} seconds", find.len() as u32 / find_sample_rate);
-        let (correlation, peak) = correlate(&within, &find);
-        let offset = peak.0 as f32 / find_sample_rate as f32;
-        assert_abs_diff_eq!(offset, 147.0, epsilon = 1.0);
-    }
+    //     println!("within: {} seconds", within.len() as u32 / find_sample_rate);
+    //     println!("find: {} seconds", find.len() as u32 / find_sample_rate);
+    //     let (correlation, peak) = correlate(&within, &find);
+    //     let offset = peak.0 as f32 / find_sample_rate as f32;
+    //     assert_abs_diff_eq!(offset, 147.0, epsilon = 1.0);
+    // }
 }
