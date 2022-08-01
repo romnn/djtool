@@ -15,10 +15,32 @@ use warp::{Filter, Rejection, Reply};
 #[cfg(debug_assertions)]
 #[macro_export]
 macro_rules! debug {
-    ($x:expr) => {
-        dbg!($x)
+    () => {
+        eprintln!("[{}:{}][{}]",
+          file!(), line!(), chrono::Local::now().format("%H:%M:%S"));
+    };
+    ($val:expr $(,)?) => {
+        match $val {
+            tmp => {
+                eprintln!("[{}:{}][{}] {} = {:#?}",
+                    file!(), line!(),
+                    chrono::Local::now().format("%H:%M:%S"), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($($val:expr),+ $(,)?) => {
+        ($($crate::debug!($val)),+,)
     };
 }
+
+// #[cfg(debug_assertions)]
+// #[macro_export]
+// macro_rules! debug {
+//     ($x:expr) => {
+//         dbg!($x)
+//     };
+// }
 
 #[cfg(not(debug_assertions))]
 #[macro_export]

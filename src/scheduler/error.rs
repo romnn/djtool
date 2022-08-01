@@ -1,16 +1,29 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+#[derive(thiserror::Error, Clone, Debug)]
+pub enum TaskError<I, E>
+where
+    I: Clone + std::fmt::Debug,
+    E: Clone + std::fmt::Debug,
+{
+    #[error("task failed: `{0:?}`")]
+    Failed(E),
+
+    #[error("task not found: `{0:?}`")]
+    NoTask(I),
+
+    #[error("preconditions not met: `{0:?}`")]
+    Precondition(I),
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error<E, I>
 where
     I: std::fmt::Debug,
-    // pub enum Error<'a, E>
-    // where
-    //     E: std::error::Error,
 {
     #[error("invalid configuration: `{0}`")]
     InvalidConfiguration(String),
-    // InvalidConfiguration(&'a str),
+
     #[error("some tasks failed")]
     Failed(Vec<E>),
 
@@ -26,9 +39,9 @@ where
     #[error("dependency cycle detected")]
     Cycle,
 
-    #[error("dependency cycle detected")]
-    UnsatisfiedDependencies(HashSet<I>),
+    #[error("new dependencies: `{0:?}`")]
+    NewDependencies(HashSet<I>),
 
-    #[error("task does not exist: `{0:?}`")]
-    NoTask(I),
+    #[error("policy scheduled task that is not ready: `{0:?}`")]
+    BadPolicy(I),
 }
