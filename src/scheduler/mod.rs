@@ -42,7 +42,7 @@ where
     O: Clone,
 {
     /// pool of pending tasks
-    pool: RwLock<Pool<I, O, E>>,
+    pool: Pool<I, O, E>,
     /// scheduler policy
     policy: P,
     /// task context factory function
@@ -53,8 +53,6 @@ where
     schedule: RwLock<Schedule<I>>,
     /// execution trace
     trace: Trace<I>,
-    // /// shutdown receiver channel
-    // shutdown_rx: broadcast::Receiver<bool>,
     /// shutdown sender channel
     shutdown_tx: broadcast::Sender<bool>,
     /// scheduler config
@@ -72,7 +70,7 @@ where
     pub fn new() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         Self {
-            pool: RwLock::new(FuturesUnordered::new()),
+            pool: FuturesUnordered::new(),
             policy: GreedyPolicy::new(),
             ctx_factory: Box::new(|| ()),
             tasks: RwLock::new(Tasks::new()),
@@ -102,12 +100,12 @@ where
 
         while let Some(current) = stack.pop() {
             seen.insert(current.task.id());
-            let mut current_deps = deps.entry(current.task.id()).or_insert(HashMap::new());
+            let mut current_deps = deps.entry(current.task.id()).or_insert(HashSet::new());
 
             // consumes dependencies
             for dep in current.dependencies.into_iter() {
                 let dep_task = dep.into_task();
-                current_deps.insert(dep_task.task.id(), schedule::State::Pending);
+                current_deps.insert(dep_task.task.id());
                 if !seen.contains(&dep_task.task.id()) {
                     stack.push(dep_task);
                 }
@@ -125,76 +123,30 @@ where
         Ok(())
     }
 
+    /// shutdown the scheduler
     pub async fn shutdown(&self) {
         let _ = self.shutdown_tx.send(true);
     }
 
     /// number of running tasks in task pool
-    async fn running(&self) -> usize {
-        self.pool.read().await.len()
+    pub fn running(&self) -> usize {
+        self.pool.len()
+    }
+
+    /// enable execution trace
+    pub fn enable_trace(&mut self, enabled: bool) {
+        self.config.trace = enabled
     }
 
     /// get trace
-    pub fn trace(&self) -> &Trace<I> {
-        &self.trace
+    pub fn trace(&'a self) -> impl Iterator<Item = &'a (I, Vec<I>)> + Clone + 'a {
+        self.trace.iter()
     }
 
-    // pub async fn mark_complete(&self) -> usize {
-    //     let pool = self.pool.read().await;
-    //     pool.len()
-    //     // Ok(0)
-    // }
-
-    // pub async fn ready(&self) -> Result<HashSet<I>, Error<E, I>> {
-    // pub async fn ready(&self) -> HashSet<I> {
-    // pub async fn ready(&self) -> tokio::sync::RwLockWriteGuard<'_, HashSet<I>> {
-    //     // let scheduler = self.scheduler.read().await;
-    //     let schedule = self.schedule.read().await;
-    //     // schedule
-    //     // &self.schedule.read().await.ready
-    //     // scheduler.ready.map(|id: I| s
-    //     schedule.ready // .iter().cloned().collect()
-    //                    // .iter().cloned().collect()
-    //                    // Ok(schedule.ready.iter().cloned().collect())
-    //                    // Ok(0)
-    // }
-
-    // /// Marks a job as completed and updates the ready queue with any new jobs that
-    // /// are now ready to execute as a result.
-    // async fn mark_complete(&self, id: I, res: Result<O, E>) {
-    //     // store the result
-    //     self.schedule.write().await.completed(&id);
-
-    //     self.tasks.write().await.insert(
-    //         id.clone(),
-    //         match res {
-    //             Ok(res) => State::Success(res),
-    //             Err(err) => State::Failed(TaskError::Failed(err)),
-    //         },
-    //     );
-
-    //     // update
-    //     // match res {
-    //     //     Err(err) => State::Failed(err),
-    //     //     _
-    //     // };
-
-    //     // update the schedule to compute new ready tasks
-    //     // let mut schedule = self.schedule.write().await;
-    //     // for dep_idx in &self.jobs[job_idx].dependents {
-    //     //     let is_ready = self.jobs[*dep_idx]
-    //     //         .dependencies
-    //     //         .iter()
-    //     //         .all(|i| self.jobs[*i].state.success());
-    //     //     if is_ready {
-    //     //         self.ready.push(*dep_idx);
-    //     //     }
-    //     // }
-    // }
-
     pub async fn run(&mut self) -> Result<(), Error<E, I>> {
+        // todo: think about when and how the locking should take place
         let mut shutdown_rx = self.shutdown_tx.subscribe();
-        self.pool.write().await.push(Box::pin(async move {
+        self.pool.push(Box::pin(async move {
             let _ = shutdown_rx.recv().await;
             PoolResult::Shutdown
         }));
@@ -204,75 +156,29 @@ where
             loop {
                 // lock the schedule, pool, and tasks
                 let mut schedule = self.schedule.write().await;
-                let mut pool = self.pool.write().await;
                 let mut tasks = self.tasks.write().await;
                 match self.policy.arbitrate(&tasks, &schedule).await {
                     Some(id) => {
-                        // schedule.ready().remove(&id);
                         schedule.schedule(&id)?;
+                        // eprintln!("scheduled {:?}", &id);
 
-                        // let (prereqs, errs) = {
                         if let Err(err) = (|| {
-                            // crate::debug!(&id, &schedule.deps); // .get(&id));
-                            let dependencies = schedule.dependencies(&id);
-                            // .ok_or(TaskError::NoTask(id.clone()))?;
-                            // let failed =
-                            // crate::debug!(dependencies);
-                            // let dependencies: Vec<(I, Option<&State<_, _, _, _>>)> = dependencies
-                            let dependencies: Vec<(_, _)> = dependencies
+                            let dependencies: Vec<(_, _)> = schedule
+                                .dependencies(&id)
                                 .map(|(_, dep)| (dep.clone(), tasks.get(&dep)))
                                 .collect();
 
-                            // let test = dependencies.iter().map(|(x, _)| x).collect::<Vec<&I>>();
-                            // crate::debug!(&test);
-                            // let dependencies: Vec<&State<_, _, _, _>> = schedule
-                            //     .dependencies(&id)
-                            //     .map(|dep| tasks.get(dep))
-                            //     .collect();
-                            // : (Vec<->, Vec<E>) =
-                            // let (results, errs) =
-                            //     dep_tasks.into_iter().partition(|p| p.succeeded());
-                            // let errs
-
-                            // let errs: HashMap<I, TaskError<I, E>> = HashMap::new();
-                            // let results: Vec<O> = Vec::new();
-                            // let : Vec<O> = Vec::new();
-
-                            // for dep in dependencies.into_iter() {
-                            //     match tasks.get(dep) {
-                            //         Some(State::Success(res)) => results.push(res),
-                            //         Some(State::Pending(_)) | Some(State::Running) => {
-                            //             panic!("dependency still pending or running: {:?}", &dep)
-                            //         }
-                            //         Some(State::Failed(err)) => {
-                            //             errs.insert(dep.clone(), TaskError::Failed(err));
-                            //         }
-                            //         None => {
-                            //             errs.insert(dep.clone(), TaskError::NoTask(dep.clone()));
-                            //         }
-                            //     }
-                            // }
                             assert!(dependencies.iter().all(|(_, state)| match state {
                                 Some(State::Success(res)) => true,
                                 _ => false,
                             }));
 
-                            // let errs: Vec<TaskError<I, E>> = dependencies
-                            //     .iter()
-                            //     .filter_map(|state| match state {
-                            //         (_, Some(State::Failed(err))) => Some(err.clone()),
-                            //         (dep, None) => Some(TaskError::NoTask(dep.clone())),
-                            //         _ => None,
-                            //     })
-                            //     .collect();
                             let prereqs: HashMap<I, O> = HashMap::from_iter(
                                 dependencies.iter().filter_map(|(id, state)| match state {
                                     Some(State::Success(res)) => Some((id.clone(), res.clone())),
                                     _ => None,
                                 }),
                             );
-                            // crate::debug!(&results);
-                            // crate::debug!(&errs);
 
                             let ctx = (self.ctx_factory)();
                             // task is owned by replacing it
@@ -282,7 +188,7 @@ where
                             {
                                 State::Pending(mut task) => {
                                     let id = id.clone();
-                                    pool.push(Box::pin(async move {
+                                    self.pool.push(Box::pin(async move {
                                         let res = (task)(ctx, prereqs).await;
                                         PoolResult::Task((id, res))
                                     }));
@@ -290,46 +196,113 @@ where
                                 _ => panic!("about to schedule non pending task"),
                             };
 
-                            self.trace
-                                .push((id.clone(), tasks.running().cloned().collect::<Vec<I>>()));
+                            if self.config.trace {
+                                self.trace.push((
+                                    id.clone(),
+                                    tasks.running().cloned().collect::<Vec<I>>(),
+                                ));
+                            }
 
                             Ok::<(), TaskError<I, E>>(())
                         })() {
-                            panic!("{:?}", err);
+                            tasks.insert(id.clone(), State::Failed(err.clone()));
                         };
                     }
                     None => break,
                 };
             }
 
-            if self.running().await == 1 {
-                // exit when all tasks are complete
+            if !self.config.long_running && self.running() == 1 {
+                // exit as soon as task pool is empty
+                // note: the remaining task in the pool is the task waiting for shutdown
                 break;
             }
 
-            let completed = self.pool.write().await.next().await;
-            match completed {
+            // eprintln!("waiting for task to complete");
+
+            match self.pool.next().await {
                 Some(PoolResult::Task((id, res))) => {
+                    // eprintln!("got task result");
+                    let mut tasks = self.tasks.write().await;
+                    let mut schedule = self.schedule.write().await;
+
                     match res {
                         Ok(res) => {
-                            // self.mark_complete(id, res).await;
-                            self.schedule.write().await.completed(&id);
-                            // mark as complete and
-                            self.tasks
-                                .write()
-                                .await
-                                .insert(id.clone(), State::Success(res));
+                            // first, mark task as succeeded
+                            schedule.set_state(id.clone(), schedule::State::Success);
+                            tasks.insert(id.clone(), State::Success(res));
+                            // for (_, dep) in vec![(0, id.clone())]
+                            //     .into_iter()
+                            //     .chain(schedule.recursive_dependencies(&id))
+                            // {
+                            let dependencies: Vec<(_, _)> =
+                                schedule.recursive_dependencies(&id).collect();
+
+                            // crate::debug!(&dependencies);
+                            for (_, dep) in dependencies {
+                                if schedule.dependants(&dep).states().all(|(_, _, state)| {
+                                    match state {
+                                        Some(schedule::State::Pending) => false,
+                                        _ => true,
+                                    }
+                                }) {
+                                    // can remove the dependency
+                                    match self.config.result_config {
+                                        ResultConfig::KeepAll => {}
+                                        ResultConfig::KeepNone | ResultConfig::KeepRoots => {
+                                            // dependency can not be root
+                                            // eprintln!("removing {:?}", &dep);
+                                            tasks.remove(&dep);
+                                        }
+                                    }
+                                }
+                            }
+                            schedule.update_ready_nodes(&id);
+                            // match self.config.result_config {
+                            //     // if schedule.dependants(&dep).all( == 0 {
+                            //     //      tasks.insert(dep.clone(), State::Failed(cause.clone()));
+                            //     //  } else {
+                            //     //      tasks.remove(&dep);
+                            //     //  }
+
+                            //     // ResultConfig::KeepAll => {
+                            //     //     tasks.insert(dep.clone(), State::Failed(cause.clone()));
+                            //     // }
+                            //     // ResultConfig::KeepRoots => {
+                            //     //     if schedule.dependants(&dep).count() == 0 {
+                            //     //         tasks.insert(dep.clone(), State::Failed(cause.clone()));
+                            //     //     } else {
+                            //     //         tasks.remove(&dep);
+                            //     //     }
+                            //     // }
+                            //     // ResultConfig::KeepNone => {
+                            //     //     tasks.remove(&dep);
+                            //     // }
+                            // }
                         }
                         Err(err) => {
-                            let mut tasks = self.tasks.write().await;
-                            let mut schedule = self.schedule.write().await;
-                            // mark task as failed
-                            tasks.insert(id.clone(), State::Failed(TaskError::Failed(err)));
                             // mark all dependants as failed
+                            // todo: this should be all reachable in component
                             let cause = TaskError::Precondition(id.clone());
-                            for dep in schedule.dependants(&id) {
-                                // if task is root (no dependants), delete the result
-                                tasks.insert(id.clone(), State::Failed(cause.clone()));
+                            for (_, dep) in vec![(0, id.clone())]
+                                .into_iter()
+                                .chain(schedule.recursive_dependants(&id))
+                            {
+                                match self.config.result_config {
+                                    ResultConfig::KeepAll => {
+                                        tasks.insert(dep.clone(), State::Failed(cause.clone()));
+                                    }
+                                    ResultConfig::KeepRoots => {
+                                        if schedule.dependants(&dep).count() == 0 {
+                                            tasks.insert(dep.clone(), State::Failed(cause.clone()));
+                                        } else {
+                                            tasks.remove(&dep);
+                                        }
+                                    }
+                                    ResultConfig::KeepNone => {
+                                        tasks.remove(&dep);
+                                    }
+                                }
                             }
                             schedule.remove_dependants(&id);
                         }
@@ -340,36 +313,24 @@ where
                     panic!("job pool unexpectedly empty");
                 }
             }
+            // eprintln!("next round");
         }
 
         // cancel all futures in the pool
-        self.pool.write().await.clear();
-        Ok(())
-    }
-
-    pub async fn start(&self) -> Result<(), Error<E, I>> {
-        let handle = tokio::spawn(async move { loop {} });
-        Ok(())
-        // let errs = plan
-        //     .Tasks
-        //     .iter()
-        //     .filter_map(|Task| match Task.state {
-        //         State::Failed(err) => Some(err),
-        //         _ => None,
-        //     })
-        //     .collect::<Vec<E>>();
-        // // let mut errs = vec![];
-        // // for Task in plan.Tasks {
-        // //     if let State::Failed(err) = Task.state {
-        // //         errs.push(err);
-        // //     }
-        // // }
-
-        // if errs.len() > 0 {
-        //     Err(Error::Failed(errs))
-        // } else {
-        //     Ok(())
+        self.pool.clear();
+        let mut tasks = self.tasks.read().await;
+        // let mut tasks = self.tasks.write().await;
+        // match self.config.result_config {
+        //     ResultConfig::KeepNone => tasks.clear(),
+        //     _ => {}
         // }
+        let errs = tasks.failed().map(|(id, err)| (id.clone(), err.clone()));
+        let errs: HashMap<I, TaskError<I, E>> = HashMap::from_iter(errs);
+        if errs.len() > 0 {
+            Err(Error::Failed(errs))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -417,7 +378,6 @@ mod tests {
 
     type Dependencies<I, C, O, E> = Vec<Box<dyn IntoTask<I, C, O, E>>>;
 
-    // #[derive(Debug)]
     struct CustomTask {
         id: CustomId<CustomLabel>,
         dependencies: Dependencies<CustomId<CustomLabel>, (), CustomResult, CustomError>,
@@ -442,29 +402,6 @@ mod tests {
 
     #[async_trait]
     impl IntoTask<CustomId<CustomLabel>, (), CustomResult, CustomError> for CustomTask {
-        // fn id(&self) -> CustomId {
-        //     self.id
-        // }
-
-        // fn labels(&self) -> &Vec<CustomLabel> {
-        //     &self.labels
-        // }
-
-        // fn dependencies(
-        //     &self,
-        // ) -> &Vec<Box<dyn Task<CustomId, CustomLabel, (), CustomResult, CustomError>>> {
-        //     self.dependencies.cloned()
-        // }
-
-        // async fn task(
-        //     self,
-        //     ctx: (),
-        //     prereqs: Vec<CustomResult>,
-        // ) -> Pin<Box<dyn Future<Output = Result<CustomResult, CustomError>> + Send + Sync>>
-        // {
-        //     Box::pin(async move { Ok(12) })
-        // }
-
         fn into_task(
             self: Box<Self>,
         ) -> TaskNode<CustomId<CustomLabel>, (), CustomResult, CustomError> {
@@ -474,7 +411,9 @@ mod tests {
                     id: self.id,
                     task: Box::new(move |ctx, prereqs| {
                         Box::pin(async move {
-                            crate::debug!(id, ctx, prereqs);
+                            crate::debug!(id);
+                            crate::debug!(ctx);
+                            crate::debug!(prereqs);
                             sleep(Duration::from_secs(2)).await;
                             Ok(id)
                         })
@@ -486,8 +425,9 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn default_scheduler() -> Result<()> {
+    async fn test_default_scheduler() -> Result<()> {
         let mut scheduler = Scheduler::new();
+        scheduler.enable_trace(true);
         // : GreedyScheduler<CustomId<CustomLabel>, CustomResult, CustomError> =
         // Scheduler::new();
 
@@ -502,21 +442,29 @@ mod tests {
             ))
             .await?;
         let results = scheduler.run().await?;
-        // todo: check the results
-
         let trace = scheduler
             .trace()
-            .iter()
             .map(|(task, _)| task.trace_id)
             .collect::<Vec<usize>>();
         assert_eq!(trace, vec![0, 0, 1]);
+        Ok(())
+    }
 
-        // todo: check the trace
-
-        // let (trace, err) = TestPlan::new(vec![(true, vec![])]).trace().await;
-        // assert!(err.is_none());
-        // assert_eq!(trace[0], Some(0));
-        assert_eq!(0, 1);
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_greedy_policy_limit() -> Result<()> {
+        let policy = GreedyPolicy::max_tasks(Some(3));
+        let mut scheduler = SchedulerBuilder::new(policy, Box::new(|| ())).build();
+        scheduler.enable_trace(true);
+        let deps = (1..)
+            .take(10)
+            .map(|id| Box::new(CustomTask::new(id, 0, vec![])))
+            .map(|task| Box::<dyn IntoTask<_, _, _, _>>::from(task))
+            .collect();
+        scheduler.add_task(CustomTask::new(0, 1, deps)).await?;
+        let results = scheduler.run().await?;
+        let active = scheduler.trace().map(|(_, active)| active.len());
+        // crate::debug!(active.clone().collect::<Vec<usize>>());
+        assert!(active.max().unwrap() <= 3);
         Ok(())
     }
 }

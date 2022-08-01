@@ -17,16 +17,19 @@ use tokio::sync::RwLock;
 // pub(super) enum State {
 pub enum State {
     Pending,
+    Running,
     Success,
     Failed,
 }
 
 // pub(super) type DAG<I> = HashMap<I, HashMap<I, State>>;
-pub type DAG<I> = HashMap<I, HashMap<I, State>>;
+// pub type DAG<I> = HashMap<I, HashMap<I, State>>;
+pub type DAG<I> = HashMap<I, HashSet<I>>;
 
 pub struct Schedule<I> {
     ready: HashSet<I>,
-    pub deps: DAG<I>,
+    states: HashMap<I, State>,
+    deps: DAG<I>,
     dependants: DAG<I>,
 }
 
@@ -34,6 +37,7 @@ impl<I> Schedule<I> {
     pub fn new() -> Self {
         Self {
             ready: HashSet::new(),
+            states: HashMap::new(),
             deps: HashMap::new(),
             dependants: HashMap::new(),
         }
@@ -42,53 +46,50 @@ impl<I> Schedule<I> {
 
 #[allow(missing_debug_implementations)]
 #[derive(Clone)]
-// pub struct Dft<'a, I, F, Iter>
-pub struct Dft<'a, I>
-// where
-//     I,
-// F: FnMut(&'a I) -> Iter,
-// Iter: Iterator<Item = &'a I>,
-{
+pub struct Dfs<'a, I> {
     stack: Vec<(usize, I)>,
     nodes: &'a DAG<I>,
+    states: &'a HashMap<I, State>,
     max_depth: Option<usize>,
-    // iter_children: F,
 }
 
-// impl<'a, I, F, Iter> DftPre<'a, I, F, Iter>
-impl<'a, I> Dft<'a, I>
+impl<'a, I> Dfs<'a, I>
 where
     I: Clone + Hash + Eq,
-    // I: ?Sized,
-    // F: FnMut(&'a I) -> Iter,
-    // Iter: Iterator<Item = &'a I>,
 {
     #[inline]
-    // pub fn new(root: &'a I, iter_children: F) -> Self {
-    pub fn new(root: &'a I, nodes: &'a DAG<I>, max_depth: Option<usize>) -> Self {
+    pub fn new(
+        root: &'a I,
+        nodes: &'a DAG<I>,
+        states: &'a HashMap<I, State>,
+        max_depth: Option<usize>,
+    ) -> Self {
         let mut stack = vec![];
         // if nodes.contains_key(root) {
         //     stack.push((0, root.clone()));
         // }
         if let Some(children) = nodes.get(root) {
-            stack.extend(children.keys().map(|child| (1, child.clone())));
+            stack.extend(children.iter().map(|child| (1, child.clone())));
         }
         Self {
             stack,
             nodes,
+            states,
             max_depth,
         }
     }
+
+    pub fn states(self) -> impl Iterator<Item = (usize, I, Option<&'a State>)> + 'a {
+        self.clone().map(move |(depth, dep)| {
+            let state = self.states.get(&dep);
+            (depth, dep, state)
+        })
+    }
 }
 
-// impl<'a, T, F, I> Iterator for DftPre<'a, T, F, I>
-impl<'a, I> Iterator for Dft<'a, I>
+impl<'a, I> Iterator for Dfs<'a, I>
 where
     I: Clone + Hash + Eq,
-    // where
-    // T: ?Sized,
-    // F: FnMut(&'a T) -> I,
-    // I: Iterator<Item = &'a T>,
 {
     type Item = (usize, I);
 
@@ -103,26 +104,12 @@ where
                 }
                 if let Some(children) = self.nodes.get(&node) {
                     self.stack
-                        .extend(children.keys().cloned().map(|child| (depth + 1, child)));
+                        .extend(children.iter().cloned().map(|child| (depth + 1, child)));
                 };
                 Some((depth, node))
             }
             None => None,
         }
-        // if let Some((depth, node)) = self.stack.pop() {
-        //     // let children = self.nodes.get(node)
-        //     if let Some(children) = self.nodes.get(node)
-        //     // let children = (self.iter_children)(node);
-
-        //     // let children = children.collect::<Vec<_>>();
-        //     // let children = children.into_iter().rev();
-
-        //     self.stack.extend(children.map(|child| (depth + 1, child)));
-
-        //     Some((depth, node))
-        // } else {
-        //     None
-        // }
     }
 }
 
@@ -162,6 +149,7 @@ where
         for (node, new_deps) in nodes.into_iter() {
             if !self.deps.contains_key(&node) {
                 self.deps.insert(node.clone(), new_deps);
+                self.states.insert(node.clone(), State::Pending);
             }
 
             // match self.deps.entry(node.clone()) {
@@ -194,12 +182,12 @@ where
                 }
 
                 // this should be fine?
-                for dep in deps.keys() {
+                for dep in deps {
                     let mut rev_deps = self
                         .dependants
                         .entry(dep.to_owned())
-                        .or_insert(HashMap::new());
-                    rev_deps.insert(node.clone(), State::Pending);
+                        .or_insert(HashSet::new());
+                    rev_deps.insert(node.clone());
                 }
             }
         }
@@ -208,20 +196,20 @@ where
         Ok(())
     }
 
-    pub fn dependencies<'a>(&'a self, node: &'a I) -> Dft<'a, I> {
-        Dft::new(node, &self.deps, Some(1))
+    pub fn dependencies<'a>(&'a self, node: &'a I) -> Dfs<'a, I> {
+        Dfs::new(node, &self.deps, &self.states, Some(1))
     }
 
-    pub fn dependants<'a>(&'a self, node: &'a I) -> Dft<'a, I> {
-        Dft::new(node, &self.dependants, Some(1))
+    pub fn dependants<'a>(&'a self, node: &'a I) -> Dfs<'a, I> {
+        Dfs::new(node, &self.dependants, &self.states, Some(1))
     }
 
-    pub fn recursive_dependencies<'a>(&'a self, node: &'a I) -> Dft<'a, I> {
-        Dft::new(node, &self.deps, None)
+    pub fn recursive_dependencies<'a>(&'a self, node: &'a I) -> Dfs<'a, I> {
+        Dfs::new(node, &self.deps, &self.states, None)
     }
 
-    pub fn recursive_dependants<'a>(&'a self, node: &'a I) -> Dft<'a, I> {
-        Dft::new(node, &self.dependants, None)
+    pub fn recursive_dependants<'a>(&'a self, node: &'a I) -> Dfs<'a, I> {
+        Dfs::new(node, &self.dependants, &self.states, None)
     }
 
     // pub fn remove_dependencies<'a>(&'a mut self, node: &'a I) {
@@ -232,28 +220,47 @@ where
     //     }
     // }
 
-    pub fn completed<'a>(&'a mut self, node: &'a I) {
+    pub fn set_state(&mut self, node: I, state: State) {
+        self.states.insert(node, state);
+    }
+
+    pub fn update_ready_nodes<'a>(&'a mut self, node: &'a I) {
         assert!(!self.ready.remove(&node));
         self.deps.remove(&node);
 
-        if let Some(dependants) = self.dependants.get(node) {
-            for dependant in dependants.keys() {
-                if let Some(dependant_dependencies) = self.deps.get_mut(&dependant) {
-                    // do not remove, unless all succeeded
-                    dependant_dependencies.insert(node.clone(), State::Success);
-                    if dependant_dependencies
-                        .values()
-                        .all(|v| *v == State::Success)
-                    {
-                        self.ready.insert(dependant.clone());
-                    }
-                    // dependant_dependencies.remove(node);
-                    // if dependant_dependencies.is_empty() {
-                    //     self.ready.insert(dependant.clone());
-                    // }
+        // let ready: Vec<I> = self
+        //     .dependants(node)
+        //     .filter_map(|(_, dependant)| match self.deps.get(&dependant) {
+        //         Some(dependant_dependencies) => Some((dependant.clone(), dependant_dependencies)),
+        //         None => None,
+        //     })
+        //     .filter_map(|(dependant, dependant_dependencies)| {
+        //         if dependant_dependencies
+        //             .iter()
+        //             .map(|d| self.states.get(d))
+        //             .all(|v| v == Some(&State::Success))
+        //         {
+        //             Some(dependant.clone())
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .collect();
+        // self.ready.extend(ready);
+        let mut ready = vec![];
+        for (_, dependant) in self.dependants(node) {
+            if let Some(dependant_dependencies) = self.deps.get(&dependant) {
+                // do not add to ready queue unless all succeeded
+                if dependant_dependencies
+                    .iter()
+                    .map(|d| self.states.get(d))
+                    .all(|v| v == Some(&State::Success))
+                {
+                    ready.push(dependant.clone());
                 }
             }
         }
+        self.ready.extend(ready);
     }
 
     pub fn remove_dependants<'a>(&'a mut self, node: &'a I) {
@@ -319,6 +326,7 @@ where
 
     // pub fn extend(&mut self, nodes: DAG<I>) -> Result<(), ScheduleError<I>> {
     pub fn schedule(&mut self, id: &I) -> Result<(), ScheduleError<I>> {
+        self.set_state(id.clone(), State::Running);
         match self.ready.remove(id) {
             true => Ok(()),
             false => Err(ScheduleError::BadPolicy(id.clone())),

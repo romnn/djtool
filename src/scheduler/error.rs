@@ -19,13 +19,14 @@ where
 #[derive(thiserror::Error, Debug)]
 pub enum Error<E, I>
 where
-    I: std::fmt::Debug,
+    I: Clone + std::fmt::Debug,
+    E: Clone + std::fmt::Debug,
 {
     #[error("invalid configuration: `{0}`")]
     InvalidConfiguration(String),
 
     #[error("some tasks failed")]
-    Failed(Vec<E>),
+    Failed(HashMap<I, TaskError<I, E>>),
 
     #[error("schedule error: `{0}`")]
     Schedule(#[from] ScheduleError<I>),
