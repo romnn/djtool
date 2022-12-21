@@ -6,6 +6,12 @@ pub mod djtool {
         "/src/proto/proto.djtool.rs"
     ));
 
+    #[derive(thiserror::Error, Clone, Debug)]
+    pub enum TrackError {
+        #[error("track has no ID")]
+        IdNotFound,
+    }
+
     impl fmt::Display for Service {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let name = match self {
@@ -15,6 +21,13 @@ pub mod djtool {
                 _ => "UNKNOWN",
             };
             write!(f, "{}", name)
+        }
+    }
+
+    impl Track {
+        pub fn id(&self) -> Result<&TrackId, TrackError> {
+            // self.id.as_ref().ok_or(TrackError::IdNotFound).clone()
+            self.id.as_ref().ok_or(TrackError::IdNotFound) // .clone()
         }
     }
 

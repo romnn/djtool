@@ -14,7 +14,7 @@ use std::hash::Hash;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 
 #[derive(Debug)]
 pub enum ResultConfig {
@@ -81,16 +81,8 @@ impl<'a, P, C> SchedulerBuilder<'a, P, C> {
         O: Clone + Send + Sync + std::fmt::Debug + 'static,
         E: Clone + Send + Sync + std::fmt::Debug + 'static,
     {
-        let (shutdown_tx, _) = broadcast::channel(1);
-        Scheduler {
-            pool: FuturesUnordered::new(),
-            policy: self.policy,
-            ctx_factory: self.ctx_factory,
-            tasks: RwLock::new(Tasks::new()),
-            schedule: RwLock::new(Schedule::new()),
-            trace: Vec::new(),
-            config: self.config,
-            shutdown_tx,
-        }
+        let mut scheduler = Scheduler::new(self.policy, self.ctx_factory);
+        scheduler.config = self.config;
+        scheduler
     }
 }

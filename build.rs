@@ -254,88 +254,29 @@ fn compile_protos() -> Result<()> {
     let _ = std::fs::remove_dir_all(&output_dir);
     let _ = std::fs::create_dir_all(&output_dir);
 
-    // println!("cargo:warning=proto source dir is {:?}", source_dir);
-    // println!("cargo:warning=proto output dir is {:?}", output_dir);
     println!("cargo:rerun-if-changed=proto/djtool.proto");
     let builder = tonic_build::configure()
-        // .type_attribute(
-        //     "proto.djtool.TrackPreview",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.Artwork",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.TrackId",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.PlaylistId",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.UserId",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.SpotifyTrack",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.YoutubeTrack",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.krackinfo",
-        //     "#[derive(serialize, deserialize, hash, eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.TrackInfo",
-        //     "#[derive(Serialize, deserialize, hash, eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.track::Info",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.track.Info",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
+        .type_attribute(
+            "proto.djtool.TrackId",
+            "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
+        )
+        .type_attribute(
+            "proto.djtool.PlaylistId",
+            "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
+        )
+        .type_attribute(
+            "proto.djtool.UserId",
+            "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
+        )
         .type_attribute(
             ".proto.djtool",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         );
-        // .type_attribute(
-        //     "proto.djtool.Track",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.Playlist",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.SourcePlaylists",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // )
-        // .type_attribute(
-        //     "proto.djtool.Library",
-        //     "#[derive(Serialize, Deserialize, Hash, Eq)]",
-        // );
     builder
-        // .type_attribute("proto.grpc.SessionToken", "#[derive(Hash, Eq)]")
-        // .type_attribute("proto.grpc.AudioInputDescriptor", "#[derive(Hash, Eq)]")
-        // .type_attribute("proto.grpc.AudioOutputDescriptor", "#[derive(Hash, Eq)]")
-        // .type_attribute("proto.grpc.AudioAnalyzerDescriptor", "#[derive(Hash, Eq)]")
         .build_server(true)
         .build_client(false)
         .out_dir(&output_dir)
-        .compile(
-            &[source_dir.join("proto/djtool.proto")],
-            &[source_dir],
-            // &proto_files,
-            // &[include_dir.canonicalize().unwrap()],
-        )?;
+        .compile(&[source_dir.join("proto/djtool.proto")], &[source_dir])?;
     Ok(())
 }
 

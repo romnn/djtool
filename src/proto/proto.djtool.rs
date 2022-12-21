@@ -16,14 +16,14 @@
 
 // }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct UserId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
     #[prost(enumeration = "Service", tag = "10")]
     pub source: i32,
 }
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct TrackId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
@@ -32,7 +32,7 @@ pub struct TrackId {
     #[prost(enumeration = "Service", tag = "10")]
     pub source: i32,
 }
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, ::prost::Message)]
+#[derive(serde::Serialize, serde::Deserialize, Hash, Eq, Clone, PartialEq, ::prost::Message)]
 pub struct PlaylistId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,

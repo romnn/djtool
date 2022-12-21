@@ -325,12 +325,18 @@ where
     }
 
     // pub fn extend(&mut self, nodes: DAG<I>) -> Result<(), ScheduleError<I>> {
-    pub fn schedule(&mut self, id: &I) -> Result<(), ScheduleError<I>> {
+    // pub fn schedule(&mut self, id: &I) -> Result<(), ScheduleError<I>> {
+    pub fn schedule(&mut self, id: &I) {
         self.set_state(id.clone(), State::Running);
-        match self.ready.remove(id) {
-            true => Ok(()),
-            false => Err(ScheduleError::BadPolicy(id.clone())),
+        // assert!(self.ready.remove(id), "scheduled non ready task {:?}", &id);
+        if !self.ready.remove(id) {
+            unreachable!("scheduled non ready task {:?}", &id)
         }
+        // match self.ready.remove(id) {
+        //     true => Ok(()),
+        //     // false => Err(ScheduleError::BadPolicy(id.clone())),
+        //     false => unreachable!("scheduled non ready task {:?}", &id),
+        // }
     }
 
     // pub fn dependencies<'a>(&'a mut self, node: &'a I) -> Option<impl Iterator<Item = &'a I> + 'a> {

@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
-#![allow(clippy::missing_safety_doc)]
-#![allow(clippy::module_inception)]
-#![allow(clippy::too_many_arguments)]
-
+// #![allow(clippy::missing_safety_doc)]
+// #![allow(clippy::module_inception)]
+// #![allow(clippy::too_many_arguments)]
 // #[cfg(feature = "image")]
 // use image;
 

@@ -30,6 +30,9 @@ where
 
     #[error("schedule error: `{0}`")]
     Schedule(#[from] ScheduleError<I>),
+
+    #[error("task failed to build: `{0}`")]
+    Build(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 }
 
 #[derive(thiserror::Error, Debug)]

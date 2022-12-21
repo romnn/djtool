@@ -80,7 +80,7 @@ impl Chunk {
             // downloaded = new;
             // pb.set_position(new);
             // output_file.start_seek(chunk.range_start).await?;
-            chunk_file.write(&byte_chunk).await?;
+            chunk_file.write_all(&byte_chunk).await?;
             let _ = progress.send(Ok(byte_chunk.len())).await;
             self.downloaded += byte_chunk.len();
         }
@@ -139,10 +139,7 @@ impl Download {
         Ok(download)
     }
 
-    pub fn on_progress(
-        &mut self,
-        callback: impl Fn(DownloadProgress) -> () + Send + 'static,
-    ) {
+    pub fn on_progress(&mut self, callback: impl Fn(DownloadProgress) -> () + Send + 'static) {
         self.progress = Some(Box::new(callback));
     }
 

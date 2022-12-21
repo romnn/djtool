@@ -6,13 +6,8 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 
-// add dependencies:
-// lets say: outputs artwork image data
-// idea: for all the Tasks, make them return the same outcome type
-// then, each Task with prerequisits can get them as a vector of those outcomes
-
 pub type TaskFun<C, I, O, E> = Box<
-    dyn FnOnce(C, HashMap<I, O>) -> Pin<Box<dyn Future<Output = Result<O, E>> + Send + Sync>>
+    dyn FnOnce(C, HashMap<I, O>) -> Pin<Box<dyn Future<Output = Result<O, E>> + Send>>
         + Send
         + Sync,
 >;
@@ -161,7 +156,7 @@ where
 pub struct TaskNode<I, C, O, E> {
     // pub task: TaskFun<C, O, E>,
     pub task: Task<I, C, O, E>,
-    pub dependencies: Vec<Box<dyn IntoTask<I, C, O, E>>>,
+    pub dependencies: Vec<Box<dyn IntoTask<I, C, O, E> + Send>>,
 }
 
 // todo: make this a normal into trait?
@@ -192,7 +187,10 @@ pub trait IntoTask<I, C, O, E> {
     // Task<I, L, C, O, E>;
 
     // fn into_task(self: Box<Self>) -> TaskNode<I, L, C, O, E>;
-    fn into_task(self: Box<Self>) -> TaskNode<I, C, O, E>;
+    fn into_task(self: Box<Self>) -> Result<TaskNode<I, C, O, E>, Error<E, I>>
+    where
+        I: Clone + std::fmt::Debug,
+        E: Clone + std::fmt::Debug;
     // fn into_task(self: Self) -> TaskNode<I, L, C, O, E>;
 
     // fn plan(&self, plan: &mut PlanBuilder<C, O, E>) -> Result<(), Error<E>> {

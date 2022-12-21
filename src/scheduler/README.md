@@ -11,6 +11,12 @@ There exist many different task scheduler implementations, the goals of this imp
 - allow custom scheduling policies based on a custom ID type, which could enforce complex constraints by using labels
 - allow concurrent adding of tasks while the scheduler is executing, so that tasks can be streamed into the scheduler
 
+#### TODO
+
+- implement pause / resume using notfications
+- implement notification based waiting for ready tasks
+- use select instead of shutdown task
+
 #### Usage
 
 tba

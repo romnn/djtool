@@ -50,12 +50,14 @@ pub struct QueryProgress {}
 
 #[async_trait]
 pub trait Sink: Send + Sync + 'static {
+    async fn audio_download_url(&self, track: &proto::djtool::Track) -> Result<(String, String)>;
+
     async fn download(
         &self,
         track: &proto::djtool::Track,
         output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Option<Method>,
-        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>>,
+        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + Sync + 'static>>,
     ) -> Result<DownloadedTrack>;
 
     async fn candidates(

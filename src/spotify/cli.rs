@@ -1,12 +1,13 @@
+use super::tasks;
 use crate::cli;
 use crate::download;
 use crate::proto;
+use crate::scheduler;
 use crate::sink;
 use crate::source;
 use crate::transcode;
 use crate::utils;
 use anyhow::Result;
-// use async_stream::stream;
 use clap::Parser;
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use futures::future;
@@ -21,6 +22,7 @@ use std::io::{self, Write};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -220,9 +222,9 @@ impl PlaylistFetchProgress {
 #[derive(Debug)]
 struct OverallProgress {
     // bar: ProgressBar,
-// bar: ProgressBar,
-// total: u64,
-// downloaded: u64,
+    // bar: ProgressBar,
+    // total: u64,
+    // downloaded: u64,
 }
 
 impl OverallProgress {
@@ -254,9 +256,9 @@ impl TrackTranscodeProgress {
 #[derive(Debug)]
 struct TrackDownloadProgress {
     // bar: ProgressBar,
-// bar: ProgressBar,
-// total: u64,
-// downloaded: u64,
+    // bar: ProgressBar,
+    // total: u64,
+    // downloaded: u64,
 }
 
 impl TrackDownloadProgress {
@@ -513,7 +515,6 @@ impl<'a> CLI<'a> {
                 let source = &sources[&source_id];
                 let sink = &sinks[&sink_id];
 
-                // let source_limit = 
                 let source_track_stream: Pin<
                     Box<dyn Stream<Item = Result<proto::djtool::Track, _>>>,
                 > = if let Some(ref track_id) = track_opts.common.id {
@@ -579,6 +580,67 @@ impl<'a> CLI<'a> {
                 let sinks = tool.sinks.read().await;
                 let source = &sources[&source_id];
 
+                let policy = scheduler::GreedyPolicy::default();
+                let ctx_factory = Box::new(|| ());
+
+                let mut scheduler: Arc<
+                    scheduler::Scheduler<_, tasks::TaskId, (), tasks::TaskResult, tasks::Error>,
+                > = Arc::new(scheduler::SchedulerBuilder::new(policy, ctx_factory).build());
+
+                // produce track tasks to scheduler
+                let sink = sinks[&proto::djtool::Service::Youtube].clone();
+                // let scheduler_clone = scheduler.clone();
+                // let results_handle = tokio::task::spawn(async move { scheduler_clone.run().await });
+
+                let tasks = selected.into_iter().map(|(track, candidate)| {
+                    // let sinks = sinks.clone();
+                    // let transcoder = tool.transcoder.clone();
+                    // let sink = &sinks[&proto::djtool::Service::Youtube];
+
+                    let candidate_filename = utils::sanitize_filename(&format!(
+                        "{} - {}",
+                        candidate.name, candidate.artist
+                    ));
+                    let filename =
+                        utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
+                    let temp_dir = TempDir::new(&filename).unwrap();
+
+                    let candidate_dir = TempDir::new_in(&temp_dir, &candidate_filename).unwrap();
+
+                    crate::debug!(&candidate_filename);
+                    crate::debug!(&filename);
+                    crate::debug!(&temp_dir);
+                    crate::debug!(&candidate_dir);
+
+                    // note: the temp dirs must be moved so that they are only dropped when no
+                    // longer used
+                    tasks::DownloadTrackAudioTask {
+                        track: candidate,
+                        output: candidate_dir,
+                        sink: sink.clone(),
+                    }
+                });
+                // let mut tasks_iter = tasks.into_iter();
+                // scheduler.add_task(tasks_iter.next().unwrap()).await.unwrap();
+                // scheduler.add_task(tasks_iter.next().unwrap()).await.unwrap();
+                stream::iter(tasks.into_iter())
+                    .for_each_concurrent(Some(4), |task| async {
+                        scheduler.add_task(task).await.unwrap();
+                    })
+                    .await;
+                // scheduler_clone.run().await
+                // todo: make the scheduler run in the background, produce the tasks and then collect
+                // the results
+
+                // let results = results_handle.await;
+                // for task in tasks.into_iter() {
+                //     let task: tasks::DownloadTrackAudioTask = task;
+                //     scheduler.add_task(task).await.unwrap();
+                // }
+
+                // scheduler wait for complete
+                // // get results
+
                 // todo: add what files to downlaod
                 // - youtube track, spotify preview, spotify artwork
                 // add what files to transcode
@@ -587,7 +649,7 @@ impl<'a> CLI<'a> {
                 // - compare all low quality youtube files with the low quality preview
                 // what files to add id3 metadata
                 // - highest match youtube version
-                // what files to export 
+                // what files to export
                 // - highest quality youtube video with id3
                 //
                 // do this in a generic DAG structure
@@ -601,113 +663,114 @@ impl<'a> CLI<'a> {
                 // and handles displaying the longest running task
 
                 // let sinks = tool.sinks.read().await;
-                let tracks = selected
-                    .into_iter()
-                    .map(|(track, candidate)| {
-                        let mp_clone = mp_clone.clone();
-                        let sinks = sinks.clone();
-                        let transcoder = tool.transcoder.clone();
-                        // let temp_dir_clone = temp_dir.clone();
-                        // let candidate_dir = temp_dir
-                        //     .path()
-                        //     .to_path_buf()
-                        //     .join(format!("candidate_utils::sanitize_filename(&filename));
-                        // fs::create_dir_all(candidate_dir).await?;
-                        let candidate_filename = utils::sanitize_filename(&format!(
-                            "{} - {}",
-                            candidate.name, candidate.artist
-                        ));
-                        let filename =
-                            utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
-                        let temp_dir = TempDir::new(&filename).unwrap();
 
-                        // crate::debug!(&candidate_filename);
+                // let tracks = selected
+                //     .into_iter()
+                //     .map(|(track, candidate)| {
+                //         let mp_clone = mp_clone.clone();
+                //         let sinks = sinks.clone();
+                //         let transcoder = tool.transcoder.clone();
+                //         // let temp_dir_clone = temp_dir.clone();
+                //         // let candidate_dir = temp_dir
+                //         //     .path()
+                //         //     .to_path_buf()
+                //         //     .join(format!("candidate_utils::sanitize_filename(&filename));
+                //         // fs::create_dir_all(candidate_dir).await?;
+                //         let candidate_filename = utils::sanitize_filename(&format!(
+                //             "{} - {}",
+                //             candidate.name, candidate.artist
+                //         ));
+                //         let filename =
+                //             utils::sanitize_filename(&format!("{} - {}", track.name, track.artist));
+                //         let temp_dir = TempDir::new(&filename).unwrap();
 
-                        let candidate_dir =
-                            TempDir::new_in(&temp_dir, &candidate_filename).unwrap();
-                        // crate::debug!(&candidate_dir);
+                //         // crate::debug!(&candidate_filename);
 
-                        let total = total.clone();
-                        tokio::task::spawn(async move {
-                            let sink = &sinks[&proto::djtool::Service::Youtube];
-                            let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
-                            TrackDownloadProgress::style(&bar);
-                            bar.tick();
+                //         let candidate_dir =
+                //             TempDir::new_in(&temp_dir, &candidate_filename).unwrap();
+                //         // crate::debug!(&candidate_dir);
 
-                            let bar_clone = bar.clone();
-                            let downloaded = sink
-                                .download(
-                                    &candidate,
-                                    &candidate_dir
-                                        .path()
-                                        .join(format!("original_{}", &candidate_filename)),
-                                    None,
-                                    Some(Box::new(move |progress: download::DownloadProgress| {
-                                        bar_clone.set_message("downloading".to_string());
-                                        bar_clone.set_position(progress.downloaded as u64);
-                                        bar_clone.set_length(progress.total.unwrap() as u64);
-                                        bar_clone.tick();
+                //         let total = total.clone();
+                //         tokio::task::spawn(async move {
+                //             let sink = &sinks[&proto::djtool::Service::Youtube];
+                //             let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
+                //             TrackDownloadProgress::style(&bar);
+                //             bar.tick();
 
-                                        // println!(
-                                        //     "downloaded: {} {:?}",
-                                        //     progress.downloaded,
-                                        //     progress.total.unwrap()
-                                        // );
-                                        // io::stdout().flush().unwrap();
-                                        // io::stderr().flush().unwrap();
-                                    })),
-                                )
-                                .await?;
-                            // println!("download done");
+                //             let bar_clone = bar.clone();
+                //             let downloaded = sink
+                //                 .download(
+                //                     &candidate,
+                //                     &candidate_dir
+                //                         .path()
+                //                         .join(format!("original_{}", &candidate_filename)),
+                //                     None,
+                //                     Some(Box::new(move |progress: download::DownloadProgress| {
+                //                         bar_clone.set_message("downloading".to_string());
+                //                         bar_clone.set_position(progress.downloaded as u64);
+                //                         bar_clone.set_length(progress.total.unwrap() as u64);
+                //                         bar_clone.tick();
 
-                            // let temp_dir_transcode = TempDir::new(&filename)?;
-                            // let mut transcoded_path = temp_dir_clone.path().join(&filename);
-                            let mut transcoded_path = candidate_dir
-                                .path()
-                                .join(format!("audio_{}", &candidate_filename));
-                            transcoded_path.set_extension("mp3");
+                //                         // println!(
+                //                         //     "downloaded: {} {:?}",
+                //                         //     progress.downloaded,
+                //                         //     progress.total.unwrap()
+                //                         // );
+                //                         // io::stdout().flush().unwrap();
+                //                         // io::stderr().flush().unwrap();
+                //                     })),
+                //                 )
+                //                 .await?;
+                //             // println!("download done");
 
-                            // let mut output_path = library_dir.join(&filename);
-                            // output_path.set_extension("mp3");
+                //             // let temp_dir_transcode = TempDir::new(&filename)?;
+                //             // let mut transcoded_path = temp_dir_clone.path().join(&filename);
+                //             let mut transcoded_path = candidate_dir
+                //                 .path()
+                //                 .join(format!("audio_{}", &candidate_filename));
+                //             transcoded_path.set_extension("mp3");
 
-                            // println!("transcoding to {}", transcoded_path.display());
-                            // let transcoded_path_clone = transcoded_path.to_owned();
-                            let options = transcode::TranscoderOptions::mp3();
+                //             // let mut output_path = library_dir.join(&filename);
+                //             // output_path.set_extension("mp3");
 
-                            // bar.finish_and_clear();
-                            // mp_clone.remove(&bar);
+                //             // println!("transcoding to {}", transcoded_path.display());
+                //             // let transcoded_path_clone = transcoded_path.to_owned();
+                //             let options = transcode::TranscoderOptions::mp3();
 
-                            // let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
-                            TrackTranscodeProgress::style(&bar);
-                            bar.tick();
+                //             // bar.finish_and_clear();
+                //             // mp_clone.remove(&bar);
 
-                            let bar_clone = bar.clone();
+                //             // let bar = Arc::new(mp_clone.add(ProgressBar::new(100)));
+                //             TrackTranscodeProgress::style(&bar);
+                //             bar.tick();
 
-                            let res = tokio::task::spawn_blocking(move || {
-                                transcoder.transcode_blocking(
-                                    &downloaded.output_path,
-                                    &transcoded_path,
-                                    Some(&options),
-                                    &mut Box::new(move |progress: transcode::TranscodeProgress| {
-                                        bar_clone.set_message("transcoding".to_string());
-                                        bar_clone.set_position(progress.timestamp.as_secs());
-                                        bar_clone.set_length(progress.duration.as_secs());
-                                        bar_clone.tick();
-                                        // crate::debug!(progress);
-                                    }),
-                                );
-                                Ok::<(), anyhow::Error>(())
-                            })
-                            .await?;
-                            bar.finish_and_clear();
-                            total.inc(1);
-                            Ok::<(), anyhow::Error>(())
-                        })
-                    })
-                    .collect::<Vec<tokio::task::JoinHandle<Result<()>>>>();
+                //             let bar_clone = bar.clone();
 
-                let downloaded = future::join_all(tracks).await;
-                total.finish_and_clear();
+                //             let res = tokio::task::spawn_blocking(move || {
+                //                 transcoder.transcode_blocking(
+                //                     &downloaded.output_path,
+                //                     &transcoded_path,
+                //                     Some(&options),
+                //                     &mut Box::new(move |progress: transcode::TranscodeProgress| {
+                //                         bar_clone.set_message("transcoding".to_string());
+                //                         bar_clone.set_position(progress.timestamp.as_secs());
+                //                         bar_clone.set_length(progress.duration.as_secs());
+                //                         bar_clone.tick();
+                //                         // crate::debug!(progress);
+                //                     }),
+                //                 );
+                //                 Ok::<(), anyhow::Error>(())
+                //             })
+                //             .await?;
+                //             bar.finish_and_clear();
+                //             total.inc(1);
+                //             Ok::<(), anyhow::Error>(())
+                //         })
+                //     })
+                //     .collect::<Vec<tokio::task::JoinHandle<Result<()>>>>();
+
+                // let downloaded = future::join_all(tracks).await;
+                // total.finish_and_clear();
                 // transcode
                 // let library_dir = {
                 //     let config = self.config.read().await;

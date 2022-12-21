@@ -29,8 +29,6 @@ impl From<model::YoutubeVideo> for proto::djtool::Track {
             id: Some(proto::djtool::TrackId {
                 source: proto::djtool::Service::Youtube as i32,
                 id: video.video_id,
-                // .map(|id| id.id().to_string())
-                // .unwrap_or("unknown".to_string()),
                 playlist_id: None, // unknown at this point
             }),
             name: video.title,
@@ -119,85 +117,111 @@ impl Youtube {
         // ) -> impl Stream<Item = Result<YoutubeVideo>> + 'a + Send {
     ) -> impl Stream<Item = Result<model::YoutubeVideo>> + 'a + Send {
         paginate(
-            move |continuation| self.search_page(search_query.to_owned(), continuation)
-            // &user_id, Some(limit), Some(offset)),
-            // DEFAULT_PAGINATION_CHUNKS,
+            move |continuation| self.search_page(search_query.to_owned(), continuation), // &user_id, Some(limit), Some(offset)),
+                                                                                         // DEFAULT_PAGINATION_CHUNKS,
         )
     }
 }
 
 #[async_trait]
 impl Sink for Youtube {
+    async fn audio_download_url(&self, track: &proto::djtool::Track) -> Result<(String, String)> {
+        // let track_id = track
+        //     .id
+        //     .as_ref()
+        //     .ok_or(anyhow::anyhow!("no video id"))?
+        //     .id
+        //     .to_owned();
+        let track_id = track.id()?;
+        let video = self.get_video(&track_id.id).await?;
+        let audio_formats = video.formats.audio();
+        let format = audio_formats
+            .iter()
+            .next()
+            .ok_or(anyhow::anyhow!("no format"))?;
+        let title = video.title.to_owned().ok_or(anyhow::anyhow!("untitled"))?;
+        let sanitized_filename = utils::sanitize_filename(&title);
+        let stream_url = self.get_stream_url(&video, &format).await?;
+        crate::debug!(&video.title);
+        crate::debug!(&format);
+        crate::debug!(&sanitized_filename);
+        crate::debug!(&stream_url);
+
+        Ok((stream_url, sanitized_filename))
+    }
+    // let mut download = download::Download::new(&stream_url, &output_path).await?;
+    // if let Some(progress) = progress {
+    // // download.on_progress(|progress: download::DownloadProgress| {});
+    // download.on_progress(progress);
+
     async fn download(
         &self,
         // track: TrackDescription,
         track: &proto::djtool::Track,
         output_path: &(dyn AsRef<Path> + Sync + Send),
         method: Option<Method>,
-        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + 'static>>,
+        progress: Option<Box<dyn Fn(download::DownloadProgress) -> () + Send + Sync + 'static>>,
         // progress: impl Fn(download::DownloadProgress) -> () + 'static,
     ) -> Result<DownloadedTrack> {
         // search the video first
         // let method = method.unwrap_or(Method::First);
         // let video_id = self.find_best_video(&track, method).await?;
 
-        let video_id = track
-            .id
-            .as_ref()
-            .ok_or(anyhow::anyhow!("no video id"))?
-            .id
-            .to_owned();
-        let video = self.get_video(&video_id).await?;
-        let audio_formats = video.formats.audio();
-        // if audio_formats.len() < 1 {
-        //     panic!("todo: error when no audio formats");
-        // }
-        // for (i, f) in audio_formats.iter().enumerate() {
-        //     println!(
-        //         "{}: {:?} {:?} {:?}",
-        //         i, f.quality_label, f.mime_type, f.bitrate
-        //     );
-        // }
-        let format = audio_formats
-            .first()
-            .ok_or(anyhow::anyhow!("no format"))?
-            .to_owned()
-            .to_owned();
-        // println!(
-        //     "Video '{:?}' - Quality '{:?}' - Codec '{:?}'",
-        //     video.title, format.quality_label, format.mime_type
-        // );
+        // let video_id = track
+        //     .id
+        //     .as_ref()
+        //     .ok_or(anyhow::anyhow!("no video id"))?
+        //     .id
+        //     .to_owned();
+        // let video = self.get_video(&video_id).await?;
+        // let audio_formats = video.formats.audio();
+        // // if audio_formats.len() < 1 {
+        // //     panic!("todo: error when no audio formats");
+        // // }
+        // // for (i, f) in audio_formats.iter().enumerate() {
+        // //     println!(
+        // //         "{}: {:?} {:?} {:?}",
+        // //         i, f.quality_label, f.mime_type, f.bitrate
+        // //     );
+        // // }
+        // let format = audio_formats
+        //     .first()
+        //     .ok_or(anyhow::anyhow!("no format"))?
+        //     .to_owned()
+        //     .to_owned();
+        // // println!(
+        // //     "Video '{:?}' - Quality '{:?}' - Codec '{:?}'",
+        // //     video.title, format.quality_label, format.mime_type
+        // // );
 
-        let title = video.title.to_owned().ok_or(anyhow::anyhow!("untitled"))?;
-        // let artist = video.author.to_owned();
-        // let filename = vec![Some(title), artist]
-        // let sanitized_filename = utils::sanitize_filename(format!("{} - {}", title, artist));
-        let sanitized_filename = utils::sanitize_filename(&title);
-        // println!("sanitized filename: {}", sanitized_filename);
+        // let title = video.title.to_owned().ok_or(anyhow::anyhow!("untitled"))?;
+        // // let artist = video.author.to_owned();
+        // // let filename = vec![Some(title), artist]
+        // // let sanitized_filename = utils::sanitize_filename(format!("{} - {}", title, artist));
+        // let sanitized_filename = utils::sanitize_filename(&title);
+        // // println!("sanitized filename: {}", sanitized_filename);
 
-        // let output_path = output_path.to_owned();
-        // println!("output path: {}", output_path.display());
+        // // let output_path = output_path.to_owned();
+        // // println!("output path: {}", output_path.display());
 
-        // create the directory if it does not already exist
-        // let content_length = self.download(&video, &format, output_path.clone()).await?;
-        let stream_url = self.get_stream_url(&video, &format).await?;
+        // // create the directory if it does not already exist
+        // // let content_length = self.download(&video, &format, output_path.clone()).await?;
+        // let stream_url = self.get_stream_url(&video, &format).await?;
         //     println!("stream url: {}", stream_url);
+        let track_id = track.id()?;
+        let (stream_url, sanitized_filename) = self.audio_download_url(track).await?;
         let mut download = download::Download::new(&stream_url, &output_path).await?;
         if let Some(progress) = progress {
             // download.on_progress(|progress: download::DownloadProgress| {});
             download.on_progress(progress);
         };
-        download
-            // .start(progress) // |progress: download::DownloadProgress| {})
-            // .start(|progress: download::DownloadProgress| {})
-            .start()
-            .await?;
+        download.start().await?;
 
         Ok(DownloadedTrack {
             track: proto::djtool::Track {
                 name: track.name.to_owned(),
                 id: Some(proto::djtool::TrackId {
-                    id: video_id.to_owned(),
+                    id: track_id.id.to_owned(),
                     source: proto::djtool::Service::Youtube as i32,
                     playlist_id: None,
                 }),
@@ -209,13 +233,6 @@ impl Sink for Youtube {
             },
             output_path: output_path.as_ref().to_owned(),
         })
-        // Ok(OutputVideo {
-        //     info: video,
-        //     thumbnail: None,
-        //     audio_file: output_path,
-        //     content_length: download.info.content_length,
-        //     format,
-        // });
     }
 
     async fn candidates(

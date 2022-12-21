@@ -14,18 +14,28 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[async_trait]
+// #[async_trait]
 pub trait Policy {
-    async fn arbitrate<I, C, O, E>(
+    // async fn arbitrate<I, C, O, E>(
+    fn arbitrate<I, C, O, E>(
         &self,
         tasks: &Tasks<I, C, O, E>,
         scheduler: &Schedule<I>,
     ) -> Option<I>
     where
-        I: Clone + Send + Sync + Eq + Hash + std::fmt::Debug + 'static,
-        C: Send + Sync + 'static,
-        O: Clone + Send + Sync + 'static,
-        E: Clone + Send + Sync + std::fmt::Debug + 'static;
+        I: Clone + Eq + Hash + std::fmt::Debug + 'static,
+        C: 'static,
+        O: Clone + 'static,
+        E: Clone + std::fmt::Debug + 'static;
+    // I: Clone + Send + Eq + Hash + std::fmt::Debug + 'static,
+    // C: Send + 'static,
+    // O: Clone + Send + 'static,
+    // E: Clone + Send + std::fmt::Debug + 'static;
+
+    // I: Clone + Send + Sync + Eq + Hash + std::fmt::Debug + 'static,
+    // C: Send + Sync + 'static,
+    // O: Clone + Send + Sync + 'static,
+    // E: Clone + Send + Sync + std::fmt::Debug + 'static;
 }
 
 pub struct GreedyPolicy {
@@ -44,22 +54,35 @@ impl GreedyPolicy {
 
 impl Default for GreedyPolicy {
     fn default() -> Self {
-        Self { max_tasks: Some(num_cpus::get()) }
+        Self {
+            max_tasks: Some(num_cpus::get()),
+        }
     }
 }
 
-#[async_trait]
+// #[async_trait]
 impl Policy for GreedyPolicy {
-    async fn arbitrate<I, C, O, E>(
+    // async fn arbitrate<I, C, O, E>(
+    fn arbitrate<I, C, O, E>(
         &self,
+        // because these are references, tasks and schedule need to be sync?
         tasks: &Tasks<I, C, O, E>,
         schedule: &Schedule<I>,
     ) -> Option<I>
     where
-        I: Clone + Send + Sync + Eq + Hash + std::fmt::Debug + 'static,
-        C: Send + Sync + 'static,
-        O: Clone + Send + Sync + 'static,
-        E: Clone + Send + Sync + std::fmt::Debug + 'static,
+        I: Clone + Eq + Hash + std::fmt::Debug + 'static,
+        C: 'static,
+        O: Clone + 'static,
+        E: Clone + std::fmt::Debug + 'static,
+        // I: Clone + Send + Eq + Hash + std::fmt::Debug + 'static,
+        // C: Send + 'static,
+        // O: Clone + Send + 'static,
+        // E: Clone + Send + std::fmt::Debug + 'static,
+        //
+        // I: Clone + Send + Sync + Eq + Hash + std::fmt::Debug + 'static,
+        // C: Send + Sync + 'static,
+        // O: Clone + Send + Sync + 'static,
+        // E: Clone + Send + Sync + std::fmt::Debug + 'static,
     {
         // returning some id -> task with id will be executed
         // returning None -> no task can be scheduled at the moment, wait for any task tofinish
