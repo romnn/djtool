@@ -1,14 +1,13 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::ffi::*;
+
 use libc::c_int;
 
 use super::{slice, Opened};
 use crate::{
     codec::Context,
-    color, frame, packet,
-    util::{chroma, format},
-    Error, FieldOrder, Rational,
+    color,
+    util::{chroma, format}, FieldOrder, Rational,
 };
 
 pub struct Video(pub Opened);

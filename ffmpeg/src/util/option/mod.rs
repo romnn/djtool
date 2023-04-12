@@ -23,8 +23,8 @@ pub enum Type {
     Duration,
     Color,
     ChannelLayout,
-    c_ulong,
-    bool,
+    UInt64,
+    Bool,
 }
 
 impl From<AVOptionType> for Type {
@@ -40,8 +40,8 @@ impl From<AVOptionType> for Type {
             AVOptionType::AV_OPT_TYPE_BINARY => Type::Binary,
             AVOptionType::AV_OPT_TYPE_DICT => Type::Dictionary,
             AVOptionType::AV_OPT_TYPE_CONST => Type::Constant,
-            AVOptionType::AV_OPT_TYPE_UINT64 => Type::c_ulong,
-            AVOptionType::AV_OPT_TYPE_BOOL => Type::bool,
+            AVOptionType::AV_OPT_TYPE_UINT64 => Type::UInt64,
+            AVOptionType::AV_OPT_TYPE_BOOL => Type::Bool,
 
             AVOptionType::AV_OPT_TYPE_IMAGE_SIZE => Type::ImageSize,
             AVOptionType::AV_OPT_TYPE_PIXEL_FMT => Type::PixelFormat,
@@ -67,8 +67,8 @@ impl From<Type> for AVOptionType {
             Type::Binary => AVOptionType::AV_OPT_TYPE_BINARY,
             Type::Dictionary => AVOptionType::AV_OPT_TYPE_DICT,
             Type::Constant => AVOptionType::AV_OPT_TYPE_CONST,
-            Type::c_ulong => AVOptionType::AV_OPT_TYPE_UINT64,
-            Type::bool => AVOptionType::AV_OPT_TYPE_BOOL,
+            Type::UInt64 => AVOptionType::AV_OPT_TYPE_UINT64,
+            Type::Bool => AVOptionType::AV_OPT_TYPE_BOOL,
 
             Type::ImageSize => AVOptionType::AV_OPT_TYPE_IMAGE_SIZE,
             Type::PixelFormat => AVOptionType::AV_OPT_TYPE_PIXEL_FMT,

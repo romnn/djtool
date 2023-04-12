@@ -5,6 +5,7 @@ use std::str::{from_utf8_unchecked, FromStr};
 
 use crate::ffi::*;
 
+#[allow(non_camel_case_types)]
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum Pixel {
     None,
@@ -73,13 +74,13 @@ pub enum Pixel {
     BGR555LE,
 
     // #[cfg(feature = "ff_api_vaapi")]
-    VAAPI_MOCO,
+    VaapiMOCO,
     // #[cfg(feature = "ff_api_vaapi")]
-    VAAPI_IDCT,
+    VaapiIDCT,
     // #[cfg(feature = "ff_api_vaapi")]
-    VAAPI_VLD,
+    VaapiVLD,
     // #[cfg(not(feature = "ff_api_vaapi"))]
-    VAAPI,
+    Vaapi,
 
     YUV420P16LE,
     YUV420P16BE,
@@ -164,7 +165,7 @@ pub enum Pixel {
     QSV,
     MMAL,
 
-    D3D11VA_VLD,
+    D3D11VaVLD,
 
     CUDA,
 
@@ -196,18 +197,18 @@ pub enum Pixel {
     GBRAP16LE,
     YUVJ411P,
 
-    BAYER_BGGR8,
-    BAYER_RGGB8,
-    BAYER_GBRG8,
-    BAYER_GRBG8,
-    BAYER_BGGR16LE,
-    BAYER_BGGR16BE,
-    BAYER_RGGB16LE,
-    BAYER_RGGB16BE,
-    BAYER_GBRG16LE,
-    BAYER_GBRG16BE,
-    BAYER_GRBG16LE,
-    BAYER_GRBG16BE,
+    BayerBGGR8,
+    BayerRGGB8,
+    BayerGBRG8,
+    BayerGRBG8,
+    BayerBGGR16LE,
+    BayerBGGR16BE,
+    BayerRGGB16LE,
+    BayerRGGB16BE,
+    BayerGBRG16LE,
+    BayerGBRG16BE,
+    BayerGRBG16LE,
+    BayerGRBG16BE,
 
     YUV440P10LE,
     YUV440P10BE,
@@ -265,10 +266,10 @@ pub enum Pixel {
     GBRP16,
     GBRAP16,
 
-    BAYER_BGGR16,
-    BAYER_RGGB16,
-    BAYER_GBRG16,
-    BAYER_GRBG16,
+    BayerBGGR16,
+    BayerRGGB16,
+    BayerGBRG16,
+    BayerGRBG16,
 
     YUVA420P9,
     YUVA422P9,
@@ -476,11 +477,11 @@ impl From<AVPixelFormat> for Pixel {
             AVPixelFormat::AV_PIX_FMT_BGR555LE => Pixel::BGR555LE,
 
             // #[cfg(feature = "ff_api_vaapi")]
-            AVPixelFormat::AV_PIX_FMT_VAAPI_MOCO => Pixel::VAAPI_MOCO,
+            AVPixelFormat::AV_PIX_FMT_VAAPI_MOCO => Pixel::VaapiMOCO,
             // #[cfg(feature = "ff_api_vaapi")]
-            AVPixelFormat::AV_PIX_FMT_VAAPI_IDCT => Pixel::VAAPI_IDCT,
+            AVPixelFormat::AV_PIX_FMT_VAAPI_IDCT => Pixel::VaapiIDCT,
             // #[cfg(feature = "ff_api_vaapi")]
-            AVPixelFormat::AV_PIX_FMT_VAAPI_VLD => Pixel::VAAPI_VLD,
+            AVPixelFormat::AV_PIX_FMT_VAAPI_VLD => Pixel::VaapiVLD,
 
             AVPixelFormat::AV_PIX_FMT_YUV420P16LE => Pixel::YUV420P16LE,
             AVPixelFormat::AV_PIX_FMT_YUV420P16BE => Pixel::YUV420P16BE,
@@ -565,7 +566,7 @@ impl From<AVPixelFormat> for Pixel {
             AVPixelFormat::AV_PIX_FMT_QSV => Pixel::QSV,
             AVPixelFormat::AV_PIX_FMT_MMAL => Pixel::MMAL,
 
-            AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD => Pixel::D3D11VA_VLD,
+            AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD => Pixel::D3D11VaVLD,
 
             AVPixelFormat::AV_PIX_FMT_CUDA => Pixel::CUDA,
 
@@ -597,18 +598,18 @@ impl From<AVPixelFormat> for Pixel {
             AVPixelFormat::AV_PIX_FMT_GBRAP16LE => Pixel::GBRAP16LE,
             AVPixelFormat::AV_PIX_FMT_YUVJ411P => Pixel::YUVJ411P,
 
-            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR8 => Pixel::BAYER_BGGR8,
-            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB8 => Pixel::BAYER_RGGB8,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG8 => Pixel::BAYER_GBRG8,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG8 => Pixel::BAYER_GRBG8,
-            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16LE => Pixel::BAYER_BGGR16LE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16BE => Pixel::BAYER_BGGR16BE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16LE => Pixel::BAYER_RGGB16LE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16BE => Pixel::BAYER_RGGB16BE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16LE => Pixel::BAYER_GBRG16LE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16BE => Pixel::BAYER_GBRG16BE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16LE => Pixel::BAYER_GRBG16LE,
-            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16BE => Pixel::BAYER_GRBG16BE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR8 => Pixel::BayerBGGR8,
+            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB8 => Pixel::BayerRGGB8,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG8 => Pixel::BayerGBRG8,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG8 => Pixel::BayerGRBG8,
+            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16LE => Pixel::BayerBGGR16LE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16BE => Pixel::BayerBGGR16BE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16LE => Pixel::BayerRGGB16LE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16BE => Pixel::BayerRGGB16BE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16LE => Pixel::BayerGBRG16LE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16BE => Pixel::BayerGBRG16BE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16LE => Pixel::BayerGRBG16LE,
+            AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16BE => Pixel::BayerGRBG16BE,
 
             AVPixelFormat::AV_PIX_FMT_YUV440P10LE => Pixel::YUV440P10LE,
             AVPixelFormat::AV_PIX_FMT_YUV440P10BE => Pixel::YUV440P10BE,
@@ -767,13 +768,13 @@ impl From<Pixel> for AVPixelFormat {
             Pixel::BGR555LE => AVPixelFormat::AV_PIX_FMT_BGR555LE,
 
             // #[cfg(feature = "ff_api_vaapi")]
-            Pixel::VAAPI_MOCO => AVPixelFormat::AV_PIX_FMT_VAAPI_MOCO,
+            Pixel::VaapiMOCO => AVPixelFormat::AV_PIX_FMT_VAAPI_MOCO,
             // #[cfg(feature = "ff_api_vaapi")]
-            Pixel::VAAPI_IDCT => AVPixelFormat::AV_PIX_FMT_VAAPI_IDCT,
+            Pixel::VaapiIDCT => AVPixelFormat::AV_PIX_FMT_VAAPI_IDCT,
             // #[cfg(feature = "ff_api_vaapi")]
-            Pixel::VAAPI_VLD => AVPixelFormat::AV_PIX_FMT_VAAPI_VLD,
+            Pixel::VaapiVLD => AVPixelFormat::AV_PIX_FMT_VAAPI_VLD,
             // #[cfg(not(feature = "ff_api_vaapi"))]
-            Pixel::VAAPI => AVPixelFormat::AV_PIX_FMT_VAAPI,
+            Pixel::Vaapi => AVPixelFormat::AV_PIX_FMT_VAAPI,
 
             Pixel::YUV420P16LE => AVPixelFormat::AV_PIX_FMT_YUV420P16LE,
             Pixel::YUV420P16BE => AVPixelFormat::AV_PIX_FMT_YUV420P16BE,
@@ -858,7 +859,7 @@ impl From<Pixel> for AVPixelFormat {
             Pixel::QSV => AVPixelFormat::AV_PIX_FMT_QSV,
             Pixel::MMAL => AVPixelFormat::AV_PIX_FMT_MMAL,
 
-            Pixel::D3D11VA_VLD => AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD,
+            Pixel::D3D11VaVLD => AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD,
 
             Pixel::CUDA => AVPixelFormat::AV_PIX_FMT_CUDA,
 
@@ -890,18 +891,18 @@ impl From<Pixel> for AVPixelFormat {
             Pixel::GBRAP16LE => AVPixelFormat::AV_PIX_FMT_GBRAP16LE,
             Pixel::YUVJ411P => AVPixelFormat::AV_PIX_FMT_YUVJ411P,
 
-            Pixel::BAYER_BGGR8 => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR8,
-            Pixel::BAYER_RGGB8 => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB8,
-            Pixel::BAYER_GBRG8 => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG8,
-            Pixel::BAYER_GRBG8 => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG8,
-            Pixel::BAYER_BGGR16LE => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16LE,
-            Pixel::BAYER_BGGR16BE => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16BE,
-            Pixel::BAYER_RGGB16LE => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16LE,
-            Pixel::BAYER_RGGB16BE => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16BE,
-            Pixel::BAYER_GBRG16LE => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16LE,
-            Pixel::BAYER_GBRG16BE => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16BE,
-            Pixel::BAYER_GRBG16LE => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16LE,
-            Pixel::BAYER_GRBG16BE => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16BE,
+            Pixel::BayerBGGR8 => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR8,
+            Pixel::BayerRGGB8 => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB8,
+            Pixel::BayerGBRG8 => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG8,
+            Pixel::BayerGRBG8 => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG8,
+            Pixel::BayerBGGR16LE => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16LE,
+            Pixel::BayerBGGR16BE => AVPixelFormat::AV_PIX_FMT_BAYER_BGGR16BE,
+            Pixel::BayerRGGB16LE => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16LE,
+            Pixel::BayerRGGB16BE => AVPixelFormat::AV_PIX_FMT_BAYER_RGGB16BE,
+            Pixel::BayerGBRG16LE => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16LE,
+            Pixel::BayerGBRG16BE => AVPixelFormat::AV_PIX_FMT_BAYER_GBRG16BE,
+            Pixel::BayerGRBG16LE => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16LE,
+            Pixel::BayerGRBG16BE => AVPixelFormat::AV_PIX_FMT_BAYER_GRBG16BE,
 
             Pixel::YUV440P10LE => AVPixelFormat::AV_PIX_FMT_YUV440P10LE,
             Pixel::YUV440P10BE => AVPixelFormat::AV_PIX_FMT_YUV440P10BE,
@@ -959,10 +960,10 @@ impl From<Pixel> for AVPixelFormat {
             Pixel::GBRP16 => AV_PIX_FMT_GBRP16,
             Pixel::GBRAP16 => AV_PIX_FMT_GBRAP16,
 
-            Pixel::BAYER_BGGR16 => AV_PIX_FMT_BAYER_BGGR16,
-            Pixel::BAYER_RGGB16 => AV_PIX_FMT_BAYER_RGGB16,
-            Pixel::BAYER_GBRG16 => AV_PIX_FMT_BAYER_GBRG16,
-            Pixel::BAYER_GRBG16 => AV_PIX_FMT_BAYER_GRBG16,
+            Pixel::BayerBGGR16 => AV_PIX_FMT_BAYER_BGGR16,
+            Pixel::BayerRGGB16 => AV_PIX_FMT_BAYER_RGGB16,
+            Pixel::BayerGBRG16 => AV_PIX_FMT_BAYER_GBRG16,
+            Pixel::BayerGRBG16 => AV_PIX_FMT_BAYER_GRBG16,
 
             Pixel::YUVA420P9 => AV_PIX_FMT_YUVA420P9,
             Pixel::YUVA422P9 => AV_PIX_FMT_YUVA422P9,

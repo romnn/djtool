@@ -1,7 +1,3 @@
-// #![allow(warnings)]
-// #![allow(dead_code)]
-// #![allow(non_camel_case_types)]
-
 use djtool_ffmpeg_sys as ffi;
 
 pub mod util;

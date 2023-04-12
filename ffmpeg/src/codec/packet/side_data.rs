@@ -44,12 +44,12 @@ pub enum Type {
     // #[cfg(feature = "ffmpeg_4_3")]
     PRFT,
     // #[cfg(feature = "ffmpeg_4_3")]
-    ICC_PROFILE,
+    IccProfile,
     // #[cfg(feature = "ffmpeg_4_3")]
-    DOVI_CONF,
+    DoviConf,
 
     // #[cfg(feature = "ffmpeg_4_4")]
-    S12M_TIMECODE,
+    S12mTimecode,
 }
 
 impl From<AVPacketSideDataType> for Type {
@@ -97,12 +97,12 @@ impl From<AVPacketSideDataType> for Type {
             // #[cfg(feature = "ffmpeg_4_3")]
             AVPacketSideDataType::AV_PKT_DATA_PRFT => Type::PRFT,
             // #[cfg(feature = "ffmpeg_4_3")]
-            AVPacketSideDataType::AV_PKT_DATA_ICC_PROFILE => Type::ICC_PROFILE,
+            AVPacketSideDataType::AV_PKT_DATA_ICC_PROFILE => Type::IccProfile,
             // #[cfg(feature = "ffmpeg_4_3")]
-            AVPacketSideDataType::AV_PKT_DATA_DOVI_CONF => Type::DOVI_CONF,
+            AVPacketSideDataType::AV_PKT_DATA_DOVI_CONF => Type::DoviConf,
 
             // #[cfg(feature = "ffmpeg_4_4")]
-            AVPacketSideDataType::AV_PKT_DATA_S12M_TIMECODE => Type::S12M_TIMECODE,
+            AVPacketSideDataType::AV_PKT_DATA_S12M_TIMECODE => Type::S12mTimecode,
         }
     }
 }
@@ -152,12 +152,12 @@ impl From<Type> for AVPacketSideDataType {
             // #[cfg(feature = "ffmpeg_4_3")]
             Type::PRFT => AVPacketSideDataType::AV_PKT_DATA_PRFT,
             // #[cfg(feature = "ffmpeg_4_3")]
-            Type::ICC_PROFILE => AVPacketSideDataType::AV_PKT_DATA_ICC_PROFILE,
+            Type::IccProfile => AVPacketSideDataType::AV_PKT_DATA_ICC_PROFILE,
             // #[cfg(feature = "ffmpeg_4_3")]
-            Type::DOVI_CONF => AVPacketSideDataType::AV_PKT_DATA_DOVI_CONF,
+            Type::DoviConf => AVPacketSideDataType::AV_PKT_DATA_DOVI_CONF,
 
             // #[cfg(feature = "ffmpeg_4_4")]
-            Type::S12M_TIMECODE => AVPacketSideDataType::AV_PKT_DATA_S12M_TIMECODE,
+            Type::S12mTimecode => AVPacketSideDataType::AV_PKT_DATA_S12M_TIMECODE,
         }
     }
 }

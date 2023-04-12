@@ -10,12 +10,12 @@ use libc::{c_char, c_int, size_t};
 // send a patch with cfg_attr.
 
 #[inline(always)]
-pub const fn AVERROR(e: c_int) -> c_int {
+pub const fn av_error(e: c_int) -> c_int {
     -e
 }
 
 #[inline(always)]
-pub const fn AVUNERROR(e: c_int) -> c_int {
+pub const fn av_un_error(e: c_int) -> c_int {
     -e
 }
 

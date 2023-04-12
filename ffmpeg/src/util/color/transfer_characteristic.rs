@@ -3,6 +3,7 @@ use std::str::from_utf8_unchecked;
 
 use crate::ffi::*;
 
+#[allow(non_camel_case_types)]
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum TransferCharacteristic {
     Reserved0,

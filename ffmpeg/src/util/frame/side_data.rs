@@ -33,20 +33,20 @@ pub enum Type {
     QPTableData,
 
     // #[cfg(feature = "ffmpeg_4_1")]
-    S12M_TIMECODE,
+    S12mTimecode,
 
     // #[cfg(feature = "ffmpeg_4_2")]
-    DYNAMIC_HDR_PLUS,
+    DynamicHdrPlus,
     // #[cfg(feature = "ffmpeg_4_2")]
-    REGIONS_OF_INTEREST,
+    RegionsOfInterest,
 
     // #[cfg(feature = "ffmpeg_4_3")]
-    VIDEO_ENC_PARAMS,
+    VideoEncParams,
 
     // #[cfg(feature = "ffmpeg_4_4")]
-    SEI_UNREGISTERED,
+    SeiUnregistered,
     // #[cfg(feature = "ffmpeg_4_4")]
-    FILM_GRAIN_PARAMS,
+    FilmGrainParams,
 }
 
 impl Type {
@@ -88,20 +88,20 @@ impl From<AVFrameSideDataType> for Type {
             AVFrameSideDataType::AV_FRAME_DATA_QP_TABLE_DATA => Type::QPTableData,
 
             // #[cfg(feature = "ffmpeg_4_1")]
-            AVFrameSideDataType::AV_FRAME_DATA_S12M_TIMECODE => Type::S12M_TIMECODE,
+            AVFrameSideDataType::AV_FRAME_DATA_S12M_TIMECODE => Type::S12mTimecode,
 
             // #[cfg(feature = "ffmpeg_4_2")]
-            AVFrameSideDataType::AV_FRAME_DATA_DYNAMIC_HDR_PLUS => Type::DYNAMIC_HDR_PLUS,
+            AVFrameSideDataType::AV_FRAME_DATA_DYNAMIC_HDR_PLUS => Type::DynamicHdrPlus,
             // #[cfg(feature = "ffmpeg_4_2")]
-            AVFrameSideDataType::AV_FRAME_DATA_REGIONS_OF_INTEREST => Type::REGIONS_OF_INTEREST,
+            AVFrameSideDataType::AV_FRAME_DATA_REGIONS_OF_INTEREST => Type::RegionsOfInterest,
 
             // #[cfg(feature = "ffmpeg_4_3")]
-            AVFrameSideDataType::AV_FRAME_DATA_VIDEO_ENC_PARAMS => Type::VIDEO_ENC_PARAMS,
+            AVFrameSideDataType::AV_FRAME_DATA_VIDEO_ENC_PARAMS => Type::VideoEncParams,
 
             // #[cfg(feature = "ffmpeg_4_4")]
-            AVFrameSideDataType::AV_FRAME_DATA_SEI_UNREGISTERED => Type::SEI_UNREGISTERED,
+            AVFrameSideDataType::AV_FRAME_DATA_SEI_UNREGISTERED => Type::SeiUnregistered,
             // #[cfg(feature = "ffmpeg_4_4")]
-            AVFrameSideDataType::AV_FRAME_DATA_FILM_GRAIN_PARAMS => Type::FILM_GRAIN_PARAMS,
+            AVFrameSideDataType::AV_FRAME_DATA_FILM_GRAIN_PARAMS => Type::FilmGrainParams,
         }
     }
 }
@@ -136,20 +136,20 @@ impl From<Type> for AVFrameSideDataType {
             Type::QPTableData => AVFrameSideDataType::AV_FRAME_DATA_QP_TABLE_DATA,
 
             // #[cfg(feature = "ffmpeg_4_1")]
-            Type::S12M_TIMECODE => AVFrameSideDataType::AV_FRAME_DATA_S12M_TIMECODE,
+            Type::S12mTimecode => AVFrameSideDataType::AV_FRAME_DATA_S12M_TIMECODE,
 
             // #[cfg(feature = "ffmpeg_4_2")]
-            Type::DYNAMIC_HDR_PLUS => AVFrameSideDataType::AV_FRAME_DATA_DYNAMIC_HDR_PLUS,
+            Type::DynamicHdrPlus => AVFrameSideDataType::AV_FRAME_DATA_DYNAMIC_HDR_PLUS,
             // #[cfg(feature = "ffmpeg_4_2")]
-            Type::REGIONS_OF_INTEREST => AVFrameSideDataType::AV_FRAME_DATA_REGIONS_OF_INTEREST,
+            Type::RegionsOfInterest => AVFrameSideDataType::AV_FRAME_DATA_REGIONS_OF_INTEREST,
 
             // #[cfg(feature = "ffmpeg_4_3")]
-            Type::VIDEO_ENC_PARAMS => AVFrameSideDataType::AV_FRAME_DATA_VIDEO_ENC_PARAMS,
+            Type::VideoEncParams => AVFrameSideDataType::AV_FRAME_DATA_VIDEO_ENC_PARAMS,
 
             // #[cfg(feature = "ffmpeg_4_4")]
-            Type::SEI_UNREGISTERED => AVFrameSideDataType::AV_FRAME_DATA_SEI_UNREGISTERED,
+            Type::SeiUnregistered => AVFrameSideDataType::AV_FRAME_DATA_SEI_UNREGISTERED,
             // #[cfg(feature = "ffmpeg_4_4")]
-            Type::FILM_GRAIN_PARAMS => AVFrameSideDataType::AV_FRAME_DATA_FILM_GRAIN_PARAMS,
+            Type::FilmGrainParams => AVFrameSideDataType::AV_FRAME_DATA_FILM_GRAIN_PARAMS,
         }
     }
 }

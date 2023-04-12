@@ -3,6 +3,7 @@ use std::str::from_utf8_unchecked;
 
 use crate::ffi::*;
 
+#[allow(non_camel_case_types)]
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum Primaries {
     Reserved0,
@@ -43,6 +44,7 @@ impl Primaries {
 }
 
 impl From<AVColorPrimaries> for Primaries {
+    #[allow(unreachable_patterns)]
     fn from(value: AVColorPrimaries) -> Primaries {
         match value {
             AVColorPrimaries::AVCOL_PRI_RESERVED0 => Primaries::Reserved0,
@@ -50,14 +52,12 @@ impl From<AVColorPrimaries> for Primaries {
             AVColorPrimaries::AVCOL_PRI_UNSPECIFIED => Primaries::Unspecified,
             AVColorPrimaries::AVCOL_PRI_RESERVED => Primaries::Reserved,
             AVColorPrimaries::AVCOL_PRI_BT470M => Primaries::BT470M,
-
             AVColorPrimaries::AVCOL_PRI_BT470BG => Primaries::BT470BG,
             AVColorPrimaries::AVCOL_PRI_SMPTE170M => Primaries::SMPTE170M,
             AVColorPrimaries::AVCOL_PRI_SMPTE240M => Primaries::SMPTE240M,
             AVColorPrimaries::AVCOL_PRI_FILM => Primaries::Film,
             AVColorPrimaries::AVCOL_PRI_BT2020 => Primaries::BT2020,
             AVColorPrimaries::AVCOL_PRI_NB => Primaries::Reserved0,
-
             AVColorPrimaries::AVCOL_PRI_SMPTE428 => Primaries::SMPTE428,
             AVColorPrimaries::AVCOL_PRI_SMPTE431 => Primaries::SMPTE431,
             AVColorPrimaries::AVCOL_PRI_SMPTE432 => Primaries::SMPTE432,

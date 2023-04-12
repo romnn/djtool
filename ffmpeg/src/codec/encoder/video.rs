@@ -8,7 +8,7 @@ use super::Encoder as Super;
 use super::{Comparison, Decision, MotionEstimation, Prediction};
 use crate::{
     codec::{traits, Context},
-    color, format, frame, packet, Dictionary, Error, Rational,
+    color, format, Dictionary, Error, Rational,
 };
 
 pub struct Video(pub Super);
