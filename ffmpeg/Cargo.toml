@@ -1,0 +1,28 @@
+[package]
+name = "djtool-ffmpeg"
+version = "0.0.1"
+edition = "2021"
+publish = true
+authors = ["djtool authors"]
+description = "ffmpeg wrappers"
+license-file = "../LICENSE"
+readme = "../README.md"
+documentation = "https://docs.rs/djtool-ffmpeg"
+homepage = "https://github.com/romnn/djtool-ffmpeg"
+repository = "https://github.com/romnn/djtool-ffmpeg"
+categories = [
+  "external-ffi-bindings",
+  "development-tools::profiling",
+  "os::unix-apis",
+]
+keywords = [
+  "ffmpeg",
+  "multimedia",
+  "audio",
+]
+exclude = []
+
+[dependencies]
+djtool-ffmpeg-sys = { path = "../ffmpeg-sys" }
+libc = "0.2"
+bitflags = "1"

@@ -5,8 +5,6 @@ pub mod config;
 #[cfg(feature = "debug")]
 mod debug;
 pub mod download;
-pub mod ffmpeg;
-mod ffmpeg_sys;
 pub mod id3;
 pub mod matching;
 pub mod proto;

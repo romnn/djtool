@@ -1,8 +1,7 @@
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::ffmpeg;
-use crate::ffmpeg::{codec, filter, format, frame, media};
+use djtool_ffmpeg as ffmpeg;
+// ,  codec, filter, format, frame, media};
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -24,10 +23,10 @@ pub enum Codec {
 }
 
 impl Codec {
-    fn codec(&self) -> codec::id::Id {
+    fn codec(&self) -> ffmpeg::codec::id::Id {
         match self {
-            Codec::MP3 => codec::id::Id::MP3,
-            Codec::PCM => codec::id::Id::PCM_S16LE,
+            Codec::MP3 => ffmpeg::codec::id::Id::MP3,
+            Codec::PCM => ffmpeg::codec::id::Id::PCM_S16LE,
         }
     }
 }
@@ -43,7 +42,7 @@ pub struct TranscoderOptions<'a> {
 impl TranscoderOptions<'_> {
     pub fn mp3() -> Self {
         Self {
-            codec: Some(Codec::MP3),
+            codec: Some(ffmpeg::Codec::MP3),
             bitrate_kbps: Some(192),
             sample_rate: None,
             filter_spec: Some("loudnorm"),
@@ -52,7 +51,7 @@ impl TranscoderOptions<'_> {
 
     pub fn matching() -> Self {
         Self {
-            codec: Some(Codec::PCM),
+            codec: Some(ffmpeg::Codec::PCM),
             bitrate_kbps: None,
             // most importantly, we resample
             sample_rate: Some(22_050),
@@ -74,8 +73,8 @@ pub trait Transcoder {
 struct FFmpegTranscode<'a> {
     stream: usize,
     filter: filter::Graph,
-    decoder: codec::decoder::Audio,
-    encoder: codec::encoder::Audio,
+    decoder: ffmpeg::codec::decoder::Audio,
+    encoder: ffmpeg::codec::encoder::Audio,
     in_time_base: ffmpeg::Rational,
     out_time_base: ffmpeg::Rational,
     duration: usize,
@@ -87,8 +86,8 @@ struct FFmpegTranscode<'a> {
 
 impl<'a> FFmpegTranscode<'a> {
     pub fn new<P: AsRef<Path>>(
-        ictx: &mut format::context::Input,
-        octx: &mut format::context::Output,
+        ictx: &mut ffmpeg::format::context::Input,
+        octx: &mut ffmpeg::format::context::Output,
         path: &P,
         options: Option<&TranscoderOptions>,
         progress_handler: &'a mut ProgressHandlerFunc,
