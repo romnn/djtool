@@ -8,7 +8,6 @@ use crate::spotify::error::{ApiError, AuthError, Error};
 use crate::spotify::model::Token;
 use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use async_trait::async_trait;
-use base64;
 use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -142,6 +141,12 @@ impl Authenticator for PkceAuthenticator {
 impl PkceAuthenticator {
     /// Generate the verifier code and the challenge code.
     fn generate_codes(&self, verifier_bytes: usize) -> (String, String) {
+        use base64::{
+            alphabet,
+            engine::{self, general_purpose},
+            Engine,
+        };
+
         println!("Generating PKCE codes");
 
         debug_assert!(verifier_bytes >= 43);
@@ -159,7 +164,13 @@ impl PkceAuthenticator {
         hasher.update(verifier.as_bytes());
         let challenge = hasher.finalize();
 
-        let challenge = base64::encode_config(challenge, base64::URL_SAFE_NO_PAD);
+        // let challenge = base64::encode_config(challenge, base64::URL_SAFE_NO_PAD);
+        // let b64 = general_purpose::STANDARD.encode(b"hello world~");
+
+        const b64: engine::GeneralPurpose =
+            engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::NO_PAD);
+
+        let challenge = b64.encode(challenge);
 
         (verifier, challenge)
     }

@@ -34,6 +34,12 @@ pub fn output() -> PathBuf {
         .unwrap()
 }
 
+pub fn manifest() -> PathBuf {
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+        .canonicalize()
+        .unwrap()
+}
+
 pub fn search() -> PathBuf {
     let mut absolute = env::current_dir().unwrap();
     absolute.push(&output());

@@ -15,14 +15,14 @@ pub fn embed_image(
         )
     })?;
 
-    let mut encoded_image_bytes = Vec::new();
+    let mut encoded_image_bytes = std::io::Cursor::new(Vec::new());
     image.write_to(&mut encoded_image_bytes, image::ImageOutputFormat::Jpeg(90))?;
 
     tag.add_picture(id3::frame::Picture {
         mime_type: "image/jpeg".to_string(),
         picture_type: id3::frame::PictureType::CoverFront,
         description: String::new(),
-        data: encoded_image_bytes,
+        data: encoded_image_bytes.into_inner(),
     });
 
     tag.write_to_path(music_filename.as_ref(), id3::Version::Id3v23)

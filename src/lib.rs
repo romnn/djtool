@@ -12,13 +12,13 @@ pub mod matching;
 pub mod proto;
 // pub mod error;
 pub mod cli;
+pub mod scheduler;
 pub mod sink;
 pub mod source;
 pub mod spotify;
 pub mod transcode;
 pub mod utils;
 pub mod youtube;
-pub mod scheduler;
 
 use anyhow::Result;
 use config::Persist;
@@ -95,14 +95,11 @@ impl DjTool {
         println!("frontend served at {}", http_addr);
 
         let djtool_grpc_service = proto::djtool::dj_tool_server::DjToolServer::new(self.clone());
-        let djtool_grpc_service = tonic_web::config()
-            // .allow_origins(vec!["localhost", "127.0.0.1"])
-            .enable(djtool_grpc_service);
 
         let grpc_server = TonicServer::builder()
             .accept_http1(true)
             .max_concurrent_streams(128)
-            .add_service(djtool_grpc_service);
+            .add_service(tonic_web::enable(djtool_grpc_service));
 
         let library_dir = {
             let config = self.config.read().await;

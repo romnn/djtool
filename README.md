@@ -13,9 +13,20 @@ pip3 install "proto-compile>=0.1.6"
 python3 compile-proto-grpcweb.py
 ```
 
+#### Linting
+```bash
+$HOME/.cargo/bin/cargo +nightly udeps
+```
+
 #### Development roadmap
 
 TODO:
+- upgrade all packages
+- lint
+- lint
+- refactor to use workspaces (faster builds, clear separation)
+- publish to crates.io
+- think of a new name?
 
 - implement a cmd based transcoder that does not need to build with ffmpeg
 - make transcoders dynamic dispatch

@@ -26,8 +26,8 @@ pub enum Codec {
 impl Codec {
     fn codec(&self) -> codec::id::Id {
         match self {
-            MP3 => codec::id::Id::MP3,
-            PCM => codec::id::Id::PCM_S16LE,
+            Codec::MP3 => codec::id::Id::MP3,
+            Codec::PCM => codec::id::Id::PCM_S16LE,
         }
     }
 }

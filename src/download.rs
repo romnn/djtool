@@ -1,6 +1,5 @@
 use crate::utils;
 use anyhow::Result;
-use boa;
 use futures_util::{stream, StreamExt};
 use http::header::HeaderMap;
 use lazy_static::lazy_static;

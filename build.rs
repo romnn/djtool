@@ -12,7 +12,7 @@ use buildtools::dep_graph::parallel::*;
 use buildtools::dep_graph::{DepGraph, Dependency};
 use buildtools::git::GitRepository;
 use buildtools::libs::{Library, LibraryId, LIBRARIES};
-use buildtools::{feature_env_set, is_debug_build, output, search};
+use buildtools::{feature_env_set, is_debug_build, manifest, output, search};
 #[cfg(feature = "parallel-build")]
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -148,7 +148,7 @@ fn check_features(
     let out_dir = output();
 
     write!(
-        File::create(out_dir.join("check.c")).expect("Failed to create file"),
+        File::create(out_dir.join("check.c")).unwrap(),
         r#"
             #include <stdio.h>
             {includes_code}
@@ -161,7 +161,7 @@ fn check_features(
         includes_code = includes_code,
         main_code = main_code
     )
-    .expect("Write failed");
+    .unwrap();
 
     let executable = out_dir.join(if cfg!(windows) { "check.exe" } else { "check" });
     let mut compiler = cc::Build::new()
@@ -179,7 +179,7 @@ fn check_features(
         .arg(&executable)
         .arg("check.c")
         .status()
-        .expect("Command failed")
+        .unwrap()
         .success()
     {
         panic!("Compile failed");
@@ -188,7 +188,7 @@ fn check_features(
     let check_output = Command::new(out_dir.join(&executable))
         .current_dir(&out_dir)
         .output()
-        .expect("Check failed");
+        .unwrap();
     if !check_output.status.success() {
         panic!(
             "{} failed: {}\n{}",
@@ -259,19 +259,23 @@ fn compile_protos() -> Result<()> {
         .type_attribute(
             "proto.djtool.TrackId",
             "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
+            // "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
         )
         .type_attribute(
             "proto.djtool.PlaylistId",
             "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
+            // "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
         )
         .type_attribute(
             "proto.djtool.UserId",
+            // "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
             "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
-        )
-        .type_attribute(
-            ".proto.djtool",
-            "#[derive(serde::Serialize, serde::Deserialize)]",
         );
+    // .type_attribute(
+    //     ".proto.djtool",
+    //     // "#[derive(serde::Serialize, serde::Deserialize)]",
+    //     "#[derive(::Deserialize)]",
+    // );
     builder
         .build_server(true)
         .build_client(false)
@@ -732,9 +736,6 @@ fn main() {
             .iter()
             .map(|include| format!("-I{}", include.to_string_lossy()));
 
-        // The bindgen::Builder is the main entry point
-        // to bindgen, and lets you build up options for
-        // the resulting bindings.
         let mut builder = bindgen::Builder::default()
             .clang_args(clang_includes)
             .ctypes_prefix("libc")
@@ -827,6 +828,9 @@ fn main() {
             .blocklist_function("ynl")
             .opaque_type("__mingw_ldbl_type_t")
             .generate_comments(false)
+            .default_enum_style(bindgen::EnumVariation::Rust {
+                non_exhaustive: env::var("CARGO_FEATURE_NON_EXHAUSTIVE_ENUMS").is_ok(),
+            })
             .rustified_enum("*")
             .prepend_enum_name(false)
             .derive_eq(true)
@@ -947,16 +951,15 @@ fn main() {
             builder = builder.header(hwcontext_drm_header);
         }
 
-        // Finish the builder and generate the bindings.
-        let bindings = builder
-            .generate()
-            // Unwrap the Result and panic on failure.
-            .expect("Unable to generate bindings");
+        let bindings = builder.generate().unwrap();
 
-        // Write the bindings to the $OUT_DIR/bindings.rs file.
         bindings
             .write_to_file(output().join("bindings.rs"))
-            .expect("Couldn't write bindings!");
+            .unwrap();
+
+        bindings
+            .write_to_file(manifest().join("bindings.rs"))
+            .unwrap();
     }
     if cfg!(target_os = "macos") {
         // required to make tao (from tauri) link

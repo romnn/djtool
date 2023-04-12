@@ -116,7 +116,8 @@ pub async fn debug_spotify_playlists_handler(
     let user_id = UserId::from_id(&query.user_id).unwrap();
     let playlist_id = query
         .playlist_id
-        .and_then(|id| PlaylistId::from_id(&id).ok());
+        .as_ref()
+        .and_then(|id| PlaylistId::from_id(id).ok());
 
     // let playlists = spotify
     //     .user_playlists_items_stream(&user_id, None, None)

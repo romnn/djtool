@@ -2,7 +2,6 @@ use super::model;
 use super::Youtube;
 use crate::utils;
 use anyhow::Result;
-use boa;
 use futures_util::{stream, StreamExt};
 use http::header::HeaderMap;
 use lazy_static::lazy_static;
@@ -198,7 +197,24 @@ impl Youtube {
 
         let contents = std::fs::read_to_string("/Users/roman/Desktop/basejsBodyExample.js")
             .expect("Something went wrong reading the file");
-        let js_code = boa::parse(&contents, false).unwrap();
+
+        // Instantiate the execution context
+        let mut context = boa_engine::Context::default();
+
+        // Parse the source code
+        match context.eval(contents) {
+            Ok(res) => {
+                println!(
+                    "{}",
+                    res.to_string(&mut context).unwrap().as_str().to_string()
+                );
+            }
+            Err(e) => {
+                // Pretty print the error
+                eprintln!("boa parse error:");
+            }
+        };
+        // let js_code = boa_engine::parse(&contents, false).unwrap();
         // let js_code = boa::parse(&player_config, false).unwrap();
         // let matches = matches.iter().collect();
         // let matches: Vec<_> = sig_js_patterns.matches(&player_config).into_iter().collect();

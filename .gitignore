@@ -10,3 +10,4 @@ experimental/results
 *.wmv
 *.webm
 *.aac
+bindings.rs

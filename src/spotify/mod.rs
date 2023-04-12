@@ -187,14 +187,17 @@ impl Spotify {
         // playlist_id: String,
         playlist: proto::djtool::Playlist,
         fields: Option<&str>,
-        market: Option<&model::Market>,
+        market: Option<model::Market>,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<model::Page<model::PlaylistItem>, Error> {
+        let market: Option<&str>= market.map(Into::into);
         let params = HashMap::<&str, Value>::from_iter(
             vec![
                 fields.map(|fields| ("fields", fields.into())),
-                market.map(|market| ("market", market.as_ref().into())),
+                market.map(|market| ("market", market.into())),
+                // market.map(|market| ("market", Into::<String>::into(market).into())),
+                // market.and_then(|market("market", Into::<String>::into(market).into())),
                 limit.map(|limit| ("limit", limit.into())),
                 offset.map(|offset| ("offset", offset.into())),
             ]
@@ -527,11 +530,11 @@ impl From<model::FullTrack> for proto::djtool::Track {
 //     }
 // }
 
-impl TryFrom<proto::djtool::PlaylistId> for model::PlaylistId {
+impl<'a> TryFrom<proto::djtool::PlaylistId> for model::PlaylistId<'a> {
     type Error = model::IdError;
 
-    fn try_from(id: proto::djtool::PlaylistId) -> Result<model::PlaylistId, Self::Error> {
-        model::PlaylistId::from_id(&id.id)
+    fn try_from(id: proto::djtool::PlaylistId) -> Result<model::PlaylistId<'a>, Self::Error> {
+        model::PlaylistId::from_id(id.id)
     }
 }
 
