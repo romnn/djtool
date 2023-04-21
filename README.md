@@ -27,6 +27,9 @@ TODO:
 - refactor to use workspaces (faster builds, clear separation)
 - publish to crates.io
 - think of a new name?
+- add github actions
+
+- compile for web assembly
 
 - implement a cmd based transcoder that does not need to build with ffmpeg
 - make transcoders dynamic dispatch

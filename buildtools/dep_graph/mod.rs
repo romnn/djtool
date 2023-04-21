@@ -1,4 +1,5 @@
 pub mod components;
+
 #[cfg(feature = "parallel-build")]
 pub mod parallel;
 

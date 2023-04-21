@@ -78,6 +78,7 @@ tonic-web = "0.9"
 prost = "0.11"
 prost-types = "0.11"
 djtool-ffmpeg = { path = "ffmpeg", optional = true }
+taski = "0"
 
 [build-dependencies]
 anyhow = "1"
