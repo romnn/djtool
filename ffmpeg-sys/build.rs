@@ -1,15 +1,5 @@
 #![allow(warnings)]
 
-// mod buildtools;
-
-// #[cfg(feature = "parallel-build")]
-// use buildtools::dep_graph::parallel::*;
-// use buildtools::dep_graph::{DepGraph, Dependency};
-// use buildtools::git::GitRepository;
-// use buildtools::libs::{Library, LibraryId, LIBRARIES};
-// use buildtools::{feature_env_set, is_debug_build, manifest, output, search};
-// #[cfg(feature = "parallel-build")]
-// use rayon::prelude::*;
 use anyhow::Result;
 use dep_graph::{DepGraph, Dependency};
 use std::collections::HashMap;
@@ -557,18 +547,28 @@ impl GitRepository<'_> {
             cmd.arg("-b").arg(branch);
         }
 
-        cmd.arg(self.url).arg(self.path.to_str().unwrap());
+        cmd.arg(self.url);
+        cmd.arg(self.path.to_string_lossy().to_string());
         // println!(
         //     "cargo:warning=Cloning {} into {}",
         //     self.url,
         //     self.path.display()
         // );
 
-        if cmd.status()?.success() {
-            Ok(())
+        let output = match cmd.output() {
+            Ok(output) => output,
+            Err(err) => return Err(anyhow::anyhow!("{:#?} failed: {}", &cmd, err)),
+        };
+
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            Err(anyhow::anyhow!("{:#?} failed", &cmd))
         } else {
-            Err(anyhow::anyhow!("fetch failed"))
-            // Err(io::Error::new(io::ErrorKind::Other, "fetch failed").into())
+            Ok(())
         }
     }
 }
@@ -868,10 +868,10 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
 
         // run make
         let mut make = Command::new("make");
-            make.arg("-j");
-            make.arg(num_cpus::get().to_string());
-            make.current_dir(&source);
-            make.envs(&build_env());
+        make.arg("-j");
+        make.arg(num_cpus::get().to_string());
+        make.current_dir(&source);
+        make.envs(&build_env());
 
         let output = match make.output() {
             Ok(output) => output,
@@ -889,9 +889,9 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
 
         // run make install
         let mut make_install = Command::new("make");
-            make_install.current_dir(&source);
-            make_install.arg("install");
-            make_install.envs(&build_env());
+        make_install.current_dir(&source);
+        make_install.arg("install");
+        make_install.envs(&build_env());
 
         let output = match make_install.output() {
             Ok(output) => output,
@@ -1333,88 +1333,6 @@ fn main() {
     assert!(!LIBRARIES.values().any(|lib| lib.needs_rebuild()));
 
     let include_paths = vec![search().join("include")];
-    // let include_paths: Vec<PathBuf> = {
-    // let enabled_libraries: Vec<_> = LIBRARIES
-    //     .iter()
-    //     .filter(|lib| {
-    //         !lib.is_feature || lib.feature_name().and_then(|f| env::var(&f).ok()).is_some()
-    //     })
-    //     .collect();
-
-    // for lib in LIBRARIES[&LibraryId::FFMPEG].artifacts {
-    //     println!("cargo:rustc-link-lib=static={}", lib.name);
-    // }
-    // for lib in &enabled_libraries {
-    //     println!("cargo:rustc-link-lib=static={}", lib.name);
-    // }
-    // if env::var("CARGO_FEATURE_BUILD_ZLIB").is_ok() && cfg!(target_os = "linux") {
-    //     println!("cargo:rustc-link-lib=z");
-    // }
-
-    // let needs_rebuild = enabled_libraries
-    //     .iter()
-    //     .map(|lib| search().join("lib").join(format!("lib{}.a", lib.name)))
-    //     .any(|lib| lib.metadata().is_err());
-
-    // if false || needs_rebuild {
-    //     fs::create_dir_all(&output()).expect("failed to create build directory");
-    //     fetch().unwrap();
-    //     build_ffmpeg().unwrap();
-    // }
-
-    // vec![search().join("include")]
-    // };
-    // else if let Some(paths) = try_vcpkg(statik) {
-    //     // vcpkg doesn't detect the "system" dependencies
-    //     if statik {
-    //         if cfg!(feature = "avcodec") || cfg!(feature = "avdevice") {
-    //             println!("cargo:rustc-link-lib=ole32");
-    //         }
-
-    //         if cfg!(feature = "avformat") {
-    //             println!("cargo:rustc-link-lib=secur32");
-    //             println!("cargo:rustc-link-lib=ws2_32");
-    //         }
-
-    //         // avutil depdendencies
-    //         println!("cargo:rustc-link-lib=bcrypt");
-    //         println!("cargo:rustc-link-lib=user32");
-    //     }
-
-    //     paths
-    // }
-    ////
-    //// Fallback to pkg-config
-    //else {
-    //    pkg_config::Config::new()
-    //        .statik(statik)
-    //        .probe("libavutil")
-    //        .unwrap();
-
-    //    let libs = vec![
-    //        ("libavformat", "AVFORMAT"),
-    //        ("libavfilter", "AVFILTER"),
-    //        ("libavdevice", "AVDEVICE"),
-    //        ("libavresample", "AVRESAMPLE"),
-    //        ("libswscale", "SWSCALE"),
-    //        ("libswresample", "SWRESAMPLE"),
-    //    ];
-
-    //    for (lib_name, env_variable_name) in libs.iter() {
-    //        if env::var(format!("CARGO_FEATURE_{}", env_variable_name)).is_ok() {
-    //            pkg_config::Config::new()
-    //                .statik(statik)
-    //                .probe(lib_name)
-    //                .unwrap();
-    //        }
-    //    }
-
-    //    pkg_config::Config::new()
-    //        .statik(statik)
-    //        .probe("libavcodec")
-    //        .unwrap()
-    //        .include_paths
-    //};
 
     check_features(
         include_paths.clone(),
