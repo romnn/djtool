@@ -1,2 +1,5 @@
 target/
+experimental/
+ffmpeg-build/
+.git/
 .DS_Store

@@ -45,8 +45,11 @@ debug = 1
 # opt-level = 's'  # Optimize for size.
 lto = true # Link Time Optimization (LTO)
 
+[dependencies.reqwest]
+features = ["json", "blocking", "rustls-tls", "stream"]
+version = "0"
+
 [dependencies]
-reqwest = { version = "0", features = ["json", "blocking", "rustls-tls", "stream"] }
 anyhow = "1"
 dotenv = "0"
 async-trait = "0"

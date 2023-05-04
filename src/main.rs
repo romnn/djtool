@@ -56,7 +56,12 @@ pub enum Command {
 }
 
 #[derive(Parser, Debug, Clone)]
-#[clap(version = "1.0", author = "romnn <contact@romnn.com>")]
+#[clap(
+    name = "djtool",
+    version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"),
+    author = "romnn <contact@romnn.com>",
+    about = "djtool",
+)]
 pub struct Opts {
     // #[cfg(feature = "record")]
     // #[clap(short = 'i', long = "input-device")]

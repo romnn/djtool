@@ -3,18 +3,8 @@ name: build
 on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    name: build
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Compile binaries
-        run: cargo build --all-targets
-
-  build-all:
-    runs-on: ${{ matrix.target.os }}
+  build-macos:
+    runs-on: macos-latest
     name: build ${{ matrix.bin }} (${{ matrix.target.arch }})
     strategy: 
       fail-fast: false
@@ -22,42 +12,96 @@ jobs:
         bin:
           - djtool
         target:
-          # linux aarch64 
-          - os: ubuntu-latest
-            arch: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
-            arch: aarch64-unknown-linux-musl
-          # linux armv7
-          - os: ubuntu-latest
-            arch: armv7-unknown-linux-musleabihf
-          # linux i686
-          - os: ubuntu-latest
-            arch: i686-unknown-linux-gnu
-          - os: ubuntu-latest
-            arch: i686-unknown-linux-musl
-          # linux arm
-          - os: ubuntu-latest
-            arch: arm-unknown-linux-gnueabi
-          - os: ubuntu-latest
-            arch: arm-unknown-linux-gnueabihf
-          # linux x86
-          - os: ubuntu-latest
-            arch: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            arch: x86_64-unknown-linux-musl
-          # apple  
-          - os: macos-latest
-            arch: x86_64-apple-darwin
-          - os: macos-latest
-            arch: aarch64-apple-darwin
-          # windows
-          - os: windows-latest
-            arch: x86_64-pc-windows-gnu
-          - os: windows-latest
-            arch: x86_64-pc-windows-msvc
-          - os: windows-latest
-            arch: i686-pc-windows-msvc
+          - arch: x86_64-apple-darwin
+          - arch: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.arch }}
 
+      - name: Install dependencies
+        run: >-
+          brew install
+          llvm
+          protobuf
+          yasm
+
+      - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: >-
+            --bin ${{ matrix.bin }}
+            --target ${{ matrix.target.arch }}
+  
+  build-linux:
+    runs-on: ubuntu-latest
+    name: build ${{ matrix.bin }} (linux ${{ matrix.target.arch }})
+    strategy: 
+      fail-fast: false
+      matrix:
+        bin:
+          - djtool
+        target:
+          # linux aarch64 
+          - arch: aarch64-unknown-linux-gnu
+          - arch: aarch64-unknown-linux-musl
+          # linux armv7
+          - arch: armv7-unknown-linux-musleabihf
+          # linux i686
+          - arch: i686-unknown-linux-gnu
+          - arch: i686-unknown-linux-musl
+          # linux arm
+          - arch: arm-unknown-linux-gnueabi
+          - arch: arm-unknown-linux-gnueabihf
+          # linux x86
+          - arch: x86_64-unknown-linux-gnu
+          - arch: x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.arch }}
+
+      - name: Install dependencies
+        run: >-
+          apt install -y
+          llvm-dev libclang-dev clang
+          build-essential
+          curl
+          wget
+          webkit2gtk-4.0
+          libssl-dev
+          libgtk-3-dev
+          libayatana-appindicator3-dev
+          librsvg2-dev
+          libsoup2.4
+          libasound2-dev
+          yasm
+          protobuf-compiler
+
+      - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: >-
+            --bin ${{ matrix.bin }}
+            --target ${{ matrix.target.arch }}
+
+  build-windows:
+    runs-on: windows-latest
+    name: build ${{ matrix.bin }} (${{ matrix.target.arch }})
+    strategy: 
+      fail-fast: false
+      matrix:
+        bin:
+          - djtool
+        target:
+          - arch: x86_64-pc-windows-gnu
+          - arch: x86_64-pc-windows-msvc
+          - arch: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -67,9 +111,7 @@ jobs:
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
         with:
-          use-cross: ${{ contains(matrix.target.os, 'ubuntu') }}
           command: build
           args: >-
-            --release
             --bin ${{ matrix.bin }}
             --target ${{ matrix.target.arch }}

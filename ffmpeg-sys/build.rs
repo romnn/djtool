@@ -636,54 +636,61 @@ pub fn build_mp3lame(rebuild: bool, version: &'static str) -> Result<()> {
         // make it static
         configure.arg("--enable-static");
         configure.arg("--disable-shared");
+        configure.envs(&build_env());
 
         // run ./configure
-        // println!("cargo:warning={:?}", configure);
-        let output = configure
-            .envs(&build_env())
-            .output()
-            // .unwrap()
-            .unwrap_or_else(|_| panic!("{:?} failed", configure));
+        let output = match configure.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &configure, err),
+        };
 
         if !output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("configure: {}", stdout);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
 
-            anyhow::anyhow!("configure failed: {}", &stderr);
-            // return Err(io::Error::new(
-            //     io::ErrorKind::Other,
-            //     format!(
-            //         "configure failed {}",
-            //         String::from_utf8_lossy(&output.stderr)
-            //     ),
-            // )
-            // .into());
+            panic!("{:#?} failed", &configure);
         }
 
         // run make
-        if !Command::new("make")
-            .arg("-j")
-            .arg(num_cpus::get().to_string())
-            .current_dir(&source)
-            .envs(&build_env())
-            .status()?
-            .success()
-        {
-            return Err(anyhow::anyhow!("make failed"));
-            // return Err(io::Error::new(io::ErrorKind::Other, "make failed").into());
+        let mut make = Command::new("make");
+        make.arg("-j");
+        make.arg(num_cpus::get().to_string());
+        make.current_dir(&source);
+        make.envs(&build_env());
+
+        let output = match make.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &make, err),
+        };
+
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            panic!("{:#?} failed", &make);
         }
 
         // run make install
-        if !Command::new("make")
-            .current_dir(&source)
-            .arg("install")
-            .envs(&build_env())
-            .status()?
-            .success()
-        {
-            return Err(anyhow::anyhow!("make install failed"));
-            // return Err(io::Error::new(io::ErrorKind::Other, "make install failed").into());
+        let mut make_install = Command::new("make");
+        make_install.current_dir(&source);
+        make_install.arg("install");
+        make_install.envs(&build_env());
+
+        let output = match make_install.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &make_install, err),
+        };
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            panic!("{:#?} failed", &make_install);
         }
     }
 
@@ -845,49 +852,59 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
 
         configure.envs(&build_envs);
 
-        let result = configure.output().unwrap();
-        if !result.status.success() {
-            return Err(anyhow::anyhow!("configure failed"));
-            // return Err(std::io::Error::new(std::io::ErrorKind::Other, "configure failed").into());
+        let output = match configure.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &configure, err),
+        };
+
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            panic!("{:#?} failed", &configure);
         }
 
-        // .unwrap_or_else(|_| panic!("{:?} failed", configure));
-        // if !output.status.success() {
-        //     println!("configure: {}", String::from_utf8_lossy(&output.stdout));
-
-        //     return Err(io::Error::new(
-        //         io::ErrorKind::Other,
-        //         format!(
-        //             "configure failed {}",
-        //             String::from_utf8_lossy(&output.stderr)
-        //         ),
-        //     )
-        //     .into());
-        // }
-
         // run make
-        if !Command::new("make")
-            .arg("-j")
-            .arg(num_cpus::get().to_string())
-            .current_dir(&source)
-            .envs(&build_env())
-            .status()?
-            .success()
-        {
-            return Err(anyhow::anyhow!("make failed"));
-            // return Err(io::Error::new(io::ErrorKind::Other, "make failed").into());
+        let mut make = Command::new("make");
+            make.arg("-j");
+            make.arg(num_cpus::get().to_string());
+            make.current_dir(&source);
+            make.envs(&build_env());
+
+        let output = match make.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &make, err),
+        };
+
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            panic!("{:#?} failed", &make);
         }
 
         // run make install
-        if !Command::new("make")
-            .current_dir(&source)
-            .arg("install")
-            .envs(&build_env())
-            .status()?
-            .success()
-        {
-            return Err(anyhow::anyhow!("make install failed"));
-            // return Err(io::Error::new(io::ErrorKind::Other, "make install failed").into());
+        let mut make_install = Command::new("make");
+            make_install.current_dir(&source);
+            make_install.arg("install");
+            make_install.envs(&build_env());
+
+        let output = match make_install.output() {
+            Ok(output) => output,
+            Err(err) => panic!("{:#?} failed: {}", &make_install, err),
+        };
+
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("{}", &stdout);
+            eprintln!("{}", &stderr);
+
+            panic!("{:#?} failed", &make_install);
         }
     }
 
@@ -1213,22 +1230,13 @@ fn check_features(
         .current_dir(&out_dir)
         .output()
         .unwrap();
+    let stdout = String::from_utf8_lossy(&check_output.stdout);
+    let stderr = String::from_utf8_lossy(&check_output.stderr);
     if !check_output.status.success() {
-        panic!(
-            "{} failed: {}\n{}",
-            executable.display(),
-            String::from_utf8_lossy(&check_output.stdout),
-            String::from_utf8_lossy(&check_output.stderr)
-        );
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+        panic!("{} failed", executable.display(),);
     }
-
-    let stdout = String::from_utf8_lossy(&check_output.stdout).to_string();
-
-    // println!(
-    //     "cargo:warning=stdout of {}={}",
-    //     executable.display(),
-    //     stdout
-    // );
 
     for &(_, feature, var) in &infos {
         let var_str = format!("[{var}]", var = var);
