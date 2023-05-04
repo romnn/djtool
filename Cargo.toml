@@ -42,8 +42,11 @@ opt-level = 0
 debug = 1
 
 [profile.release]
-# opt-level = 's'  # Optimize for size.
-lto = true # Link Time Optimization (LTO)
+# opt-level = "z"  # optimize for size
+opt-level = "s"  # optimize for speed
+lto = true # use link Time Optimization (LTO)
+strip = true # strip symbols
+codegen-units = 1 # max one parallel codegen-unit for most optimizations
 
 [dependencies.reqwest]
 features = ["json", "blocking", "rustls-tls", "stream"]

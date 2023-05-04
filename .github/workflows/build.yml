@@ -37,8 +37,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/            
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
 
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
@@ -79,7 +79,7 @@ jobs:
 
       - name: Install dependencies
         run: >-
-          sudo apt-get install -y
+          sudo apt-get update && sudo apt-get install -y --fix-missing
           llvm-dev libclang-dev clang
           build-essential
           curl
@@ -104,8 +104,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/            
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
 
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
@@ -144,8 +144,8 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/            
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
 
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
