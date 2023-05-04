@@ -61,13 +61,13 @@ jobs:
           - arch: aarch64-unknown-linux-gnu
           - arch: aarch64-unknown-linux-musl
           # linux armv7
-          - arch: armv7-unknown-linux-musleabihf
+          # - arch: armv7-unknown-linux-musleabihf
           # linux i686
-          - arch: i686-unknown-linux-gnu
-          - arch: i686-unknown-linux-musl
+          # - arch: i686-unknown-linux-gnu
+          # - arch: i686-unknown-linux-musl
           # linux arm
-          - arch: arm-unknown-linux-gnueabi
-          - arch: arm-unknown-linux-gnueabihf
+          # - arch: arm-unknown-linux-gnueabi
+          # - arch: arm-unknown-linux-gnueabihf
           # linux x86
           - arch: x86_64-unknown-linux-gnu
           - arch: x86_64-unknown-linux-musl
@@ -110,47 +110,47 @@ jobs:
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: false
           command: build
           args: >-
             --bin ${{ matrix.bin }}
             --target ${{ matrix.target.arch }}
 
-  build-windows:
-    runs-on: windows-latest
-    name: build ${{ matrix.bin }} (${{ matrix.target.arch }})
-    strategy: 
-      fail-fast: false
-      matrix:
-        bin:
-          - djtool
-        target:
-          - arch: x86_64-pc-windows-gnu
-          - arch: x86_64-pc-windows-msvc
-          - arch: i686-pc-windows-msvc
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target.arch }}
-
-      - name: Set up cache
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/            
-          key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
-
-      - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: >-
-            --bin ${{ matrix.bin }}
-            --target ${{ matrix.target.arch }}
+  # build-windows:
+  #   runs-on: windows-latest
+  #   name: build ${{ matrix.bin }} (${{ matrix.target.arch }})
+  #   strategy: 
+  #     fail-fast: false
+  #     matrix:
+  #       bin:
+  #         - djtool
+  #       target:
+  #         - arch: x86_64-pc-windows-gnu
+  #         - arch: x86_64-pc-windows-msvc
+  #         - arch: i686-pc-windows-msvc
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         targets: ${{ matrix.target.arch }}
+  #
+  #     - name: Set up cache
+  #       uses: actions/cache@v3
+  #       continue-on-error: false
+  #       with:
+  #         path: |
+  #           ~/.cargo/bin/
+  #           ~/.cargo/registry/index/
+  #           ~/.cargo/registry/cache/
+  #           ~/.cargo/git/db/
+  #           target/            
+  #         key: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+  #         restore-keys: ${{ runner.os }}-${{ matrix.target.arch }}-cargo-
+  #
+  #     - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
+  #       uses: actions-rs/cargo@v1
+  #       with:
+  #         command: build
+  #         args: >-
+  #           --bin ${{ matrix.bin }}
+  #           --target ${{ matrix.target.arch }}

@@ -44,9 +44,15 @@ debug = 1
 [profile.release]
 # opt-level = "z"  # optimize for size
 opt-level = "s"  # optimize for speed
-lto = true # use link Time Optimization (LTO)
+lto = true # use link time optimization (LTO)
 strip = true # strip symbols
 codegen-units = 1 # max one parallel codegen-unit for most optimizations
+
+[target.x86_64-unknown-linux-gnu]
+dockerfile = "./cross/x86_64-unknown-linux-gnu.dockerfile"
+
+[target.aarch64-unknown-linux-gnu]
+dockerfile = "./cross/aarch64-unknown-linux-gnu.dockerfile"
 
 [dependencies.reqwest]
 features = ["json", "blocking", "rustls-tls", "stream"]

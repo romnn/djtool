@@ -573,6 +573,7 @@ impl GitRepository<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct CrossBuildConfig {
     prefix: String,
     arch: String,
@@ -622,6 +623,7 @@ pub fn build_mp3lame(rebuild: bool, version: &'static str) -> Result<()> {
         configure.arg(format!("--prefix={}", search().to_string_lossy()));
 
         if let Some(cross) = CrossBuildConfig::guess() {
+            println!("cargo:warning=cross config: {:#?}", cross);
             configure.arg(format!("--cross-prefix={}-", cross.prefix));
             configure.arg(format!("--arch={}", cross.arch));
             configure.arg(format!("--target_os={}", cross.target_os,));
@@ -637,6 +639,7 @@ pub fn build_mp3lame(rebuild: bool, version: &'static str) -> Result<()> {
         configure.arg("--enable-static");
         configure.arg("--disable-shared");
         configure.envs(&build_env());
+        println!("cargo:warning=configure mp3: {:#?}", &configure);
 
         // run ./configure
         let output = match configure.output() {
