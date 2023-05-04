@@ -3,8 +3,8 @@ pub mod cli;
 pub mod config;
 pub mod error;
 pub mod model;
-pub mod tasks;
 pub mod stream;
+pub mod tasks;
 
 use super::config::Persist;
 // use crate::config::Persist;
@@ -191,7 +191,7 @@ impl Spotify {
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<model::Page<model::PlaylistItem>, Error> {
-        let market: Option<&str>= market.map(Into::into);
+        let market: Option<&str> = market.map(Into::into);
         let params = HashMap::<&str, Value>::from_iter(
             vec![
                 fields.map(|fields| ("fields", fields.into())),
@@ -390,7 +390,7 @@ impl TryFrom<model::PlaylistItem> for proto::djtool::Track {
                     id: ep.id.to_string(), // episodes always have an ID
                     playlist_id: None,     // unknown at this point
                 }),
-                duration_millis: ep.duration.as_millis() as u64,
+                duration_millis: ep.duration.num_milliseconds() as u64,
                 artwork: {
                     let mut images = ep
                         .show
@@ -428,7 +428,7 @@ impl From<model::FullTrack> for proto::djtool::Track {
                 playlist_id: None, // unknown at this point
             }),
             name: track.name,
-            duration_millis: track.duration.as_millis() as u64,
+            duration_millis: track.duration.num_milliseconds() as u64,
             artwork: {
                 let mut images = track
                     .album
@@ -653,9 +653,7 @@ impl source::Source for Spotify {
                 let query = query.clone();
                 async move {
                     // let search_result: Result<model::Page<model::FullTrack>> = self
-                    let search_result = self
-                        .search_page(query, Some(limit), Some(offset))
-                        .await;
+                    let search_result = self.search_page(query, Some(limit), Some(offset)).await;
                     match search_result {
                         Ok(model::SearchResult::Tracks(track_page)) => Ok(track_page),
                         Ok(_) => Err(Error::InvalidSearchResultType(

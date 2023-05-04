@@ -42,7 +42,7 @@ pub struct TranscoderOptions<'a> {
 impl TranscoderOptions<'_> {
     pub fn mp3() -> Self {
         Self {
-            codec: Some(ffmpeg::Codec::MP3),
+            codec: Some(Codec::MP3),
             bitrate_kbps: Some(192),
             sample_rate: None,
             filter_spec: Some("loudnorm"),
@@ -51,7 +51,7 @@ impl TranscoderOptions<'_> {
 
     pub fn matching() -> Self {
         Self {
-            codec: Some(ffmpeg::Codec::PCM),
+            codec: Some(Codec::PCM),
             bitrate_kbps: None,
             // most importantly, we resample
             sample_rate: Some(22_050),
@@ -72,7 +72,7 @@ pub trait Transcoder {
 
 struct FFmpegTranscode<'a> {
     stream: usize,
-    filter: filter::Graph,
+    filter: ffmpeg::filter::Graph,
     decoder: ffmpeg::codec::decoder::Audio,
     encoder: ffmpeg::codec::encoder::Audio,
     in_time_base: ffmpeg::Rational,
@@ -95,7 +95,7 @@ impl<'a> FFmpegTranscode<'a> {
         // println!("options: {:?}", options);
         let input = ictx
             .streams()
-            .best(media::Type::Audio)
+            .best(ffmpeg::media::Type::Audio)
             .expect("could not find best audio stream");
         // let duration = input.duration();
         let mut decoder = input.codec().decoder().audio()?;
@@ -103,7 +103,7 @@ impl<'a> FFmpegTranscode<'a> {
 
         let encoder = match options.and_then(|o| o.codec.as_ref()) {
             Some(requested_codec) => requested_codec.codec(),
-            None => octx.format().codec(path, media::Type::Audio),
+            None => octx.format().codec(path, ffmpeg::media::Type::Audio),
         };
         // println!("chosen encoder: {:?}", encoder);
 
@@ -182,10 +182,10 @@ impl<'a> FFmpegTranscode<'a> {
 
     fn build_filter(
         spec: &str,
-        decoder: &codec::decoder::Audio,
-        encoder: &codec::encoder::Audio,
-    ) -> Result<filter::Graph, ffmpeg::Error> {
-        let mut filter = filter::Graph::new();
+        decoder: &ffmpeg::codec::decoder::Audio,
+        encoder: &ffmpeg::codec::encoder::Audio,
+    ) -> Result<ffmpeg::filter::Graph, ffmpeg::Error> {
+        let mut filter = ffmpeg::filter::Graph::new();
 
         let args = format!(
             "time_base={}:sample_rate={}:sample_fmt={}:channel_layout=0x{:x}",
@@ -196,12 +196,12 @@ impl<'a> FFmpegTranscode<'a> {
         );
 
         filter.add(
-            &filter::find("abuffer").ok_or(ffmpeg::Error::FilterNotFound)?,
+            &ffmpeg::filter::find("abuffer").ok_or(ffmpeg::Error::FilterNotFound)?,
             "in",
             &args,
         )?;
         filter.add(
-            &filter::find("abuffersink").ok_or(ffmpeg::Error::FilterNotFound)?,
+            &ffmpeg::filter::find("abuffersink").ok_or(ffmpeg::Error::FilterNotFound)?,
             "out",
             "",
         )?;
@@ -243,7 +243,7 @@ impl<'a> FFmpegTranscode<'a> {
 
     fn receive_and_process_encoded_packets(
         &mut self,
-        octx: &mut format::context::Output,
+        octx: &mut ffmpeg::format::context::Output,
     ) -> Result<(), ffmpeg::Error> {
         let mut encoded = ffmpeg::Packet::empty();
         while self.encoder.receive_packet(&mut encoded).is_ok() {
@@ -266,9 +266,9 @@ impl<'a> FFmpegTranscode<'a> {
 
     fn get_and_process_filtered_frames(
         &mut self,
-        octx: &mut format::context::Output,
+        octx: &mut ffmpeg::format::context::Output,
     ) -> Result<(), ffmpeg::Error> {
-        let mut filtered = frame::Audio::empty();
+        let mut filtered = ffmpeg::frame::Audio::empty();
         loop {
             let mut f = self
                 .filter
@@ -295,9 +295,9 @@ impl<'a> FFmpegTranscode<'a> {
 
     fn receive_and_process_decoded_frames(
         &mut self,
-        octx: &mut format::context::Output,
+        octx: &mut ffmpeg::format::context::Output,
     ) -> Result<(), ffmpeg::Error> {
-        let mut decoded = frame::Audio::empty();
+        let mut decoded = ffmpeg::frame::Audio::empty();
         while self.decoder.receive_frame(&mut decoded).is_ok() {
             let timestamp = decoded.timestamp();
             decoded.set_pts(timestamp);
@@ -388,8 +388,8 @@ impl Transcoder for FFmpegTranscoder {
     ) -> Result<(), ffmpeg::Error> {
         ffmpeg::init()?;
 
-        let mut ictx = format::input(&input_path)?;
-        let mut octx = format::output(&output_path)?;
+        let mut ictx = ffmpeg::format::input(&input_path)?;
+        let mut octx = ffmpeg::format::output(&output_path)?;
         let mut transcoder =
             FFmpegTranscode::new(&mut ictx, &mut octx, &output_path, options, progess_handler)?;
 
