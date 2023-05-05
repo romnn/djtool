@@ -1,0 +1,12 @@
+[package]
+name = "audio-correlation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+rustfft = "6"
+rodio = "0"
+thiserror = "1"
+num = "0"
+ndarray = { version = "0" , features = ["approx", "rayon"]}

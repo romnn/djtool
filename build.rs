@@ -38,6 +38,8 @@ fn compile_protos() -> Result<()> {
 
 fn main() {
     let start = Instant::now();
+
+    #[cfg(feature = "ui")]
     tauri_build::build();
 
     if is_debug_build() {

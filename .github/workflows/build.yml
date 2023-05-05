@@ -47,7 +47,12 @@ jobs:
           args: >-
             --bin ${{ matrix.bin }}
             --target ${{ matrix.target.arch }}
-  
+
+      - name: Inspect binary
+        run: |
+          ls -liah ./target/debug
+          otool -L ./target/debug/djtool
+
   build-linux:
     runs-on: ubuntu-latest
     name: build ${{ matrix.bin }} (linux ${{ matrix.target.arch }})
@@ -110,11 +115,16 @@ jobs:
       - name: Build ${{ matrix.bin }} (${{ matrix.target.arch }})
         uses: actions-rs/cargo@v1
         with:
-          use-cross: false
+          use-cross: true
           command: build
           args: >-
             --bin ${{ matrix.bin }}
             --target ${{ matrix.target.arch }}
+
+      - name: Inspect binary
+        run: |
+          ls -liah ./target/debug
+          ldd ./target/debug/djtool
 
   # build-windows:
   #   runs-on: windows-latest

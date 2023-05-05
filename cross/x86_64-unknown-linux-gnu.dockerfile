@@ -2,6 +2,8 @@ ARG CROSS_BASE_IMAGE
 FROM $CROSS_BASE_IMAGE
 
 RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+
 RUN apt-get install -y \
     llvm-dev libclang-dev clang \
     build-essential \

@@ -199,21 +199,22 @@ impl Youtube {
             .expect("Something went wrong reading the file");
 
         // Instantiate the execution context
-        let mut context = boa_engine::Context::default();
+        // let mut context = boa_engine::Context::default();
+        //
+        // // Parse the source code
+        // match context.eval(contents) {
+        //     Ok(res) => {
+        //         println!(
+        //             "{}",
+        //             res.to_string(&mut context).unwrap().as_str().to_string()
+        //         );
+        //     }
+        //     Err(e) => {
+        //         // Pretty print the error
+        //         eprintln!("boa parse error:");
+        //     }
+        // };
 
-        // Parse the source code
-        match context.eval(contents) {
-            Ok(res) => {
-                println!(
-                    "{}",
-                    res.to_string(&mut context).unwrap().as_str().to_string()
-                );
-            }
-            Err(e) => {
-                // Pretty print the error
-                eprintln!("boa parse error:");
-            }
-        };
         // let js_code = boa_engine::parse(&contents, false).unwrap();
         // let js_code = boa::parse(&player_config, false).unwrap();
         // let matches = matches.iter().collect();

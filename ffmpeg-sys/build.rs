@@ -1290,6 +1290,26 @@ fn main() {
         // println!("cargo:warning=is debug build");
         println!(r#"cargo:rustc-cfg=feature="debug""#);
     }
+    println!("cargo:warning=is cross: {:#?}", is_cross_build());
+    println!("cargo:warning=cross build: {:#?}", CrossBuildConfig::guess());
+    let cc = cc::Build::new();
+    let prefix = cc.get_compiler().path().file_stem().unwrap().to_str().and_then(|c| {
+        dbg!(&c);
+        // cut off "-gcc"
+        if let Some(suffix_pos) = c.rfind('-') {
+            // "wr-c++" compiler
+            Some(c[0..suffix_pos].trim_end_matches("-wr").to_string())
+        } else {
+            None
+        }
+    });
+    dbg!(&prefix);
+    // dbg!(&suffix_pos);
+    // --build x86_64-pc-linux-gnu --host aarch64-linux-gnu
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").ok();
+    dbg!(&arch);
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").ok();
+    dbg!(&target_os);
 
     let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
 
@@ -1639,7 +1659,7 @@ fn main() {
         ],
     );
 
-    if need_build {
+    if true || need_build {
         let clang_includes = include_paths
             .iter()
             .map(|include| format!("-I{}", include.to_string_lossy()));

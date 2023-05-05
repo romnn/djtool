@@ -7,25 +7,37 @@ edition = "2021"
 members = [
   "ffmpeg",
   "ffmpeg-sys",
+  "spotify",
+  "youtube",
+  "soundcloud",
+  "correlation",
 ]
 
 [lib]
 # Disable doctests as a workaround for https://github.com/rust-lang/rust-bindgen/issues/1313
-doctest = false
+# doctest = false
 
 [features]
-default  = [
-  "spotify",
+# default  = [
+#   "spotify",
+#   "youtube",
+#   "proto-build",
+#   "ffmpeg",
+#   "ui",
+# ]
+default = [
+  # "proto-build",
   "youtube",
-  "proto-build",
+  "spotify",
   "ffmpeg",
-  "ui",
+  # "youtube",
 ]
 
 # "parallel-build",
-ui = ["tauri", "tauri-build"]
-proto-build = ["tonic-build"]
-spotify = ["rspotify-model"]
+cli = ["dep:dialoguer", "dep:indicatif"]
+ui = ["dep:tauri", "dep:tauri-build"]
+# proto-build = ["tonic-build"]
+spotify = ["dep:rspotify-model"]
 youtube = []
 ffmpeg = ["dep:djtool-ffmpeg"]
 
@@ -48,12 +60,6 @@ lto = true # use link time optimization (LTO)
 strip = true # strip symbols
 codegen-units = 1 # max one parallel codegen-unit for most optimizations
 
-[target.x86_64-unknown-linux-gnu]
-dockerfile = "./cross/x86_64-unknown-linux-gnu.dockerfile"
-
-[target.aarch64-unknown-linux-gnu]
-dockerfile = "./cross/aarch64-unknown-linux-gnu.dockerfile"
-
 [dependencies.reqwest]
 features = ["json", "blocking", "rustls-tls", "stream"]
 version = "0"
@@ -73,21 +79,17 @@ rand = "0"
 uuid = { version = "1", features = ["v4"] }
 futures-util = "0.3"
 rustfft = "6"
-indicatif = "0.16.2"
 approx = "0"
 url = "2"
 clap = { version = "3", features = [ "derive", "env" ] }
 rayon = "1"
 rodio = "0"
-dialoguer = "0"
 strsim = "0"
 ndarray = { version = "0" , features = ["approx", "rayon"]}
-boa_engine = "0"
 futures = "0.3"
 num_cpus = "1"
 num = "0"
 http = "0"
-downcast-rs = "1"
 tempdir = "0"
 base64 = "0"
 chrono = { version = "0", features = ["serde"] }
@@ -95,9 +97,7 @@ thiserror = "1"
 sha2 = "0"
 webbrowser = "0"
 warp = "0.3"
-tauri = { version = "1", features = ["custom-protocol", "api-all"] , optional = true}
 dirs = "4"
-rspotify-model = { version = "0", optional = true }
 async-stream = "0"
 id3 = "0"
 image = "0.24"
@@ -105,11 +105,31 @@ tonic = "0.9"
 tonic-web = "0.9"
 prost = "0.11"
 prost-types = "0.11"
-djtool-ffmpeg = { path = "ffmpeg", optional = true }
 taski = "0"
+# outdated deps
+# downcast-rs = "1"
+# boa_engine = "0"
+
+# factor out to spotify
+rspotify-model = { version = "0", optional = true }
+
+# optional dependencies
+djtool-ffmpeg = { path = "ffmpeg", optional = true }
+
+# optional cli dependencies
+dialoguer = { version = "0", optional = true }
+indicatif = { version = "0.16.2", optional = true }
+
+# optional ui dependencies
+[dependencies.tauri]
+version = "1"
+features = ["custom-protocol", "api-all"]
+optional = true
 
 [build-dependencies]
 anyhow = "1"
 lazy_static = "1"
+tonic-build = { version = "0.9", features = ["prost"] }
+
+# optional build dependencies
 tauri-build = { version = "1", optional = true }
-tonic-build = { version = "0.9", features = ["prost"], optional = true }

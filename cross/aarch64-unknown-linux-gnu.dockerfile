@@ -1,8 +1,10 @@
 ARG CROSS_BASE_IMAGE
 FROM $CROSS_BASE_IMAGE
 
-RUN dpkg --add-architecture arm64 && \
-    apt-get update
+# dpkg --add-architecture arm64
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+
 RUN apt-get install -y \
     llvm-dev libclang-dev clang:arm64 \
     build-essential:arm64 \
