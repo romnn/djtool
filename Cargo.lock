@@ -191,6 +191,7 @@ name = "audio-correlation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "approx 0.4.0",
  "ndarray",
  "num",
  "rodio",

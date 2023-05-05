@@ -10,3 +10,7 @@ rodio = "0"
 thiserror = "1"
 num = "0"
 ndarray = { version = "0" , features = ["approx", "rayon"]}
+
+[dev-dependencies]
+# todo: replace with ndarray approx version?
+approx = "0"
