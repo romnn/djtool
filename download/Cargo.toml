@@ -1,0 +1,20 @@
+[package]
+name = "download-ranged"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tempfile = "*"
+thiserror = "1"
+http = "0"
+num_cpus = "1"
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+
+[dependencies.reqwest]
+features = ["json", "blocking", "rustls-tls", "stream"]
+version = "0"
+
+[dev-dependencies]
+anyhow = "1"
+sha2 = "0"
