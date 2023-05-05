@@ -1,6 +1,6 @@
-use super::{preflight::preflight, Download, DownloadProgress, Error, ProgressCallback};
+use super::{preflight, Download, DownloadProgress, Error, ProgressCallback};
 use http::header::HeaderMap;
-use std::path::{Path, PathBuf};
+
 use std::sync::Arc;
 
 #[derive()]
@@ -25,67 +25,73 @@ impl Default for Builder {
 }
 
 impl Builder {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn on_progress(
-        mut self,
-        callback: impl Fn(DownloadProgress) -> () + Send + 'static,
-    ) -> Self {
+    #[must_use]
+    pub fn on_progress(mut self, callback: impl Fn(DownloadProgress) + Send + 'static) -> Self {
         self.progress = Some(Box::new(callback));
         self
     }
 
+    #[must_use]
     pub fn chunk_size(mut self, chunk_size: u64) -> Self {
         self.chunk_size = Some(chunk_size);
         self
     }
 
+    #[must_use]
     pub fn concurrency(mut self, concurrency: usize) -> Self {
         self.concurrency = Some(concurrency);
         self
     }
 
+    #[must_use]
     pub fn client(mut self, client: Arc<reqwest::Client>) -> Self {
         self.client = client;
         self
     }
 
+    #[must_use]
     pub fn headers(mut self, headers: HeaderMap) -> Self {
         self.headers = Some(headers);
         self
     }
 
+    /// Create a new download
+    ///
+    /// ## Example
+    /// ```rust
+    /// let buffer = tokio::io::BufWriter::new(Vec::new());
+    /// let url = "https://google.com";
+    /// let mut dl = Builder::new().download(url, &mut buffer).await?;
+    /// dl.start().await?;
+    /// assert!(buffer.into_inner().len() > 0);
+    /// ```
+    ///
+    /// ## Errors
+    /// If the given url is invalid.
     pub async fn download<W>(
-        mut self,
+        self,
         url: impl reqwest::IntoUrl,
-        // dest: impl Into<PathBuf>,
         writer: W,
     ) -> Result<Download<W>, Error>
     where
         W: tokio::io::AsyncWrite + Unpin,
     {
         let url = url.into_url()?;
-        let preflight = preflight(&self.client, url.clone()).await?;
+        let preflight = preflight::send(&self.client, url.clone()).await.ok();
 
-        // let concurrency = self
-        //     .concurrency
-        //     .unwrap_or_else(|| super::default_concurrency());
-        //
-        // let chunk_size = self
-        //     .chunk_size
-        //     .unwrap_or_else(|| super::chunk::compute_size(&preflight, concurrency, None, None));
-        //
         Ok(Download {
-            client: self.client,
-            temp_dir: tempfile::tempdir()?,
             url,
-            headers: self.headers.unwrap_or_default(),
             writer,
+            preflight,
+            client: self.client,
+            headers: self.headers.unwrap_or_default(),
             concurrency: self.concurrency,
             chunk_size: self.chunk_size,
-            preflight,
             progress: self.progress,
         })
     }

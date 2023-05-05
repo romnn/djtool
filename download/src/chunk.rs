@@ -1,4 +1,4 @@
-use super::{Error, PreflightResult, ProgressTx};
+use super::{Error, ProgressTx};
 use futures_util::StreamExt;
 use http::header::HeaderMap;
 use std::path::PathBuf;
@@ -6,21 +6,27 @@ use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
 pub fn compute_chunk_size(
     content_len: u64,
     concurrency: usize,
     min: Option<u64>,
     max: Option<u64>,
 ) -> u64 {
-    let mut cs = (content_len as f32 / concurrency as f32) as u64;
+    let cs = content_len as f64 / concurrency as f64;
+    let mut cs = cs.abs().round() as u64;
 
     // if chunk size >= 102400000 bytes set default to (chunk size / 2)
-    while cs >= 102400000 {
-        cs = cs / 2;
+    while cs >= 102_400_000 {
+        cs /= 2;
     }
 
     // set default min chunk size to 2M, or file size / 2
-    let mut min = min.unwrap_or(2097152u64);
+    let mut min = min.unwrap_or(2_097_152_u64);
     if min >= content_len {
         min = content_len / 2;
     }
@@ -41,21 +47,26 @@ pub fn compute_chunk_size(
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct ChunkRange {
+pub struct Range {
     pub idx: u64,
     pub start: u64,
     pub end: u64,
 }
 
-pub fn compute_ranges(content_len: u64, chunk_size: u64) -> impl Iterator<Item = ChunkRange> {
-    let num_chunks = content_len as f32 / chunk_size as f32;
-    let num_chunks = num_chunks.ceil() as usize;
-    (0..num_chunks).into_iter().map(move |idx| {
-        let idx = idx as u64;
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
+pub fn compute_ranges(content_len: u64, chunk_size: u64) -> impl Iterator<Item = Range> {
+    let num_chunks = content_len as f64 / chunk_size as f64;
+    let num_chunks = num_chunks.ceil().abs() as u64;
+    (0..num_chunks).map(move |idx| {
+        // let idx = idx as u64;
         let start = idx * chunk_size;
         let end = (idx + 1) * chunk_size;
         let end = (end - 1).min(content_len);
-        ChunkRange { idx, start, end }
+        Range { idx, start, end }
     })
 }
 
@@ -100,7 +111,7 @@ impl Chunk {
         while let Some(byte_chunk) = data_stream.next().await {
             let byte_chunk = byte_chunk?;
             dest.write_all(&byte_chunk).await?;
-            let _ = progress.send(byte_chunk.len() as u64).await;
+            progress.send(byte_chunk.len() as u64).await.ok();
         }
         Ok(())
     }
