@@ -11,6 +11,9 @@ members = [
   "youtube",
   "soundcloud",
   "correlation",
+  "transcode",
+  "model",
+  "cli",
 ]
 
 [lib]
@@ -27,9 +30,9 @@ members = [
 # ]
 default = [
   # "proto-build",
-  "youtube",
-  "spotify",
-  "ffmpeg",
+  # "youtube",
+  # "spotify",
+  # "ffmpeg",
   # "youtube",
 ]
 
@@ -78,17 +81,12 @@ sanitize-filename = "0"
 rand = "0"
 uuid = { version = "1", features = ["v4"] }
 futures-util = "0.3"
-rustfft = "6"
-approx = "0"
 url = "2"
 clap = { version = "3", features = [ "derive", "env" ] }
 rayon = "1"
-rodio = "0"
 strsim = "0"
-ndarray = { version = "0" , features = ["approx", "rayon"]}
 futures = "0.3"
 num_cpus = "1"
-num = "0"
 http = "0"
 tempdir = "0"
 base64 = "0"

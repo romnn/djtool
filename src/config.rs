@@ -1,8 +1,5 @@
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json;
-use std::io;
-use std::marker::{Send, Sync};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
@@ -27,7 +24,7 @@ pub enum ConfigError {
     ParseError(#[from] serde_json::Error),
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait Persist: Serialize + DeserializeOwned {
     async fn load<P: AsRef<Path> + Send + Sync>(config_file: P) -> Result<Self, ConfigError> {
         let mut file = tokio::fs::File::open(config_file).await?;

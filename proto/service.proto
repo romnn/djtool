@@ -1,0 +1,22 @@
+syntax = "proto3";
+package proto.djtool;
+
+message SyncProgressUpdate {
+  // todo oneof
+}
+
+message SyncRequest {
+  repeated string sources = 1;
+  repeated TrackSyncDesc tracks = 2;
+  repeated PlaylistSyncDesc playlists = 3;
+  /* oneof request { */
+  /*   TrackDescriptor track = 1; */
+  /*   PlaylistDescriptor playlist = 2; */
+  /*   // all is equal to none here */
+  /*   /1* SyncAll all = 3; *1/ */
+  /* } */
+}
+
+service DjTool {
+  rpc Sync(SyncRequest) returns (stream SyncProgressUpdate) {}
+}

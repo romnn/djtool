@@ -21,7 +21,7 @@ use djtool::{DjTool, SPLASH_LOGO};
 use futures::Stream;
 use futures_util::pin_mut;
 use futures_util::{StreamExt, TryStreamExt};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+// use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -100,6 +100,9 @@ pub struct Opts {
     #[clap(subcommand)]
     pub subcommand: Option<Command>,
 }
+
+
+#[cfg(feature = "ui")]
 fn build_ui() -> anyhow::Result<tauri::App> {
     let menu = tauri::Menu::new().add_submenu(tauri::Submenu::new(
         "djtool",
@@ -113,29 +116,29 @@ fn build_ui() -> anyhow::Result<tauri::App> {
     Ok(app)
 }
 
-fn main2() -> Result<(), Box<dyn std::error::Error>> {
-    let m = MultiProgress::new();
-    let status = m.add(ProgressBar::new_spinner());
-
-    // let sty = ProgressStyle::default_bar();
-    // status.set_style(sty.clone());
-
-    let pb = m.add(ProgressBar::new(128));
-    // pb.set_style(sty.clone());
-
-    let h1 = thread::spawn(move || {
-        for i in 0..128 {
-            pb.set_message(format!("item #{}", i + 1));
-            pb.inc(1);
-            thread::sleep(Duration::from_millis(15));
-        }
-        pb.finish_with_message("done");
-    });
-    m.join_and_clear()?;
-    // h1.join();
-    // m.clear().unwrap();
-    Ok(())
-}
+// fn main2() -> Result<(), Box<dyn std::error::Error>> {
+//     let m = MultiProgress::new();
+//     let status = m.add(ProgressBar::new_spinner());
+//
+//     // let sty = ProgressStyle::default_bar();
+//     // status.set_style(sty.clone());
+//
+//     let pb = m.add(ProgressBar::new(128));
+//     // pb.set_style(sty.clone());
+//
+//     let h1 = thread::spawn(move || {
+//         for i in 0..128 {
+//             pb.set_message(format!("item #{}", i + 1));
+//             pb.inc(1);
+//             thread::sleep(Duration::from_millis(15));
+//         }
+//         pb.finish_with_message("done");
+//     });
+//     m.join_and_clear()?;
+//     // h1.join();
+//     // m.clear().unwrap();
+//     Ok(())
+// }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", SPLASH_LOGO);
@@ -177,7 +180,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match opts.subcommand {
         None => {
+            #[cfg(feature = "ui")]
             let app = build_ui()?;
+
             // let runtime_clone = runtime.clone();
             runtime.spawn(async move {
                 // let _ = thread::spawn(move || {

@@ -1,27 +1,20 @@
-use crate::config::ConfigError;
-use crate::config::Persist;
-use crate::proto;
-use crate::spotify;
-use crate::spotify::auth::{join_scopes, Authenticator, Credentials, OAuth};
-use crate::spotify::config::Config;
-use crate::spotify::error::{ApiError, AuthError, Error};
-use crate::spotify::model::Token;
-use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
-use async_trait::async_trait;
+use crate::auth::{join_scopes, Authenticator, Credentials, OAuth};
+use crate::config::Config;
+use crate::error::{ApiError, AuthError, Error};
+use crate::spotify_model;
+use djtool_model as model;
+use djtool::utils::{random_string, Alphanumeric, PKCECodeVerifier};
+use djtool::config::{ConfigError, Persist};
+
 use chrono::{DateTime, Duration, Utc};
-use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::io::{Read, Write};
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
-use webbrowser;
 
 pub mod api {
     pub const AUTHORIZE: &str = "https://accounts.spotify.com/authorize";
@@ -64,7 +57,7 @@ pub struct PkceAuthenticator {
     pub client: Arc<reqwest::Client>,
 }
 
-impl spotify::Spotify {
+impl crate::Spotify {
     pub async fn pkce<P: AsRef<Path> + Send + Sync>(
         config_dir: P,
         creds: Credentials,
@@ -97,7 +90,7 @@ impl spotify::Spotify {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Authenticator for PkceAuthenticator {
     async fn auth_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
@@ -119,11 +112,11 @@ impl Authenticator for PkceAuthenticator {
 
     async fn handle_user_login_callback(
         &self,
-        data: proto::djtool::SpotifyUserLoginCallback,
+        data: model::SpotifyUserLoginCallback,
     ) -> Result<(), Error> {
         match data.method {
-            Some(proto::djtool::spotify_user_login_callback::Method::Pkce(
-                proto::djtool::SpotifyUserLoginCallbackPkce { code, state },
+            Some(model::spotify_user_login_callback::Method::Pkce(
+                model::SpotifyUserLoginCallbackPkce { code, state },
             )) => {
                 println!("handling received code: {} state: {}", code, state);
                 if self.oauth.state != state {
@@ -202,7 +195,8 @@ impl PkceAuthenticator {
         payload.insert(param::STATE, &self.oauth.state);
         payload.insert(param::SCOPE, &scopes);
 
-        Url::parse_with_params(api::AUTHORIZE, payload).map_err(Error::BadUrl)
+        let url = reqwest::Url::parse_with_params(api::AUTHORIZE, payload)?;
+        Ok(url)
     }
 
     async fn read_config(&self) -> Result<(), Error> {
@@ -292,7 +286,7 @@ impl PkceAuthenticator {
         &self,
         form: &HashMap<&str, String>,
         headers: Option<HeaderMap>,
-    ) -> std::result::Result<Token, Error> {
+    ) -> std::result::Result<spotify_model::Token, Error> {
         let response = self
             .client
             .post(api::TOKEN)
@@ -306,7 +300,7 @@ impl PkceAuthenticator {
         //     "fetch access token response: {}",
         //     response.text().await.unwrap()
         // );
-        let mut token: Token = response
+        let mut token: spotify_model::Token = response
             .json()
             .await
             .map_err(|err| Error::Api(ApiError::Http(err)))?;
@@ -316,13 +310,13 @@ impl PkceAuthenticator {
         Ok(token)
     }
 
-    async fn refetch_token(&self) -> std::result::Result<Option<Token>, spotify::error::Error> {
+    async fn refetch_token(&self) -> std::result::Result<Option<spotify_model::Token>, Error> {
         let current_token = {
             let config = self.config.read().await;
             config.token.to_owned()
         };
         match current_token {
-            Some(Token {
+            Some(spotify_model::Token {
                 refresh_token: Some(refresh_token),
                 ..
             }) => {

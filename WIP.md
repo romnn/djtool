@@ -1,10 +1,4 @@
-## djtool
-
-#### Usage
-
-```bash
-cargo run --release
-```
+## work in progress tracker
 
 #### Development
 
@@ -18,11 +12,13 @@ python3 compile-proto-grpcweb.py
 $HOME/.cargo/bin/cargo +nightly udeps
 ```
 
-#### Development roadmap
+#### Roadmap
 
 TODO:
+- split proto into model, server, and client
+
 - refactor to use workspaces (faster builds, clear separation)
-- publish to crates.io
+- consider: move djtool_model to djtool::model?
 - lint
 
 - think of a new name?
@@ -48,6 +44,11 @@ TODO:
   - need a reindex method that builds the config from scratch!
   - needs to be run whenever the version changes
 - use main config to initialize spotify config path
+
+
+Dropped
+  - publish to crates.io (=> users can install via git and we dont want to publish this)
+    - however, might publish audio-correlation if in own repo
 
 Done:
 

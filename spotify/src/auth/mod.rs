@@ -1,27 +1,20 @@
 pub mod pkce;
 
-use super::config::Config;
-use crate::config::Persist;
-use crate::spotify;
-use crate::proto;
-use crate::spotify::model::Token;
-use crate::utils::{random_string, Alphanumeric, PKCECodeVerifier};
+use crate::error::Error;
+use crate::config::Config;
+use djtool_model as model;
+use djtool::utils::{random_string, Alphanumeric, PKCECodeVerifier};
+
 use anyhow::Result;
-use async_trait::async_trait;
-use base64;
 use chrono::{DateTime, Duration, Utc};
 use reqwest;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Error as HttpError, Url};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::io::{Read, Write};
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use webbrowser;
 
@@ -39,15 +32,15 @@ pub enum SpotifyLoginCallback {
     Pkce { code: String, state: String },
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait Authenticator {
     async fn auth_headers(&self) -> HeaderMap;
-    async fn reauthenticate(&self) -> std::result::Result<(), spotify::error::Error>;
+    async fn reauthenticate(&self) -> std::result::Result<(), Error>;
     // async fn handle_user_login_callback(&self, data: SpotifyLoginCallback) -> Result<()>;
     async fn handle_user_login_callback(
         &self,
-        data: proto::djtool::SpotifyUserLoginCallback,
-    ) -> Result<(), spotify::error::Error>;
+        data: model::SpotifyUserLoginCallback,
+    ) -> Result<(), Error>;
 }
 
 #[derive(Debug, Clone, Default)]

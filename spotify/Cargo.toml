@@ -3,6 +3,24 @@ name = "spotify"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+# todo: remove
+anyhow = "1"
+thiserror = "1"
+
+url = "2"
+rspotify-model = "0"
+async-trait = "0"
+base64 = "0"
+sha2 = "0"
+webbrowser = "0"
+chrono = { version = "0", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+
+djtool = { path = "../" }
+djtool-model = { path = "../model" }
+
+[dependencies.reqwest]
+features = ["json", "blocking", "rustls-tls", "stream"]
+version = "0"

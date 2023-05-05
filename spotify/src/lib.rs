@@ -1,14 +1,14 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+#![allow(warnings)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod auth;
+pub mod error;
+pub mod config;
+pub use rspotify_model as spotify_model;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct Spotify {
+    pub authenticator: Arc<Box<dyn auth::Authenticator + Send + Sync>>,
+    pub client: Arc<reqwest::Client>,
 }
