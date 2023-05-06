@@ -3,4 +3,15 @@ name = "djtool-transcode"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["ffmpeg"]
+ffmpeg = ["dep:djtool-ffmpeg"]
+
+[package.metadata.cargo-feature-combinations]
+denylist = ["default"]
+
 [dependencies]
+thiserror = "1"
+djtool-ffmpeg = { path = "../ffmpeg", optional = true }
+
+[dev-dependencies]

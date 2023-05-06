@@ -27,7 +27,7 @@ exclude = []
 libc = "0.2"
 
 [build-dependencies]
-anyhow = "1"
+thiserror = "1"
 num_cpus = "1"
 cc = "1"
 pkg-config = "0.3"

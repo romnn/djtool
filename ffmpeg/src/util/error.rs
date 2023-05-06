@@ -93,9 +93,7 @@ impl From<c_int> for Error {
             AVERROR_HTTP_NOT_FOUND => Error::HttpNotFound,
             AVERROR_HTTP_OTHER_4XX => Error::HttpOther4xx,
             AVERROR_HTTP_SERVER_ERROR => Error::HttpServerError,
-            e => Error::Other {
-                errno: av_un_error(e),
-            },
+            e => Error::Other { errno: av_neg_error(e) },
         }
     }
 }
@@ -160,7 +158,7 @@ impl fmt::Display for Error {
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str("ffmpeg::Error(")?;
-        f.write_str(&format!("{}: ", av_un_error((*self).into())))?;
+        f.write_str(&format!("{}: ", av_neg_error((*self).into())))?;
         fmt::Display::fmt(self, f)?;
         f.write_str(")")
     }
@@ -353,7 +351,7 @@ mod tests {
     fn test_error_roundtrip() {
         assert_eq!(Into::<c_int>::into(Error::from(AVERROR_EOF)), AVERROR_EOF);
         assert_eq!(
-            Into::<c_int>::into(Error::from(av_error(EAGAIN))),
+            Into::<c_int>::into(Error::from(crate::ffi::av_error(EAGAIN))),
             av_error(EAGAIN)
         );
         assert_eq!(

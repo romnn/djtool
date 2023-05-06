@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use super::codec::Codec;
+use super::Codec;
 use crate::ffi::*;
 use crate::{format, ChannelLayout};
 

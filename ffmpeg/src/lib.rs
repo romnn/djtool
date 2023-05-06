@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use djtool_ffmpeg_sys as ffi;
 
 pub mod util;
@@ -19,13 +21,13 @@ pub use util::rational::{self, Rational};
 pub use util::time;
 
 pub mod format;
+pub use format::Format;
 pub use format::chapter::{Chapter, ChapterMut};
-pub use format::format::Format;
 pub use format::stream::{Stream, StreamMut};
 
 pub mod codec;
 pub use codec::audio_service::AudioService;
-pub use codec::codec::Codec;
+pub use codec::Codec;
 pub use codec::discard::Discard;
 pub use codec::field_order::FieldOrder;
 pub use codec::packet::{self, Packet};

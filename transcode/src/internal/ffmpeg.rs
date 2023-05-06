@@ -1,73 +1,15 @@
-use std::path::{Path, PathBuf};
-
+use crate::{Codec, Error, ProgressHandlerFunc, TranscodeProgress, Transcoder, TranscoderOptions};
 use djtool_ffmpeg as ffmpeg;
-// ,  codec, filter, format, frame, media};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
-#[derive(Debug)]
-pub struct TranscodeProgress {
-    pub elapsed: Duration,
-    pub frame: usize,
-    pub total_frames: usize,
-    pub duration: Duration,
-    pub timestamp: Duration,
-}
-
-pub type ProgressHandlerFunc = dyn FnMut(TranscodeProgress) -> ();
-
-#[derive(Debug, Clone)]
-pub enum Codec {
-    MP3,
-    PCM,
-    // todo: add more codecs in the future
-}
-
-impl Codec {
-    fn codec(&self) -> ffmpeg::codec::id::Id {
-        match self {
-            Codec::MP3 => ffmpeg::codec::id::Id::MP3,
-            Codec::PCM => ffmpeg::codec::id::Id::PCM_S16LE,
+impl From<Codec> for ffmpeg::codec::id::Id {
+    fn from(codec: Codec) -> Self {
+        match codec {
+            Codec::MP3 => Self::MP3,
+            Codec::PCM => Self::PCM_S16LE,
         }
     }
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct TranscoderOptions<'a> {
-    pub codec: Option<Codec>,
-    pub bitrate_kbps: Option<usize>,
-    pub sample_rate: Option<usize>,
-    pub filter_spec: Option<&'a str>,
-}
-
-impl TranscoderOptions<'_> {
-    pub fn mp3() -> Self {
-        Self {
-            codec: Some(Codec::MP3),
-            bitrate_kbps: Some(192),
-            sample_rate: None,
-            filter_spec: Some("loudnorm"),
-        }
-    }
-
-    pub fn matching() -> Self {
-        Self {
-            codec: Some(Codec::PCM),
-            bitrate_kbps: None,
-            // most importantly, we resample
-            sample_rate: Some(22_050),
-            filter_spec: None,
-        }
-    }
-}
-
-pub trait Transcoder {
-    fn transcode_blocking(
-        &self,
-        input_path: &PathBuf,
-        output_path: &PathBuf,
-        options: Option<&TranscoderOptions>,
-        progess_handler: &mut ProgressHandlerFunc,
-    ) -> Result<(), ffmpeg::Error>;
 }
 
 struct FFmpegTranscode<'a> {
@@ -101,15 +43,15 @@ impl<'a> FFmpegTranscode<'a> {
         let mut decoder = input.codec().decoder().audio()?;
         // let duration = decoder.duration();
 
-        let encoder = match options.and_then(|o| o.codec.as_ref()) {
-            Some(requested_codec) => requested_codec.codec(),
+        let encoder = match options.and_then(|o| o.codec) {
+            Some(requested_codec) => requested_codec.into(),
             None => octx.format().codec(path, ffmpeg::media::Type::Audio),
         };
         // println!("chosen encoder: {:?}", encoder);
 
         let codec = ffmpeg::encoder::find(encoder)
             .ok_or(ffmpeg::error::Error::EncoderNotFound)
-            .and_then(|c| c.audio())?;
+            .and_then(djtool_ffmpeg::Codec::audio)?;
 
         let global = octx
             .format()
@@ -123,8 +65,7 @@ impl<'a> FFmpegTranscode<'a> {
 
         let channel_layout = codec
             .channel_layouts()
-            .map(|cls| cls.best(decoder.channel_layout().channels()))
-            .unwrap_or(ffmpeg::channel_layout::ChannelLayout::STEREO);
+            .map_or(ffmpeg::channel_layout::ChannelLayout::STEREO, |cls| cls.best(decoder.channel_layout().channels()));
 
         if global {
             encoder.set_flags(ffmpeg::codec::flag::Flags::GLOBAL_HEADER);
@@ -154,11 +95,18 @@ impl<'a> FFmpegTranscode<'a> {
         let encoder = encoder.open_as(codec)?;
         output.set_parameters(&encoder);
 
-        let filter = Self::build_filter(
-            options.and_then(|o| o.filter_spec).unwrap_or(&"anull"),
-            &decoder,
-            &encoder,
-        )?;
+        let mut filters = Vec::new();
+        if let Some(options) = options {
+            if options.loudness_normalize {
+                filters.push("loudnorm");
+            }
+        }
+        let filter_spec = if filters.is_empty() {
+            "anull".to_string()
+        } else {
+            filters.join(",")
+        };
+        let filter = Self::build_filter(&filter_spec, &decoder, &encoder)?;
 
         let in_time_base = decoder.time_base();
         let out_time_base = output.time_base();
@@ -276,8 +224,8 @@ impl<'a> FFmpegTranscode<'a> {
                 .ok_or(ffmpeg::Error::FilterNotFound)?;
             match f.sink().frame(&mut filtered) {
                 Ok(_) => {
-                    self.send_frame_to_encoder(&filtered);
-                    self.receive_and_process_encoded_packets(octx);
+                    self.send_frame_to_encoder(&filtered)?;
+                    self.receive_and_process_encoded_packets(octx)?;
                 }
                 Err(_) => break,
             };
@@ -303,10 +251,6 @@ impl<'a> FFmpegTranscode<'a> {
             decoded.set_pts(timestamp);
             self.frame += 1;
 
-            // debug!(timestamp);
-            // debug!(self.decoder.time_base());
-            // check if timestamp is valid
-
             let duration = self.to_duration(self.duration as f64);
             let timestamp = self.to_duration(timestamp.unwrap_or(0) as f64);
             (self.progress_handler)(TranscodeProgress {
@@ -314,15 +258,10 @@ impl<'a> FFmpegTranscode<'a> {
                 frame: self.frame,
                 total_frames: self.total_frames,
                 duration,
-                // Duration::from_secs_f64(
-                //     self.duration as f64 * f64::from(self.decoder.time_base()),
-                // ),
                 timestamp,
-                // : self.to_duration(&(timestamp.unwrap_or(0) as f64)),
-                // timestamp: Duration::from_secs_f64(),
             });
-            self.add_frame_to_filter(&decoded);
-            self.get_and_process_filtered_frames(octx);
+            self.add_frame_to_filter(&decoded)?;
+            self.get_and_process_filtered_frames(octx)?;
         }
         Ok(())
     }
@@ -335,63 +274,30 @@ impl<'a> FFmpegTranscode<'a> {
             Duration::ZERO
         }
     }
-
-    // fn timestamp(&self) -> Duration {
-    //     let timestamp = timestamp.unwrap_or(0) as f64 * f64::from(self.decoder.time_base());
-    //     if 0f64 <= timestamp && timestamp <= Duration::MAX.as_secs_f64() {
-    //         Duration::from_secs_f64(timestamp)
-    //     } else {
-    //         Duration::ZERO
-    //     }
-    // }
-
-    // fn log_progress(&mut self, timestamp: f64) {
-    //     // if !self.logging_enabled
-    //     //     || (self.frame_count - self.last_log_frame_count < 100
-    //     //         && self.last_log_time.elapsed().as_secs_f64() < 1.0)
-    //     // {
-    //     //     return;
-    //     // }
-    //     println!(
-    //         // "time elpased: \t{:8.2}\tframe count: {:8}\ttimestamp: {:8.2}",
-    //         "frame count: {:8}\ttimestamp: {:8.2}",
-    //         // self.starting_time.elapsed().as_secs_f64(),
-    //         self.frame_count,
-    //         timestamp
-    //     );
-    //     // self.last_log_frame_count = self.frame_count;
-    //     // self.last_log_time = Instant::now();
-    // }
 }
 
+#[derive(Default)]
 pub struct FFmpegTranscoder {}
 
 impl FFmpegTranscoder {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for FFmpegTranscoder {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-impl Transcoder for FFmpegTranscoder {
-    fn transcode_blocking(
+    pub fn transcode(
         &self,
-        input_path: &PathBuf,
-        output_path: &PathBuf,
+        input_path: &Path,
+        output_path: &Path,
         options: Option<&TranscoderOptions>,
-        progess_handler: &mut ProgressHandlerFunc,
+        progress_handler: &mut ProgressHandlerFunc,
     ) -> Result<(), ffmpeg::Error> {
         ffmpeg::init()?;
 
         let mut ictx = ffmpeg::format::input(&input_path)?;
         let mut octx = ffmpeg::format::output(&output_path)?;
-        let mut transcoder =
-            FFmpegTranscode::new(&mut ictx, &mut octx, &output_path, options, progess_handler)?;
+        let mut transcoder = FFmpegTranscode::new(
+            &mut ictx,
+            &mut octx,
+            &output_path,
+            options,
+            progress_handler,
+        )?;
 
         octx.set_metadata(ictx.metadata().to_owned());
         octx.write_header()?;
@@ -399,21 +305,42 @@ impl Transcoder for FFmpegTranscoder {
         for (stream, mut packet) in ictx.packets() {
             if stream.index() == transcoder.stream {
                 packet.rescale_ts(stream.time_base(), transcoder.in_time_base);
-                transcoder.send_packet_to_decoder(&packet);
-                transcoder.receive_and_process_decoded_frames(&mut octx);
+                transcoder.send_packet_to_decoder(&packet)?;
+                transcoder.receive_and_process_decoded_frames(&mut octx)?;
             }
         }
 
-        transcoder.send_eof_to_decoder();
-        transcoder.receive_and_process_decoded_frames(&mut octx);
+        transcoder.send_eof_to_decoder()?;
+        transcoder.receive_and_process_decoded_frames(&mut octx)?;
 
-        transcoder.flush_filter();
-        transcoder.get_and_process_filtered_frames(&mut octx);
+        transcoder.flush_filter()?;
+        transcoder.get_and_process_filtered_frames(&mut octx)?;
 
-        transcoder.send_eof_to_encoder();
-        transcoder.receive_and_process_encoded_packets(&mut octx);
+        transcoder.send_eof_to_encoder()?;
+        transcoder.receive_and_process_encoded_packets(&mut octx)?;
 
         octx.write_trailer()?;
         Ok(())
+    }
+}
+
+impl FFmpegTranscoder {
+    #[must_use] pub fn new() -> Self {
+        Self {}
+    }
+}
+
+
+
+impl Transcoder for FFmpegTranscoder {
+    fn transcode_blocking(
+        &self,
+        input_path: &Path,
+        output_path: &Path,
+        options: Option<&TranscoderOptions>,
+        progress_handler: &mut ProgressHandlerFunc,
+    ) -> Result<(), Error> {
+        self.transcode(input_path, output_path, options, progress_handler)
+            .map_err(|err| Error::Custom(err.into()))
     }
 }

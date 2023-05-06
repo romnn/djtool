@@ -9,13 +9,17 @@ use libc::{c_char, c_int, size_t};
 // constness is more valuable than BeOS support, so if someone really needs it,
 // send a patch with cfg_attr.
 
-#[inline(always)]
+#[inline]
+#[must_use]
+#[allow(clippy::module_name_repetitions)]
 pub const fn av_error(e: c_int) -> c_int {
     -e
 }
 
-#[inline(always)]
-pub const fn av_un_error(e: c_int) -> c_int {
+#[inline]
+#[must_use]
+#[allow(clippy::module_name_repetitions)]
+pub const fn av_neg_error(e: c_int) -> c_int {
     -e
 }
 
@@ -53,7 +57,7 @@ pub const AVERROR_HTTP_NOT_FOUND: c_int = FFERRTAG!(0xF8, b'4', b'0', b'4');
 pub const AVERROR_HTTP_OTHER_4XX: c_int = FFERRTAG!(0xF8, b'4', b'X', b'X');
 pub const AVERROR_HTTP_SERVER_ERROR: c_int = FFERRTAG!(0xF8, b'5', b'X', b'X');
 
-#[inline(always)]
+#[inline]
 pub unsafe fn av_make_error_string(
     errnum: c_int,
     errbuf: *mut c_char,

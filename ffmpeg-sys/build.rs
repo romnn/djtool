@@ -1,10 +1,14 @@
 #![allow(warnings)]
+#![allow(
+    clippy::missing_panics_doc,
+    clippy::overly_complex_bool_expr,
+    clippy::too_many_lines
+)]
 
-use anyhow::Result;
 use dep_graph::{DepGraph, Dependency};
 use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -20,18 +24,21 @@ macro_rules! switch {
     };
 }
 
+#[must_use]
 pub fn output() -> PathBuf {
     PathBuf::from(std::env::var("OUT_DIR").unwrap())
         .canonicalize()
         .unwrap()
 }
 
+#[must_use]
 pub fn manifest() -> PathBuf {
     PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .canonicalize()
         .unwrap()
 }
 
+#[must_use]
 pub fn search() -> PathBuf {
     let mut absolute = std::env::current_dir().unwrap();
     absolute.push(&output());
@@ -39,16 +46,19 @@ pub fn search() -> PathBuf {
     absolute
 }
 
+#[must_use]
 pub fn feature_env_set(name: &str) -> bool {
-    std::env::var(&format!("CARGO_FEATURE_FFMPEG_{}", name.to_uppercase())).is_ok()
+    std::env::var(format!("CARGO_FEATURE_FFMPEG_{}", name.to_uppercase())).is_ok()
 }
 
+#[must_use]
 pub fn is_debug_build() -> bool {
     std::env::var("DEBUG").is_ok()
 }
 
+#[must_use]
 pub fn is_cross_build() -> bool {
-    || -> Result<bool> {
+    || -> Result<bool, std::env::VarError> {
         let target = std::env::var("TARGET")?;
         let host = std::env::var("HOST")?;
         Ok(target != host)
@@ -56,10 +66,11 @@ pub fn is_cross_build() -> bool {
     .unwrap_or(false)
 }
 
+#[must_use]
 pub fn build_env() -> HashMap<&'static str, String> {
     let ld_flags = format!("-L{}", search().join("lib").to_string_lossy());
     HashMap::from([
-        ("LDFLAGS", ld_flags.clone()),
+        ("LDFLAGS", ld_flags),
         (
             "PKG_CONFIG_PATH",
             search().join("lib/pkgconfig").to_string_lossy().to_string(),
@@ -91,7 +102,8 @@ pub mod dep_graph {
             stacked: bool,
         }
 
-        pub struct TarjanStronglyConnectedComponents<'a, I>
+        /// Tarjan strongly connected components.
+        pub struct StronglyConnected<'a, I>
         where
             I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
         {
@@ -102,12 +114,13 @@ pub mod dep_graph {
             components: Vec<Vec<&'a I>>,
         }
 
-        impl<'a, I> TarjanStronglyConnectedComponents<'a, I>
+        impl<'a, I> StronglyConnected<'a, I>
         where
             I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
         {
-            pub fn new(graph: &'a InnerGraph<I>) -> TarjanStronglyConnectedComponents<I> {
-                TarjanStronglyConnectedComponents {
+            #[must_use]
+            pub fn new(graph: &'a InnerGraph<I>) -> StronglyConnected<I> {
+                StronglyConnected {
                     graph,
                     stack: Vec::<&I>::new(),
                     nodes: Vec::<ComponentNode>::with_capacity(graph.len()),
@@ -120,7 +133,7 @@ pub mod dep_graph {
                 // start depth first search from each node that has not yet been visited
                 for node in self.graph.keys() {
                     if !self.seen.contains_key(&node) {
-                        self.dfs(&node);
+                        self.dfs(node);
                     }
                 }
                 // panic!("components: {:?}", self.components);
@@ -138,22 +151,19 @@ pub mod dep_graph {
 
                 if let Some(links) = self.graph.get(node) {
                     for neighbour in links {
-                        match self.seen.get(neighbour) {
-                            Some(&i) => {
-                                // node was already visited
-                                if self.nodes[i].stacked {
-                                    self.nodes[stack_idx].stack_idx =
-                                        self.nodes[stack_idx].stack_idx.min(i);
-                                }
-                            }
-                            None => {
-                                // node has not yet been visited
-                                let n = self.dfs(neighbour);
-                                let n_stack_idx = n.stack_idx;
+                        if let Some(&i) = self.seen.get(neighbour) {
+                            // node was already visited
+                            if self.nodes[i].stacked {
                                 self.nodes[stack_idx].stack_idx =
-                                    self.nodes[stack_idx].stack_idx.min(n_stack_idx);
+                                    self.nodes[stack_idx].stack_idx.min(i);
                             }
-                        };
+                        } else {
+                            // node has not yet been visited
+                            let n = self.dfs(neighbour);
+                            let n_stack_idx = n.stack_idx;
+                            self.nodes[stack_idx].stack_idx =
+                                self.nodes[stack_idx].stack_idx.min(n_stack_idx);
+                        }
                     }
                 }
                 // maintain the stack invariant:
@@ -181,8 +191,7 @@ pub mod dep_graph {
         }
     }
 
-    use anyhow::Result;
-    use components::TarjanStronglyConnectedComponents;
+    use components::StronglyConnected;
     use std::cmp::PartialEq;
     use std::collections::{HashMap, HashSet};
     use std::hash::{Hash, Hasher};
@@ -194,6 +203,12 @@ pub mod dep_graph {
 
     type InnerGraph<I> = HashMap<I, HashSet<I>>;
     type Graph<I> = Arc<RwLock<InnerGraph<I>>>;
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error("dependency graph has circles")]
+        HasCircles,
+    }
 
     #[derive(Clone, Debug)]
     pub struct Dependency<I>
@@ -240,12 +255,17 @@ pub mod dep_graph {
     where
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
-        pub fn new(nodes: Vec<Dependency<I>>) -> Result<Self> {
+        /// Create a new dependency graph (DAG) from list of dependencies.
+        ///
+        /// # Errors
+        /// If the graph contains circles.
+        pub fn new(nodes: Vec<Dependency<I>>) -> Result<Self, Error> {
             let (ready_nodes, deps, reverse_deps) = DepGraph::parse_nodes(nodes);
 
             // check for cyclic dependencies
-            if TarjanStronglyConnectedComponents::new(&deps).has_circles() {
-                panic!("has circles");
+            let mut strongly_connected = StronglyConnected::new(&deps);
+            if strongly_connected.has_circles() {
+                return Err(Error::HasCircles);
             }
 
             // println!("cargo:warning=deps: {:?}", deps);
@@ -288,18 +308,19 @@ pub mod dep_graph {
             for node in nodes {
                 all_reacheable.extend(self.reacheable(&node));
             }
-            let remove: HashSet<I> = HashSet::from_iter(
-                self.deps
-                    .read()
-                    .unwrap()
-                    .keys()
-                    .filter(|dep| !all_reacheable.contains(dep))
-                    .map(|dep| dep.to_owned()),
-            );
+            let remove: HashSet<I> = self
+                .deps
+                .read()
+                .unwrap()
+                .keys()
+                .filter(|dep| !all_reacheable.contains(dep))
+                .map(std::borrow::ToOwned::to_owned)
+                .collect();
+
             for dep in &remove {
-                self.ready_nodes.remove(&dep);
-                self.deps.write().unwrap().remove(&dep);
-                self.reverse_deps.write().unwrap().remove(&dep);
+                self.ready_nodes.remove(dep);
+                self.deps.write().unwrap().remove(dep);
+                self.reverse_deps.write().unwrap().remove(dep);
                 for (_, deps) in self.deps.write().unwrap().iter_mut() {
                     deps.remove(dep);
                 }
@@ -358,10 +379,10 @@ pub mod dep_graph {
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
         type Item = I;
-        type IntoIter = DepGraphIter<I>;
+        type IntoIter = Iter<I>;
 
         fn into_iter(self) -> Self::IntoIter {
-            DepGraphIter::<I>::new(
+            Iter::<I>::new(
                 self.ready_nodes.clone(),
                 self.deps.clone(),
                 self.reverse_deps,
@@ -370,7 +391,7 @@ pub mod dep_graph {
     }
 
     #[derive(Clone)]
-    pub struct DepGraphIter<I>
+    pub struct Iter<I>
     where
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
@@ -379,7 +400,7 @@ pub mod dep_graph {
         reverse_deps: Graph<I>,
     }
 
-    impl<I> DepGraphIter<I>
+    impl<I> Iter<I>
     where
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
@@ -392,16 +413,16 @@ pub mod dep_graph {
         }
     }
 
-    pub fn remove_node_id<I>(id: I, deps: &Graph<I>, reverse_deps: &Graph<I>) -> Result<Vec<I>>
+    pub fn remove_node_id<I>(id: &I, deps: &Graph<I>, reverse_deps: &Graph<I>) -> Vec<I>
     where
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
         let rdep_ids = {
-            match reverse_deps.read().unwrap().get(&id) {
+            match reverse_deps.read().unwrap().get(id) {
                 Some(node) => node.clone(),
                 // If no node depends on a node, it will not appear
                 // in reverse_deps.
-                None => Default::default(),
+                None => HashSet::default(),
             }
         };
 
@@ -409,12 +430,11 @@ pub mod dep_graph {
         let next_nodes = rdep_ids
             .iter()
             .filter_map(|rdep_id| {
-                let rdep = match deps.get_mut(&rdep_id) {
-                    Some(rdep) => rdep,
-                    None => return None,
+                let Some(rdep) = deps.get_mut(rdep_id) else {
+                    return None;
                 };
 
-                rdep.remove(&id);
+                rdep.remove(id);
 
                 if rdep.is_empty() {
                     Some(rdep_id.clone())
@@ -425,12 +445,12 @@ pub mod dep_graph {
             .collect();
 
         // Remove the current node from the list of dependencies.
-        deps.remove(&id);
+        deps.remove(id);
 
-        Ok(next_nodes)
+        next_nodes
     }
 
-    impl<I> Iterator for DepGraphIter<I>
+    impl<I> Iterator for Iter<I>
     where
         I: Clone + std::fmt::Debug + Eq + Hash + PartialEq + Send + Sync + 'static,
     {
@@ -440,8 +460,7 @@ pub mod dep_graph {
             if let Some(id) = self.ready_nodes.iter().next().cloned() {
                 self.ready_nodes.remove(&id);
                 // remove dependencies and retrieve next available nodes, if any
-                let next_nodes =
-                    remove_node_id::<I>(id.clone(), &self.deps, &self.reverse_deps).ok()?;
+                let next_nodes = remove_node_id::<I>(&id, &self.deps, &self.reverse_deps);
                 // push ready nodes
                 self.ready_nodes.extend(next_nodes);
                 return Some(id);
@@ -463,9 +482,7 @@ pub trait LibraryFeature {
     fn lib(&self) -> &'static str;
 
     fn is_enabled(&self) -> bool {
-        self.feature_name()
-            .map(|name| feature_env_set(name))
-            .unwrap_or(true)
+        self.feature_name().map_or(true, feature_env_set)
     }
 
     fn exists(&self) -> bool {
@@ -513,7 +530,7 @@ pub struct Library {
     pub version: &'static str,
     pub requires: &'static [LibraryDependency],
     pub artifacts: &'static [LibraryArtifact],
-    pub build: Box<dyn Fn(bool, &'static str) -> Result<()> + Send + Sync>,
+    pub build: Box<dyn Fn(bool, &'static str) + Send + Sync>,
 }
 
 impl std::fmt::Debug for Library {
@@ -527,6 +544,7 @@ impl std::fmt::Debug for Library {
 }
 
 impl Library {
+    #[must_use]
     pub fn needs_rebuild(&self) -> bool {
         self.artifacts.iter().any(|a| a.is_enabled() && !a.exists())
     }
@@ -534,13 +552,13 @@ impl Library {
 
 pub struct GitRepository<'a> {
     pub url: &'a str,
-    pub path: &'a PathBuf,
+    pub path: &'a Path,
     pub branch: Option<String>,
 }
 
 impl GitRepository<'_> {
-    pub fn clone(&self) -> Result<()> {
-        let _ = std::fs::remove_dir_all(&self.path);
+    pub fn clone(&self) {
+        std::fs::remove_dir_all(self.path).ok();
         let mut cmd = Command::new("git");
         cmd.arg("clone").arg("--depth=1");
         if let Some(branch) = &self.branch {
@@ -557,7 +575,7 @@ impl GitRepository<'_> {
 
         let output = match cmd.output() {
             Ok(output) => output,
-            Err(err) => return Err(anyhow::anyhow!("{:#?} failed: {}", &cmd, err)),
+            Err(err) => panic!("{:#?} failed: {}", &cmd, err),
         };
 
         if !output.status.success() {
@@ -565,10 +583,7 @@ impl GitRepository<'_> {
             let stderr = String::from_utf8_lossy(&output.stderr);
             println!("{}", &stdout);
             eprintln!("{}", &stderr);
-
-            Err(anyhow::anyhow!("{:#?} failed", &cmd))
-        } else {
-            Ok(())
+            panic!("{:#?} failed", &cmd);
         }
     }
 }
@@ -581,6 +596,7 @@ pub struct CrossBuildConfig {
 }
 
 impl CrossBuildConfig {
+    #[must_use]
     pub fn guess() -> Option<CrossBuildConfig> {
         if is_cross_build() {
             // Rust targets are subtly different than naming scheme for compiler prefixes.
@@ -605,312 +621,243 @@ impl CrossBuildConfig {
     }
 }
 
-pub fn build_mp3lame(rebuild: bool, version: &'static str) -> Result<()> {
+pub fn build_mp3lame(rebuild: bool, version: &'static str) {
     let output_base_path = output();
-    let source = output_base_path.join(format!("lame-{}", version));
-    if rebuild {
-        let repo = GitRepository {
-            url: "https://github.com/despoa/LAME",
-            path: &source,
-            branch: Some(format!("lame3_{}", version)),
-        };
-        repo.clone()?;
-
-        let configure_path = source.join("configure");
-        assert!(configure_path.exists());
-        let mut configure = Command::new(&configure_path);
-        configure.current_dir(&source);
-        configure.arg(format!("--prefix={}", search().to_string_lossy()));
-
-        if let Some(cross) = CrossBuildConfig::guess() {
-            println!("cargo:warning=cross config: {:#?}", cross);
-            configure.arg(format!("--cross-prefix={}-", cross.prefix));
-            configure.arg(format!("--arch={}", cross.arch));
-            configure.arg(format!("--target_os={}", cross.target_os,));
-        }
-
-        if is_debug_build() {
-            configure.arg("--enable-debug");
-        } else {
-            configure.arg("--disable-debug");
-        }
-
-        // make it static
-        configure.arg("--enable-static");
-        configure.arg("--disable-shared");
-        configure.envs(&build_env());
-        println!("cargo:warning=configure mp3: {:#?}", &configure);
-
-        // run ./configure
-        let output = match configure.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &configure, err),
-        };
-
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &configure);
-        }
-
-        // run make
-        let mut make = Command::new("make");
-        make.arg("-j");
-        make.arg(num_cpus::get().to_string());
-        make.current_dir(&source);
-        make.envs(&build_env());
-
-        let output = match make.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &make, err),
-        };
-
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &make);
-        }
-
-        // run make install
-        let mut make_install = Command::new("make");
-        make_install.current_dir(&source);
-        make_install.arg("install");
-        make_install.envs(&build_env());
-
-        let output = match make_install.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &make_install, err),
-        };
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &make_install);
-        }
+    let source = output_base_path.join(format!("lame-{version}"));
+    if !rebuild {
+        return;
     }
 
-    Ok(())
+    let repo = GitRepository {
+        url: "https://github.com/despoa/LAME",
+        path: &source,
+        branch: Some(format!("lame3_{version}")),
+    };
+    repo.clone();
+
+    let configure_path = source.join("configure");
+    assert!(configure_path.exists());
+    let mut configure = Command::new(&configure_path);
+    configure.current_dir(&source);
+    configure.arg(format!("--prefix={}", search().to_string_lossy()));
+
+    if let Some(cross) = CrossBuildConfig::guess() {
+        println!("cargo:warning=cross config: {cross:#?}");
+        configure.arg(format!("--cross-prefix={}-", cross.prefix));
+        configure.arg(format!("--arch={}", cross.arch));
+        configure.arg(format!("--target_os={}", cross.target_os,));
+    }
+
+    if is_debug_build() {
+        configure.arg("--enable-debug");
+    } else {
+        configure.arg("--disable-debug");
+    }
+
+    // make it static
+    configure.arg("--enable-static");
+    configure.arg("--disable-shared");
+    configure.envs(&build_env());
+    println!("cargo:warning=configure mp3: {:#?}", &configure);
+
+    // run ./configure
+    let output = match configure.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &configure, err),
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &configure);
+    }
+
+    // run make
+    let mut make = Command::new("make");
+    make.arg("-j");
+    make.arg(num_cpus::get().to_string());
+    make.current_dir(&source);
+    make.envs(&build_env());
+
+    let output = match make.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &make, err),
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &make);
+    }
+
+    // run make install
+    let mut make_install = Command::new("make");
+    make_install.current_dir(&source);
+    make_install.arg("install");
+    make_install.envs(&build_env());
+
+    let output = match make_install.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &make_install, err),
+    };
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &make_install);
+    }
 }
 
-pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
-    let output_base_path = output();
-    let source = output_base_path.join(format!("ffmpeg-{}", version));
-    if rebuild {
-        let repo = GitRepository {
-            url: "https://github.com/FFmpeg/FFmpeg",
-            path: &source,
-            branch: Some(format!("release/{}", version)),
-        };
-        repo.clone()?;
+pub fn rebuild_ffmpeg(source: &Path, version: &'static str) {
+    let repo = GitRepository {
+        url: "https://github.com/FFmpeg/FFmpeg",
+        path: source,
+        branch: Some(format!("release/{version}")),
+    };
+    repo.clone();
 
-        let configure_path = source.join("configure");
-        assert!(configure_path.exists());
-        let mut configure = Command::new(&configure_path);
-        configure.current_dir(&source);
-        configure.arg(format!("--prefix={}", search().to_string_lossy()));
+    let configure_path = source.join("configure");
+    assert!(configure_path.exists());
+    let mut configure = Command::new(&configure_path);
+    configure.current_dir(source);
+    configure.arg(format!("--prefix={}", search().to_string_lossy()));
 
-        let build_envs = build_env();
-        configure.arg(format!("--extra-ldflags=\"{}\"", build_envs["LDFLAGS"]));
-        configure.arg(format!("--extra-cflags=\"{}\"", build_envs["CFLAGS"]));
-        configure.arg("--extra-libs=\"-ldl -lpthread -lm -lz\"");
+    let build_envs = build_env();
+    configure.arg(format!("--extra-ldflags=\"{}\"", build_envs["LDFLAGS"]));
+    configure.arg(format!("--extra-cflags=\"{}\"", build_envs["CFLAGS"]));
+    configure.arg("--extra-libs=\"-ldl -lpthread -lm -lz\"");
 
-        if let Some(cross) = CrossBuildConfig::guess() {
-            configure.arg(format!("--cross-prefix={}", cross.prefix));
-            configure.arg(format!("--arch={}", cross.arch));
-            configure.arg(format!("--target_os={}", cross.target_os));
-        }
+    if let Some(cross) = CrossBuildConfig::guess() {
+        configure.arg(format!("--cross-prefix={}", cross.prefix));
+        configure.arg(format!("--arch={}", cross.arch));
+        configure.arg(format!("--target_os={}", cross.target_os));
+    }
 
-        if is_debug_build() {
-            configure.arg("--enable-debug");
-            configure.arg("--disable-stripping");
-        } else {
-            configure.arg("--disable-debug");
-            configure.arg("--enable-stripping");
-        }
+    if is_debug_build() {
+        configure.arg("--enable-debug");
+        configure.arg("--disable-stripping");
+    } else {
+        configure.arg("--disable-debug");
+        configure.arg("--enable-stripping");
+    }
 
-        // make it static
-        configure.arg("--pkg-config-flags=\"--static\"");
-        configure.arg("--enable-static");
-        configure.arg("--disable-shared");
-        if cfg!(target_os = "linux") {
-            configure.arg("--extra-ldexeflags=\"-static\"");
-        }
+    // make it static
+    configure.arg("--pkg-config-flags=\"--static\"");
+    configure.arg("--enable-static");
+    configure.arg("--disable-shared");
+    if cfg!(target_os = "linux") {
+        configure.arg("--extra-ldexeflags=\"-static\"");
+    }
 
-        // configure.arg("--enable-pic");
+    // configure.arg("--enable-pic");
 
-        // disable all features and only used what is explicitely enabled
-        // configure.arg("--disable-everything");
+    // disable all features and only used what is explicitely enabled
+    // configure.arg("--disable-everything");
 
-        // stop autodetected libraries enabling themselves, causing linking errors
-        configure.arg("--disable-autodetect");
+    // stop autodetected libraries enabling themselves, causing linking errors
+    configure.arg("--disable-autodetect");
 
-        // do not build programs since we don't need them
-        configure.arg("--disable-programs");
+    // do not build programs since we don't need them
+    configure.arg("--disable-programs");
 
-        configure.arg("--disable-network");
+    configure.arg("--disable-network");
 
-        configure.arg("--enable-small");
+    configure.arg("--enable-small");
 
-        // the binary must comply with GPL
-        switch!(configure, feature_env_set("LICENSE_GPL"), "gpl");
+    // the binary must comply with GPL
+    switch!(configure, feature_env_set("LICENSE_GPL"), "gpl");
 
-        // the binary must comply with (L)GPLv3
-        switch!(configure, feature_env_set("LICENSE_VERSION3"), "version3");
+    // the binary must comply with (L)GPLv3
+    switch!(configure, feature_env_set("LICENSE_VERSION3"), "version3");
 
-        // the binary cannot be redistributed
-        switch!(configure, feature_env_set("LICENSE_NONFREE"), "nonfree");
+    // the binary cannot be redistributed
+    switch!(configure, feature_env_set("LICENSE_NONFREE"), "nonfree");
 
-        for (_, dep) in LIBRARIES.iter() {
-            for feat in dep.artifacts.iter() {
-                // if !feat.is_enabled() {
-                //     continue;
-                // }
-                if let Some(flag) = feat.ffmpeg_flag {
-                    switch!(configure, feat.is_enabled(), flag);
-                }
-                // println!("cargo:rustc-link-lib=static={}", feat.name);
-                // println!("cargo:warning={}", feat.name);
+    for (_, dep) in LIBRARIES.iter() {
+        for feat in dep.artifacts.iter() {
+            if let Some(flag) = feat.ffmpeg_flag {
+                switch!(configure, feat.is_enabled(), flag);
             }
-        }
-
-        // configure external SSL libraries
-        // enable!(configure, "FFMPEG_GNUTLS", "gnutls");
-        // enable!(configure, "FFMPEG_OPENSSL", "openssl");
-
-        // configure external filters
-        // enable!(configure, "FFMPEG_FONTCONFIG", "fontconfig");
-        // enable!(configure, "FFMPEG_FREI0R", "frei0r");
-        // enable!(configure, "FFMPEG_LADSPA", "ladspa");
-        // enable!(configure, "FFMPEG_ASS", "libass");
-        // enable!(configure, "FFMPEG_FREETYPE", "libfreetype");
-        // enable!(configure, "FFMPEG_FRIBIDI", "libfribidi");
-        // enable!(configure, "FFMPEG_OPENCV", "libopencv");
-        // enable!(configure, "FFMPEG_VMAF", "libvmaf");
-
-        // configure external encoders/decoders
-        // enable!(configure, "FFMPEG_AACPLUS", "libaacplus");
-        // enable!(configure, "FFMPEG_CELT", "libcelt");
-        // enable!(configure, "FFMPEG_DCADEC", "libdcadec");
-        // enable!(configure, "FFMPEG_DAV1D", "libdav1d");
-        // enable!(configure, "FFMPEG_FAAC", "libfaac");
-        // enable!(configure, "FFMPEG_FDK_AAC", "libfdk-aac");
-        // enable!(configure, "FFMPEG_GSM", "libgsm");
-        // enable!(configure, "FFMPEG_ILBC", "libilbc");
-        // enable!(configure, "FFMPEG_VAZAAR", "libvazaar");
-        // enable!(configure, "FFMPEG_MP3LAME", "libmp3lame");
-        // enable!(configure, "FFMPEG_OPENCORE_AMRNB", "libopencore-amrnb");
-        // enable!(configure, "FFMPEG_OPENCORE_AMRWB", "libopencore-amrwb");
-        // enable!(configure, "FFMPEG_OPENH264", "libopenh264");
-        // enable!(configure, "FFMPEG_OPENH265", "libopenh265");
-        // enable!(configure, "FFMPEG_OPENJPEG", "libopenjpeg");
-        // enable!(configure, "FFMPEG_OPUS", "libopus");
-        // enable!(configure, "FFMPEG_SCHROEDINGER", "libschroedinger");
-        // enable!(configure, "FFMPEG_SHINE", "libshine");
-        // enable!(configure, "FFMPEG_SNAPPY", "libsnappy");
-        // enable!(configure, "FFMPEG_SPEEX", "libspeex");
-        // enable!(configure, "FFMPEG_STAGEFRIGHT_H264", "libstagefright-h264");
-        // enable!(configure, "FFMPEG_THEORA", "libtheora");
-        // enable!(configure, "FFMPEG_TWOLAME", "libtwolame");
-        // enable!(configure, "FFMPEG_UTVIDEO", "libutvideo");
-        // enable!(configure, "FFMPEG_VO_AACENC", "libvo-aacenc");
-        // enable!(configure, "FFMPEG_VO_AMRWBENC", "libvo-amrwbenc");
-        // enable!(configure, "FFMPEG_VORBIS", "libvorbis");
-        // enable!(configure, "FFMPEG_VPX", "libvpx");
-        // enable!(configure, "FFMPEG_WAVPACK", "libwavpack");
-        // enable!(configure, "FFMPEG_WEBP", "libwebp");
-        // enable!(configure, "FFMPEG_X264", "libx264");
-        // enable!(configure, "FFMPEG_X265", "libx265");
-        // enable!(configure, "FFMPEG_AVS", "libavs");
-        // enable!(configure, "FFMPEG_XVID", "libxvid");
-
-        // other external libraries
-        // enable!(configure, "FFMPEG_DRM", "libdrm");
-        // enable!(configure, "FFMPEG_NVENC", "nvenc");
-
-        // configure external protocols
-        // enable!(configure, "FFMPEG_SMBCLIENT", "libsmbclient");
-        // enable!(configure, "FFMPEG_SSH", "libssh");
-
-        // configure misc build options
-        // enable!(configure, "FFMPEG_PIC", "pic");
-
-        // run ./configure
-        // let cmd_str: Vec<_> = configure.get_args().collect();
-        // let cmd_str = cmd_str
-        //     .into_iter()
-        //     .map(|arg| arg.to_owned().into_string().unwrap())
-        //     .collect::<Vec<String>>()
-        //     .join(" ");
-        // println!("cargo:warning={:?}", build_env());
-        // println!("cargo:warning={:?}", configure);
-        // println!("cargo:warning={}", cmd_str);
-
-        configure.envs(&build_envs);
-
-        let output = match configure.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &configure, err),
-        };
-
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &configure);
-        }
-
-        // run make
-        let mut make = Command::new("make");
-        make.arg("-j");
-        make.arg(num_cpus::get().to_string());
-        make.current_dir(&source);
-        make.envs(&build_env());
-
-        let output = match make.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &make, err),
-        };
-
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &make);
-        }
-
-        // run make install
-        let mut make_install = Command::new("make");
-        make_install.current_dir(&source);
-        make_install.arg("install");
-        make_install.envs(&build_env());
-
-        let output = match make_install.output() {
-            Ok(output) => output,
-            Err(err) => panic!("{:#?} failed: {}", &make_install, err),
-        };
-
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("{}", &stdout);
-            eprintln!("{}", &stderr);
-
-            panic!("{:#?} failed", &make_install);
         }
     }
 
+    configure.envs(&build_envs);
+
+    let output = match configure.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &configure, err),
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &configure);
+    }
+
+    // run make
+    let mut make = Command::new("make");
+    make.arg("-j");
+    make.arg(num_cpus::get().to_string());
+    make.current_dir(source);
+    make.envs(&build_env());
+
+    let output = match make.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &make, err),
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &make);
+    }
+
+    // run make install
+    let mut make_install = Command::new("make");
+    make_install.current_dir(source);
+    make_install.arg("install");
+    make_install.envs(&build_env());
+
+    let output = match make_install.output() {
+        Ok(output) => output,
+        Err(err) => panic!("{:#?} failed: {}", &make_install, err),
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("{}", &stdout);
+        eprintln!("{}", &stderr);
+
+        panic!("{:#?} failed", &make_install);
+    }
+}
+
+pub fn build_ffmpeg(rebuild: bool, version: &'static str) {
+    let output_base_path = output();
+    let source = output_base_path.join(format!("ffmpeg-{version}"));
+    if rebuild {
+        rebuild_ffmpeg(&source, version);
+    }
+
+    link_ffmpeg_libraries(&source);
+}
+
+fn link_ffmpeg_libraries(source: &Path) {
     for (_, dep) in LIBRARIES.iter() {
         for feat in dep.artifacts.iter() {
             if !feat.is_enabled() {
@@ -941,38 +888,35 @@ pub fn build_ffmpeg(rebuild: bool, version: &'static str) -> Result<()> {
             "VideoToolbox",
         ];
         for f in frameworks {
-            println!("cargo:rustc-link-lib=framework={}", f);
+            println!("cargo:rustc-link-lib=framework={f}");
         }
     }
 
     // Check additional required libraries.
-    {
-        use std::io::{BufRead, BufReader};
-        let config_mak_path = source.join("ffbuild/config.mak");
-        let config_mak_file = std::fs::OpenOptions::new()
-            .read(true)
-            .open(config_mak_path)
-            .unwrap();
-        let reader = BufReader::new(config_mak_file);
-        let extra_libs = reader
-            .lines()
-            .find(|line| line.as_ref().unwrap().starts_with("EXTRALIBS"))
-            .map(|line| line.unwrap())
-            .unwrap();
+    dbg!(&source);
+    let config_mak_path = source.join("ffbuild/config.mak");
+    let config_mak_file = std::fs::OpenOptions::new()
+        .read(true)
+        .open(config_mak_path)
+        .unwrap();
+    let reader = BufReader::new(config_mak_file);
+    let extra_libs = reader
+        .lines()
+        .find(|line| line.as_ref().unwrap().starts_with("EXTRALIBS"))
+        .map(std::result::Result::unwrap)
+        .unwrap();
 
-        // TODO: could use regex here
-        let linker_args = extra_libs.split('=').last().unwrap().split(' ');
-        let include_libs = linker_args
-            .filter(|v| v.starts_with("-l"))
-            .map(|flag| &flag[2..]);
+    // TODO: could use regex here
+    let linker_args = extra_libs.split('=').last().unwrap().split(' ');
+    let include_libs = linker_args
+        .filter(|v| v.starts_with("-l"))
+        .map(|flag| &flag[2..]);
 
-        for lib in include_libs {
-            println!("cargo:rustc-link-lib={}", lib);
-        }
+    for lib in include_libs {
+        println!("cargo:rustc-link-lib={lib}");
     }
-
-    Ok(())
 }
+
 lazy_static::lazy_static! {
     pub static ref LIBRARIES: HashMap<LibraryId, Library> = HashMap::from([
         (
@@ -1071,28 +1015,24 @@ lazy_static::lazy_static! {
 struct Callbacks;
 
 impl ParseCallbacks for Callbacks {
-    fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
+    fn int_macro(&self, name: &str, value: i64) -> Option<IntKind> {
         let ch_layout_prefix = "AV_CH_";
         let codec_cap_prefix = "AV_CODEC_CAP_";
         let codec_flag_prefix = "AV_CODEC_FLAG_";
         let error_max_size = "AV_ERROR_MAX_STRING_SIZE";
 
-        if value >= i64::min_value() as i64
-            && value <= i64::max_value() as i64
-            && _name.starts_with(ch_layout_prefix)
-        {
+        if value >= i64::min_value() && name.starts_with(ch_layout_prefix) {
             Some(IntKind::ULongLong)
-        } else if value >= i32::min_value() as i64
-            && value <= i32::max_value() as i64
-            && (_name.starts_with(codec_cap_prefix) || _name.starts_with(codec_flag_prefix))
+        } else if i32::try_from(value).is_ok()
+            && (name.starts_with(codec_cap_prefix) || name.starts_with(codec_flag_prefix))
         {
             Some(IntKind::UInt)
-        } else if _name == error_max_size {
+        } else if name == error_max_size {
             Some(IntKind::Custom {
                 name: "usize",
                 is_signed: false,
             })
-        } else if value >= i32::min_value() as i64 && value <= i32::max_value() as i64 {
+        } else if i32::try_from(value).is_ok() {
             Some(IntKind::Int)
         } else {
             None
@@ -1115,14 +1055,10 @@ impl ParseCallbacks for Callbacks {
 
     // https://github.com/rust-lang/rust-bindgen/issues/687#issuecomment-388277405
     fn will_parse_macro(&self, name: &str) -> MacroParsingBehavior {
-        use MacroParsingBehavior::*;
+        use MacroParsingBehavior::{Default, Ignore};
 
         match name {
-            "FP_INFINITE" => Ignore,
-            "FP_NAN" => Ignore,
-            "FP_NORMAL" => Ignore,
-            "FP_SUBNORMAL" => Ignore,
-            "FP_ZERO" => Ignore,
+            "FP_INFINITE" | "FP_NAN" | "FP_NORMAL" | "FP_SUBNORMAL" | "FP_ZERO" => Ignore,
             _ => Default,
         }
     }
@@ -1151,11 +1087,11 @@ fn check_features(
     let mut main_code = String::new();
     let infos: Vec<_> = infos
         .iter()
-        .filter(|(_, feature, _)| feature.map(|feat| feature_env_set(feat)).unwrap_or(true))
+        .filter(|(_, feature, _)| feature.map(feature_env_set).unwrap_or(true))
         .collect();
 
     for &(header, feature, var) in &infos {
-        let include = format!("#include <{}>", header);
+        let include = format!("#include <{header}>");
         if !includes_code.contains(&include) {
             includes_code.push_str(&include);
             includes_code.push('\n');
@@ -1170,14 +1106,12 @@ fn check_features(
             #define {var}_is_defined 1
             #endif
             #endif
-        "#,
-            var = var
+        "#
         ));
 
         main_code.push_str(&format!(
             r#"printf("[{var}]%d%d\n", {var}, {var}_is_defined);
-            "#,
-            var = var
+            "#
         ));
     }
 
@@ -1200,9 +1134,7 @@ fn check_features(
                 {main_code}
                 return 0;
             }}
-           "#,
-        includes_code = includes_code,
-        main_code = main_code
+           "#
     )
     .unwrap();
 
@@ -1242,12 +1174,12 @@ fn check_features(
     }
 
     for &(_, feature, var) in &infos {
-        let var_str = format!("[{var}]", var = var);
+        let var_str = format!("[{var}]");
         let pos = var_str.len()
             + stdout
                 .find(&var_str)
-                .unwrap_or_else(|| panic!("Variable '{}' not found in stdout output", var_str));
-        if &stdout[pos..pos + 1] == "1" {
+                .unwrap_or_else(|| panic!("Variable '{var_str}' not found in stdout output"));
+        if &stdout[pos..=pos] == "1" {
             println!(r#"cargo:rustc-cfg=feature="{}""#, var.to_lowercase());
             println!(r#"cargo:{}=true"#, var.to_lowercase());
         }
@@ -1271,7 +1203,7 @@ fn search_include(include_paths: &[PathBuf], header: &str) -> String {
             return include.as_path().to_str().unwrap().to_string();
         }
     }
-    format!("/usr/include/{}", header)
+    format!("/usr/include/{header}")
 }
 
 fn maybe_search_include(include_paths: &[PathBuf], header: &str) -> Option<String> {
@@ -1291,18 +1223,23 @@ fn main() {
         println!(r#"cargo:rustc-cfg=feature="debug""#);
     }
     println!("cargo:warning=is cross: {:#?}", is_cross_build());
-    println!("cargo:warning=cross build: {:#?}", CrossBuildConfig::guess());
+    println!(
+        "cargo:warning=cross build: {:#?}",
+        CrossBuildConfig::guess()
+    );
     let cc = cc::Build::new();
-    let prefix = cc.get_compiler().path().file_stem().unwrap().to_str().and_then(|c| {
-        dbg!(&c);
-        // cut off "-gcc"
-        if let Some(suffix_pos) = c.rfind('-') {
-            // "wr-c++" compiler
-            Some(c[0..suffix_pos].trim_end_matches("-wr").to_string())
-        } else {
-            None
-        }
-    });
+    let prefix = cc
+        .get_compiler()
+        .path()
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .and_then(|c| {
+            dbg!(&c);
+            // cut off "-gcc"
+            c.rfind('-')
+                .map(|suffix_pos| c[0..suffix_pos].trim_end_matches("-wr").to_string())
+        });
     dbg!(&prefix);
     // dbg!(&suffix_pos);
     // --build x86_64-pc-linux-gnu --host aarch64-linux-gnu
@@ -1311,20 +1248,27 @@ fn main() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").ok();
     dbg!(&target_os);
 
-    let need_build = LIBRARIES.values().any(|lib| lib.needs_rebuild());
+    println!(
+        "cargo:warning=libs: {:?}",
+        LIBRARIES
+            .values()
+            .map(|l| (l.name, l.needs_rebuild()))
+            .collect::<Vec<_>>()
+    );
+    let need_build = LIBRARIES.values().any(Library::needs_rebuild);
+    println!("cargo:warning=need rebuild: {need_build:?}");
 
-    // println!("cargo:warning=need rebuild: {:?}", need_build);
     let mut dependencies = DepGraph::new(
         LIBRARIES
             .iter()
-            .filter_map(|(id, lib)| {
+            .map(|(id, lib)| {
                 let mut dep = Dependency::new(id.clone());
                 for subdep in lib.requires {
                     if !subdep.optional || feature_env_set(LIBRARIES[&subdep.id].name) {
                         dep.add_dep(subdep.id.clone());
                     }
                 }
-                Some(dep)
+                dep
             })
             .collect(),
     )
@@ -1336,13 +1280,14 @@ fn main() {
         search().join("lib").to_string_lossy()
     );
 
+    return;
     if need_build || feature_env_set("force-build") {
-        let _ = std::fs::remove_dir_all(&search());
+        std::fs::remove_dir_all(&search()).ok();
     }
 
-    for inner in dependencies.into_iter() {
+    for inner in dependencies {
         let lib = LIBRARIES.get(&inner).unwrap();
-        (lib.build)(need_build, lib.version).unwrap();
+        (lib.build)(need_build, lib.version);
     }
 
     // dependencies.into_par_iter().for_each(|dep| {
@@ -1353,7 +1298,7 @@ fn main() {
     // });
 
     // make sure the need_build flag works
-    assert!(!LIBRARIES.values().any(|lib| lib.needs_rebuild()));
+    assert!(!LIBRARIES.values().any(Library::needs_rebuild));
 
     let include_paths = vec![search().join("include")];
 
@@ -1659,7 +1604,7 @@ fn main() {
         ],
     );
 
-    if true || need_build {
+    if need_build {
         let clang_includes = include_paths
             .iter()
             .map(|include| format!("-I{}", include.to_string_lossy()));
@@ -1775,7 +1720,7 @@ fn main() {
                 .header(search_include(&include_paths, "libavcodec/avfft.h"))
                 .header(search_include(&include_paths, "libavcodec/vorbis_parser.h"));
             // if ffmpeg_major_version < 5 {
-            builder = builder.header(search_include(&include_paths, "libavcodec/vaapi.h"))
+            builder = builder.header(search_include(&include_paths, "libavcodec/vaapi.h"));
             // }
         }
 
@@ -1893,87 +1838,6 @@ fn main() {
         // required to make tao (from tauri) link
         println!("cargo:rustc-link-lib=framework=ColorSync");
     }
-    #[cfg(all(feature = "proto-build", feature = "parallel-build"))]
-    proto_build_thread.join().unwrap();
 
     println!("cargo:warning=build script took: {:?}", start.elapsed());
 }
-
-// println!("cargo:rerun-if-changed=build.rs");
-// println!("cargo:rustc-link-lib=framework=OpenAL");
-// println!("cargo:rustc-link-lib=framework=Foundation");
-// println!("cargo:rustc-link-lib=framework=AudioToolbox");
-// println!("cargo:rustc-link-lib=framework=CoreAudio");
-// println!("cargo:rustc-link-lib=framework=AVFoundation");
-// println!("cargo:rustc-link-lib=framework=CoreVideo");
-// println!("cargo:rustc-link-lib=framework=CoreMedia");
-// println!("cargo:rustc-link-lib=framework=CoreGraphics");
-// println!("cargo:rustc-link-lib=framework=OpenGL");
-// println!("cargo:rustc-link-lib=framework=ApplicationServices");
-// println!("cargo:rustc-link-lib=framework=CoreFoundation");
-// println!("cargo:rustc-link-lib=framework=CoreImage");
-// println!("cargo:rustc-link-lib=framework=AppKit");
-// println!("cargo:rustc-link-lib=framework=OpenCL");
-// println!("cargo:rustc-link-lib=framework=VideoToolbox");
-// println!("cargo:rustc-link-lib=framework=CoreServices");
-// println!("cargo:rustc-link-lib=framework=CoreText");
-// println!("cargo:rustc-link-lib=framework=IOKit");
-// println!("cargo:rustc-link-lib=framework=ForceFeedback");
-// println!("cargo:rustc-link-lib=framework=GameController");
-// println!("cargo:rustc-link-lib=framework=Carbon");
-// println!("cargo:rustc-link-lib=framework=Metal");
-// println!("cargo:rustc-link-lib=dylib=z");
-// println!("cargo:rustc-link-lib=dylib=c++");
-// println!("cargo:rustc-link-search=native=ffmpeg-build/lib");
-// println!("cargo:rustc-link-lib=static=lzma");
-// println!("cargo:rustc-link-lib=static=expat");
-// println!("cargo:rustc-link-lib=static=iconv");
-// println!("cargo:rustc-link-lib=static=gettextpo");
-// println!("cargo:rustc-link-lib=static=png16");
-// println!("cargo:rustc-link-lib=static=png");
-// println!("cargo:rustc-link-lib=static=yasm");
-// println!("cargo:rustc-link-lib=static=bz2");
-// println!("cargo:rustc-link-lib=static=udfread");
-// println!("cargo:rustc-link-lib=static=bluray");
-// println!("cargo:rustc-link-lib=static=freetype");
-// println!("cargo:rustc-link-lib=static=fribidi");
-// println!("cargo:rustc-link-lib=static=fontconfig");
-// println!("cargo:rustc-link-lib=static=harfbuzz");
-// println!("cargo:rustc-link-lib=static=ass");
-// println!("cargo:rustc-link-lib=static=ssl");
-// println!("cargo:rustc-link-lib=static=srt");
-// println!("cargo:rustc-link-lib=static=snappy");
-// println!("cargo:rustc-link-lib=static=openal");
-// println!("cargo:rustc-link-lib=static=opencore-amrwb");
-// println!("cargo:rustc-link-lib=static=opencore-amrnb");
-// println!("cargo:rustc-link-lib=static=opus");
-// println!("cargo:rustc-link-lib=static=ogg");
-// println!("cargo:rustc-link-lib=static=crypto");
-// println!("cargo:rustc-link-lib=static=theora");
-// println!("cargo:rustc-link-lib=static=vorbis");
-// println!("cargo:rustc-link-lib=static=vorbisenc");
-// println!("cargo:rustc-link-lib=static=vorbisfile");
-// println!("cargo:rustc-link-lib=static=mp3lame");
-// println!("cargo:rustc-link-lib=static=fdk-aac");
-// println!("cargo:rustc-link-lib=static=gsm");
-// println!("cargo:rustc-link-lib=static=speex");
-// println!("cargo:rustc-link-lib=static=zimg");
-// println!("cargo:rustc-link-lib=static=vpx");
-// println!("cargo:rustc-link-lib=static=webp");
-// println!("cargo:rustc-link-lib=static=webpmux");
-// println!("cargo:rustc-link-lib=static=webpdemux");
-// println!("cargo:rustc-link-lib=static=openjp2");
-// println!("cargo:rustc-link-lib=static=aom");
-// println!("cargo:rustc-link-lib=static=dav1d");
-// println!("cargo:rustc-link-lib=static=xvidcore");
-// println!("cargo:rustc-link-lib=static=openh264");
-// println!("cargo:rustc-link-lib=static=x264");
-// println!("cargo:rustc-link-lib=static=x265");
-// println!("cargo:rustc-link-lib=static=avutil");
-// println!("cargo:rustc-link-lib=static=avformat");
-// println!("cargo:rustc-link-lib=static=postproc");
-// println!("cargo:rustc-link-lib=static=avfilter");
-// println!("cargo:rustc-link-lib=static=avdevice");
-// println!("cargo:rustc-link-lib=static=swscale");
-// println!("cargo:rustc-link-lib=static=swresample");
-// println!("cargo:rustc-link-lib=static=avcodec");

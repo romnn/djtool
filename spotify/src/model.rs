@@ -5,50 +5,34 @@ pub mod spotify {
     use djtool_model as model;
     use rspotify_model::Id;
     use serde::{Deserialize, Serialize};
-    // use rspotify_model;
 
-    //
-    // pub trait TryIntoTrack {
-    //     type Error;
-    //     fn into_playlist_id(self) -> model::PlaylistId;
-    // }
-    //
-    // impl<'a> TryIntoPlaylistId for spotify_model::PlaylistId<'a> {
-    //     type Error = spotify_model::IdError;
-    //
-    //     fn into_playlist_id(self) -> model::PlaylistId {
-    //         spotify_model::PlaylistId::from_id(self.id)
-    //     }
-    // }
+    #[macro_export]
+    macro_rules! wrap {
+        ($typ:ident) => {
+            #[repr(transparent)]
+            #[derive(Serialize, Deserialize)]
+            pub struct $typ(pub rspotify_model::$typ);
 
-    // pub trait TryIntoPlaylistId {
-    //     type Error;
-    //     fn into_playlist_id(self) -> model::PlaylistId;
-    // }
-    //
-    // impl<'a> TryIntoPlaylistId for spotify_model::PlaylistId<'a> {
-    //     type Error = spotify_model::IdError;
-    //
-    //     fn into_playlist_id(self) -> model::PlaylistId {
-    //         spotify_model::PlaylistId::from_id(self.id)
-    //     }
-    // }
+            impl $typ {
+                pub fn into_inner(self) -> rspotify_model::$typ {
+                    self.0
+                }
+            }
 
-    #[repr(transparent)]
-    #[derive(Serialize, Deserialize)]
-    pub struct SimplifiedPlaylist(pub rspotify_model::SimplifiedPlaylist);
+            impl std::ops::Deref for $typ {
+                type Target = rspotify_model::$typ;
 
-    impl std::ops::Deref for SimplifiedPlaylist {
-        type Target = rspotify_model::SimplifiedPlaylist;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+        };
     }
 
+    wrap!(SimplifiedPlaylist);
     impl From<SimplifiedPlaylist> for model::Playlist {
         fn from(playlist: SimplifiedPlaylist) -> Self {
-            let playlist = playlist.0;
+            let playlist = playlist.into_inner();
             let id = model::PlaylistId {
                 source: model::Service::Spotify as i32,
                 id: playlist.id.id().to_string(),
@@ -62,48 +46,17 @@ pub mod spotify {
         }
     }
 
-    #[repr(transparent)]
-    #[derive(Serialize, Deserialize)]
-    pub struct Image(pub rspotify_model::Image);
-
-    impl std::ops::Deref for Image {
-        type Target = rspotify_model::Image;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
+    wrap!(Image);
     impl From<Image> for model::Artwork {
         fn from(img: Image) -> Self {
+            let img = img.into_inner();
             model::Artwork {
-                url: img.url.clone(),
+                url: img.url,
                 width: img.width.unwrap_or(0),
                 height: img.height.unwrap_or(0),
             }
         }
     }
-
-    // #[repr(transparent)]
-    // pub struct Artwork(pub model::Artwork);
-    //
-    // impl std::ops::Deref for Artwork {
-    //     type Target = model::Artwork;
-    //
-    //     fn deref(&self) -> &Self::Target {
-    //         &self.0
-    //     }
-    // }
-    //
-    // impl From<spotify_model::Image> for Artwork {
-    //     fn from(img: spotify_model::Image) -> Self {
-    //         Self(model::Artwork {
-    //             url: img.url,
-    //             width: img.width.unwrap_or(0),
-    //             height: img.height.unwrap_or(0),
-    //         })
-    //     }
-    // }
 
     #[repr(transparent)]
     pub struct PlaylistId<'a>(pub rspotify_model::PlaylistId<'a>);
@@ -125,37 +78,14 @@ pub mod spotify {
         }
     }
 
-    // #[repr(transparent)]
-    // pub struct PlaylistId(pub model::PlaylistId);
-    //
-    // impl<'a> TryFrom<PlaylistId> for spotify_model::PlaylistId<'a> {
-    //     type Error = spotify_model::IdError;
-    //
-    //     fn try_from(id: PlaylistId) -> Result<Self, Self::Error> {
-    //         Self::from_id(id.id)
-    //     }
-    // }
-
-    //
-
-    #[repr(transparent)]
-    #[derive(Serialize, Deserialize)]
-    pub struct PlaylistItem(pub rspotify_model::PlaylistItem);
-
-    impl std::ops::Deref for PlaylistItem {
-        type Target = rspotify_model::PlaylistItem;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
+    wrap!(PlaylistItem);
     impl TryFrom<PlaylistItem> for model::Track {
         type Error = Error;
 
         fn try_from(track: PlaylistItem) -> Result<Self, Self::Error> {
             use rspotify_model::PlayableItem;
-            match track.0.track {
+            let track = track.into_inner();
+            match track.track {
                 Some(PlayableItem::Track(track)) => Ok(FullTrack(track).into()),
                 Some(PlayableItem::Episode(ep)) => {
                     let id = model::TrackId {
@@ -189,21 +119,10 @@ pub mod spotify {
         }
     }
 
-    #[repr(transparent)]
-    #[derive(Deserialize, Serialize)]
-    pub struct FullPlaylist(pub rspotify_model::FullPlaylist);
-
-    impl std::ops::Deref for FullPlaylist {
-        type Target = rspotify_model::FullPlaylist;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
+    wrap!(FullPlaylist);
     impl From<FullPlaylist> for model::Playlist {
         fn from(playlist: FullPlaylist) -> Self {
-            let playlist = playlist.0;
+            let playlist = playlist.into_inner();
             Self {
                 id: Some(model::PlaylistId {
                     source: model::Service::Spotify as i32,
@@ -216,21 +135,10 @@ pub mod spotify {
         }
     }
 
-    #[repr(transparent)]
-    #[derive(Serialize, Deserialize)]
-    pub struct FullTrack(pub rspotify_model::FullTrack);
-
-    impl std::ops::Deref for FullTrack {
-        type Target = rspotify_model::FullTrack;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
+    wrap!(FullTrack);
     impl From<FullTrack> for model::Track {
         fn from(track: FullTrack) -> Self {
-            let track = track.0;
+            let track = track.into_inner();
             let id = model::TrackId {
                 source: model::Service::Spotify as i32,
                 // tracks dont need an ID if they are local

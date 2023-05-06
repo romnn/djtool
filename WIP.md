@@ -15,15 +15,17 @@ $HOME/.cargo/bin/cargo +nightly udeps
 #### Roadmap
 
 TODO:
+- implement a CLI interface
+  - implement very fancy progress bar
+  - implement colored output
+
+- make all implemented sources and sinks features
 - split proto into model, server, and client
 
 - refactor to use workspaces (faster builds, clear separation)
 - consider: move djtool_model to djtool::model?
 - lint
-
-- think of a new name?
-
-- compile for web assembly
+- add support for the cargo jobserver protocol to reserve threads for make -j
 
 - implement a cmd based transcoder that does not need to build with ffmpeg
 - make transcoders dynamic dispatch
@@ -31,10 +33,6 @@ TODO:
 - sync: playlist/track, source, sink(s)
   - if nothing specified: all
 
-- make all implemented sources and sinks features
-- implement a CLI interface
-- implement very fancy progress bar
-  - using a sync progress struct
 - use atomic usize for the stats durinc sync
 - implement generic matching interface that scores top n results
 - unify the start routine of the djtool with a shutdown channel
@@ -44,6 +42,11 @@ TODO:
   - need a reindex method that builds the config from scratch!
   - needs to be run whenever the version changes
 - use main config to initialize spotify config path
+
+TODO (future):
+- upgrade to ffmpeg 6
+- think of a new name?
+- compile for web assembly
 
 
 Dropped

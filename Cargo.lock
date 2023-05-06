@@ -670,7 +670,6 @@ dependencies = [
 name = "djtool-ffmpeg-sys"
 version = "0.0.1"
 dependencies = [
- "anyhow",
  "bindgen",
  "cc",
  "crossbeam-channel",
@@ -680,6 +679,7 @@ dependencies = [
  "pkg-config",
  "rayon",
  "tauri-build",
+ "thiserror",
  "tonic-build",
  "vcpkg",
 ]
@@ -701,6 +701,10 @@ dependencies = [
 [[package]]
 name = "djtool-transcode"
 version = "0.1.0"
+dependencies = [
+ "djtool-ffmpeg",
+ "thiserror",
+]
 
 [[package]]
 name = "download-ranged"

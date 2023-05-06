@@ -9,11 +9,19 @@ pub mod chapter;
 pub mod context;
 pub use context::Context;
 
-pub mod format;
-pub use format::{flag, Flags};
-pub use format::{list, Input, Output};
-
 pub mod network;
+
+mod flag;
+pub use flag::Flags;
+
+mod input;
+pub use input::Input;
+
+mod output;
+pub use output::Output;
+
+mod iter;
+pub use iter::Iter;
 
 use std::ffi::{CStr, CString};
 use std::path::Path;
@@ -21,8 +29,46 @@ use std::ptr;
 use std::str::from_utf8_unchecked;
 
 use crate::ffi::*;
-use crate::{Dictionary, Error, Format};
+use crate::{Dictionary, Error};
 
+pub enum Format {
+    Input(Input),
+    Output(Output),
+}
+
+impl Format {
+    pub fn name(&self) -> &str {
+        match *self {
+            Format::Input(ref f) => f.name(),
+            Format::Output(ref f) => f.name(),
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        match *self {
+            Format::Input(ref f) => f.description(),
+            Format::Output(ref f) => f.description(),
+        }
+    }
+
+    pub fn extensions(&self) -> Vec<&str> {
+        match *self {
+            Format::Input(ref f) => f.extensions(),
+            Format::Output(ref f) => f.extensions(),
+        }
+    }
+
+    pub fn mime_types(&self) -> Vec<&str> {
+        match *self {
+            Format::Input(ref f) => f.mime_types(),
+            Format::Output(ref f) => f.mime_types(),
+        }
+    }
+}
+
+pub fn list() -> Iter {
+    Iter::new()
+}
 pub fn register_all() {
     unsafe {
         av_register_all();

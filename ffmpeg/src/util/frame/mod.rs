@@ -79,8 +79,8 @@ impl Frame {
     pub fn packet(&self) -> Packet {
         unsafe {
             Packet {
-                duration: av_frame_get_pkt_duration(self.as_ptr()) as i64,
-                position: av_frame_get_pkt_pos(self.as_ptr()) as i64,
+                duration: av_frame_get_pkt_duration(self.as_ptr()),
+                position: av_frame_get_pkt_pos(self.as_ptr()),
                 size: av_frame_get_pkt_size(self.as_ptr()) as usize,
 
                 pts: (*self.as_ptr()).pkt_pts,
@@ -94,7 +94,7 @@ impl Frame {
         unsafe {
             match (*self.as_ptr()).pts {
                 AV_NOPTS_VALUE => None,
-                pts => Some(pts as i64),
+                pts => Some(pts),
             }
         }
     }
@@ -111,7 +111,7 @@ impl Frame {
         unsafe {
             match av_frame_get_best_effort_timestamp(self.as_ptr()) {
                 AV_NOPTS_VALUE => None,
-                t => Some(t as i64),
+                t => Some(t),
             }
         }
     }
