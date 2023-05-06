@@ -24,9 +24,14 @@ fn main() {
             "#[derive(serde::Serialize, serde::Deserialize, Hash, Eq)]",
         );
     builder
-        .build_server(true)
-        .build_client(false)
         .out_dir(&output_dir)
-        .compile(&[proto_dir.join("model.proto")], &[proto_dir])
+        .compile(&[proto_dir.join("model.proto")], &[&proto_dir])
         .unwrap();
+
+    // tonic_build::configure()
+    //     .build_server(true)
+    //     .build_client(true)
+    //     .out_dir(&output_dir)
+    //     .compile(&[proto_dir.join("service.proto")], &[&proto_dir])
+    //     .unwrap();
 }

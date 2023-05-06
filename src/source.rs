@@ -1,25 +1,21 @@
-use super::proto;
-// use anyhow::Result;
-use super::spotify;
-use async_trait::async_trait;
+use djtool_model as model;
 use chrono::{Date, Utc};
 use futures::stream::Stream;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 pub type PlaylistStream<'a> =
-    Pin<Box<dyn Stream<Item = Result<proto::djtool::Playlist, Error>> + 'a + Send>>;
+    Pin<Box<dyn Stream<Item = Result<model::Playlist, Error>> + 'a + Send>>;
 
-pub type TrackStream<'a> =
-    Pin<Box<dyn Stream<Item = Result<proto::djtool::Track, Error>> + 'a + Send>>;
+pub type TrackStream<'a> = Pin<Box<dyn Stream<Item = Result<model::Track, Error>> + 'a + Send>>;
 
 pub type SearchResultStream<'a, R> = Pin<Box<dyn Stream<Item = Result<R, Error>> + 'a + Send>>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     // todo: add some common error types
-    #[error("spotify error: `{0:?}`")]
-    Spotify(#[from] spotify::Error),
+    // #[error("spotify error: `{0:?}`")]
+    // Spotify(#[from] spotify::Error),
     // Spotify {
     //     #[from]
     //     source: spotify::Error,
@@ -28,15 +24,8 @@ pub enum Error {
     #[error("not found")]
     NotFound,
     #[error("source error: `{0:?}`")]
-    // Custom(Box<dyn std::error::Error + Send>),
-    Custom(Box<dyn std::error::Error + Send + Sync>),
+    Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
-
-// impl<T: std::error::Error> From<T> for Error {
-//     fn from(err: T) -> Error {
-//         Error::Custom(err.into())
-//     }
-// }
 
 #[derive(Clone, Debug)]
 pub enum SearchFilterYear {
@@ -98,29 +87,28 @@ impl SearchQuery {
 #[derive(Debug, Clone)]
 pub struct QueryProgress {}
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait Source {
-    fn id(&self) -> proto::djtool::Service;
-    // use protos for the interface types here
+    fn id(&self) -> model::Service;
     // get user info (username, profile picture)
 
     // get track and playlist info
-    async fn playlist_by_id(&self, id: &String) -> Result<Option<proto::djtool::Playlist>, Error>;
+    async fn playlist_by_id(&self, id: &String) -> Result<Option<model::Playlist>, Error>;
 
-    async fn track_by_id(&self, id: &String) -> Result<Option<proto::djtool::Track>, Error>;
+    async fn track_by_id(&self, id: &String) -> Result<Option<model::Track>, Error>;
 
     async fn search(
         &self,
         query: SearchQuery,
         progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> Vec<Result<proto::djtool::Track, Error>>;
+    ) -> Vec<Result<model::Track, Error>>;
 
     // fn track_by_name_stream<'a>(
     //     &'a self,
     //     name: &str,
-    // ) -> source::SearchResultStream<proto::djtool::Track>;
-    // Pin<Box<dyn Stream<Item = (proto::djtool::Track)> + Send + 'a>>;
+    // ) -> source::SearchResultStream<model::Track>;
+    // Pin<Box<dyn Stream<Item = (model::Track)> + Send + 'a>>;
 
     // get stream of playlists
     fn user_playlists_stream<'a>(&'a self, user_id: &'a String) -> Result<PlaylistStream, Error>;
@@ -128,7 +116,7 @@ pub trait Source {
     fn user_playlist_tracks_stream<'a>(
         &'a self,
         // playlist_id: String,
-        playlist_id: proto::djtool::Playlist,
+        playlist_id: model::Playlist,
     ) -> Result<TrackStream, Error>;
 
     // get stream of tracks based on name
@@ -137,11 +125,11 @@ pub trait Source {
         query: SearchQuery,
         progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> SearchResultStream<proto::djtool::Track>;
+    ) -> SearchResultStream<model::Track>;
 
     async fn handle_user_login_callback(
         &self,
-        login: proto::djtool::UserLoginCallback,
+        login: model::UserLoginCallback,
     ) -> Result<(), Error>;
 
     async fn reauthenticate(&self) -> Result<Option<reqwest::Url>, Error>;
@@ -152,26 +140,3 @@ pub trait Source {
 
     // get stream of playlist tracks
 }
-
-// #[derive(Debug, Clone)]
-// pub struct TrackDescription {
-//     name: String,
-//     artist: Option<String>,
-//     album: Option<String>,
-//     release_date: Option<Date<Utc>>,
-//     duration: Option<u32>,
-//     reference_audio: Option<PathBuf>,
-// }
-
-// #[derive(Debug, Clone)]
-// pub enum Method {
-//     Best {
-//         max_candidates: Option<u32>,
-//         min_confidence: Option<f32>,
-//     },
-//     Fast {
-//         max_candidates: Option<u32>,
-//         min_confidence: Option<f32>,
-//     },
-//     First,
-// }

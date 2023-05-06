@@ -1,7 +1,5 @@
-use anyhow::Result;
 pub use rand::distributions::Alphanumeric;
 use rand::{distributions::Distribution, Rng};
-use sanitize_filename as sanitizer;
 use serde_json::{self, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -32,7 +30,7 @@ impl Distribution<u8> for PKCECodeVerifier {
 pub async fn save_json_response<P: AsRef<Path> + Send + Sync>(
     output_file: P,
     response: &Value,
-) -> Result<()> {
+) -> Result<(), std::io::Error> {
     let file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -43,15 +41,14 @@ pub async fn save_json_response<P: AsRef<Path> + Send + Sync>(
 }
 
 pub fn sanitize_filename(name: &String) -> String {
-    sanitizer::sanitize_with_options(
+    sanitize_filename::sanitize_with_options(
         name,
-        sanitizer::Options {
+        sanitize_filename::Options {
             truncate: true,
             windows: true,
             replacement: "",
         },
     )
-    // .replace(" ", "_")
 }
 
 pub fn random_string(length: usize, dist: impl Distribution<u8>) -> String {
@@ -60,20 +57,4 @@ pub fn random_string(length: usize, dist: impl Distribution<u8>) -> String {
         .take(length)
         .map(char::from)
         .collect()
-    // let mut buf = vec![0u8; length];
-    // getrandom(&mut buf).unwrap();
-    // let range = alphabet.len();
-
-    // buf.iter()
-    //     .map(|byte| alphabet[*byte as usize % range] as char)
-    //     .collect()
 }
-
-// pub fn random_filename(n: usize) -> String {
-//     let name = rand::thread_rng()
-//         .sample_iter(&Alphanumeric)
-//         .take(n)
-//         .map(char::from)
-//         .collect();
-//     sanitize_filename(name)
-// }

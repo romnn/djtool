@@ -128,26 +128,6 @@ pub struct Playlist {
     #[prost(message, repeated, tag = "100")]
     pub tracks: ::prost::alloc::vec::Vec<Track>,
 }
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TrackSyncDesc {
-    #[prost(string, tag = "1")]
-    pub id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub source: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub sink: ::prost::alloc::string::String,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PlaylistSyncDesc {
-    #[prost(string, tag = "1")]
-    pub id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub source: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub sink: ::prost::alloc::string::String,
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Service {

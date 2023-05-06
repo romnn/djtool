@@ -74,15 +74,3 @@ message Playlist {
   uint32 total = 3;
   repeated Track tracks = 100;
 }
-
-message TrackSyncDesc {
-  string id = 1;
-  string source = 2;
-  string sink = 3;
-}
-
-message PlaylistSyncDesc {
-  string id = 1;
-  string source = 2;
-  string sink = 3;
-}

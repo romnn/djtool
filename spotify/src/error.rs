@@ -1,6 +1,5 @@
-use crate::spotify_model;
 use djtool::config::ConfigError;
-use djtool_model as model;
+use crate::model;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
@@ -21,7 +20,7 @@ pub enum ApiError {
     #[error("url parse error: {0}")]
     ParseError(#[from] url::ParseError),
     #[error("invalid id: {0}")]
-    InvalidID(#[from] spotify_model::IdError),
+    InvalidID(#[from] rspotify_model::IdError),
     #[error("invalid media type (neither track or episode)")]
     InvalidMediaType,
 }
@@ -41,7 +40,7 @@ pub enum Error {
     NotFound,
 
     #[error("search result is not of type `{0:?}`")]
-    InvalidSearchResultType(spotify_model::SearchType),
+    InvalidSearchResultType(rspotify_model::SearchType),
     #[error("unknown spotify error: `{0:?}`")]
     Unknown(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

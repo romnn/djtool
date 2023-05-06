@@ -5,6 +5,18 @@ message SyncProgressUpdate {
   // todo oneof
 }
 
+message TrackSyncDesc {
+  string id = 1;
+  string source = 2;
+  string sink = 3;
+}
+
+message PlaylistSyncDesc {
+  string id = 1;
+  string source = 2;
+  string sink = 3;
+}
+
 message SyncRequest {
   repeated string sources = 1;
   repeated TrackSyncDesc tracks = 2;

@@ -38,12 +38,13 @@ default = [
 ]
 
 # "parallel-build",
-cli = ["dep:dialoguer", "dep:indicatif"]
-ui = ["dep:tauri", "dep:tauri-build"]
+# cli = ["dep:dialoguer", "dep:indicatif"]
+# ui = ["dep:tauri", "dep:tauri-build"]
+# spotify = ["dep:rspotify-model"]
+# youtube = []
+# ffmpeg = ["dep:djtool-ffmpeg"]
+
 # proto-build = ["tonic-build"]
-spotify = ["dep:rspotify-model"]
-youtube = []
-ffmpeg = ["dep:djtool-ffmpeg"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -69,66 +70,68 @@ features = ["json", "blocking", "rustls-tls", "stream"]
 version = "0"
 
 [dependencies]
-anyhow = "1"
-dotenv = "0"
+# anyhow = "1"
+djtool-model = { path = "./model" }
+# dotenv = "0"
 async-trait = "0"
-regex = "1"
-lazy_static = "1"
+# regex = "1"
+# lazy_static = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
+# tokio-stream = "0.1"
 sanitize-filename = "0"
 rand = "0"
-uuid = { version = "1", features = ["v4"] }
-futures-util = "0.3"
-url = "2"
-clap = { version = "3", features = [ "derive", "env" ] }
-rayon = "1"
-strsim = "0"
+# uuid = { version = "1", features = ["v4"] }
+# futures-util = "0.3"
+# url = "2"
+# clap = { version = "3", features = [ "derive", "env" ] }
+# rayon = "1"
+# strsim = "0"
 futures = "0.3"
-num_cpus = "1"
-http = "0"
-tempdir = "0"
-base64 = "0"
+# num_cpus = "1"
+# http = "0"
+# tempdir = "0"
+# base64 = "0"
 chrono = { version = "0", features = ["serde"] }
 thiserror = "1"
-sha2 = "0"
-webbrowser = "0"
-warp = "0.3"
+# sha2 = "0"
+# webbrowser = "0"
+# warp = "0.3"
 dirs = "4"
-async-stream = "0"
-id3 = "0"
-image = "0.24"
-tonic = "0.9"
-tonic-web = "0.9"
-prost = "0.11"
-prost-types = "0.11"
-taski = "0"
+# async-stream = "0"
+# id3 = "0"
+# image = "0.24"
+# tonic = "0.9"
+# tonic-web = "0.9"
+# prost = "0.11"
+# prost-types = "0.11"
+# taski = "0"
+
 # outdated deps
 # downcast-rs = "1"
 # boa_engine = "0"
 
 # factor out to spotify
-rspotify-model = { version = "0", optional = true }
+# rspotify-model = { version = "0", optional = true }
 
 # optional dependencies
-djtool-ffmpeg = { path = "ffmpeg", optional = true }
+# djtool-ffmpeg = { path = "ffmpeg", optional = true }
 
 # optional cli dependencies
-dialoguer = { version = "0", optional = true }
-indicatif = { version = "0.16.2", optional = true }
+# dialoguer = { version = "0", optional = true }
+# indicatif = { version = "0.16.2", optional = true }
 
 # optional ui dependencies
-[dependencies.tauri]
-version = "1"
-features = ["custom-protocol", "api-all"]
-optional = true
+# [dependencies.tauri]
+# version = "1"
+# features = ["custom-protocol", "api-all"]
+# optional = true
 
 [build-dependencies]
-anyhow = "1"
-lazy_static = "1"
-tonic-build = { version = "0.9", features = ["prost"] }
-
-# optional build dependencies
-tauri-build = { version = "1", optional = true }
+# anyhow = "1"
+# lazy_static = "1"
+# tonic-build = { version = "0.9", features = ["prost"] }
+#
+# # optional build dependencies
+# tauri-build = { version = "1", optional = true }

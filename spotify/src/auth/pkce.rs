@@ -1,8 +1,7 @@
 use crate::auth::{join_scopes, Authenticator, Credentials, OAuth};
 use crate::config::Config;
 use crate::error::{ApiError, AuthError, Error};
-use crate::spotify_model;
-use djtool_model as model;
+use crate::model;
 use djtool::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 use djtool::config::{ConfigError, Persist};
 
@@ -286,7 +285,7 @@ impl PkceAuthenticator {
         &self,
         form: &HashMap<&str, String>,
         headers: Option<HeaderMap>,
-    ) -> std::result::Result<spotify_model::Token, Error> {
+    ) -> std::result::Result<rspotify_model::Token, Error> {
         let response = self
             .client
             .post(api::TOKEN)
@@ -300,7 +299,7 @@ impl PkceAuthenticator {
         //     "fetch access token response: {}",
         //     response.text().await.unwrap()
         // );
-        let mut token: spotify_model::Token = response
+        let mut token: rspotify_model::Token = response
             .json()
             .await
             .map_err(|err| Error::Api(ApiError::Http(err)))?;
@@ -310,13 +309,13 @@ impl PkceAuthenticator {
         Ok(token)
     }
 
-    async fn refetch_token(&self) -> std::result::Result<Option<spotify_model::Token>, Error> {
+    async fn refetch_token(&self) -> std::result::Result<Option<rspotify_model::Token>, Error> {
         let current_token = {
             let config = self.config.read().await;
             config.token.to_owned()
         };
         match current_token {
-            Some(spotify_model::Token {
+            Some(rspotify_model::Token {
                 refresh_token: Some(refresh_token),
                 ..
             }) => {

@@ -1,3 +1,5 @@
+// pub mod spotify;
+
 pub use std::fmt;
 
 include!(concat!(
@@ -45,3 +47,36 @@ impl fmt::Display for PlaylistId {
     }
 }
 
+// pub trait ConvertFrom<T>
+// where
+//     Self: Sized,
+// {
+//     fn convert_from(other: T) -> Self;
+// }
+//
+//
+// pub trait TryConvertFrom<T>
+// where
+//     Self: Sized,
+// {
+//     type Error;
+//     fn try_convert_from(other: T) -> Result<Self, Self::Error>;
+// }
+//
+// pub trait TryConvertInto<T>
+// where
+//     Self: Sized,
+// {
+//     type Error;
+//     fn try_convert_into(self) -> Result<T, Self::Error>;
+// }
+//
+// impl<T, U> TryConvertInto<T> for U
+// where
+//     T: TryConvertFrom<U>,
+// {
+//     type Error = <T as TryConvertFrom<U>>::Error;
+//     fn try_convert_into(self) -> Result<T, Self::Error> {
+//         TryConvertFrom::try_convert_from(self)
+//     }
+// }
