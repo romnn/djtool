@@ -1280,7 +1280,6 @@ fn main() {
         search().join("lib").to_string_lossy()
     );
 
-    return;
     if need_build || feature_env_set("force-build") {
         std::fs::remove_dir_all(&search()).ok();
     }

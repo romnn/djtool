@@ -1,4 +1,11 @@
-#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_safety_doc, clippy::must_use_candidate)]
+#![allow(
+    warnings,
+    clippy::all,
+    clippy::pedantic,
+    clippy::restriction,
+    clippy::nursery
+)]
 
 use djtool_ffmpeg_sys as ffi;
 

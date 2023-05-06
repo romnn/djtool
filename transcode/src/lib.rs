@@ -9,8 +9,8 @@ use std::time::Duration;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TranscodeProgress {
     pub elapsed: Duration,
-    pub frame: usize,
-    pub total_frames: usize,
+    pub frame: u64,
+    pub total_frames: u64,
     pub duration: Duration,
     pub timestamp: Duration,
 }
@@ -59,6 +59,10 @@ pub enum Error {
 }
 
 pub trait Transcoder {
+    /// Transcode input file to output path
+    ///
+    /// # Errors
+    /// If an ffmpeg error occurs during transcoding.
     fn transcode_blocking(
         &self,
         input_path: &Path,

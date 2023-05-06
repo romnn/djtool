@@ -1,3 +1,10 @@
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+)]
+
 use crate::{Codec, Error, ProgressHandlerFunc, TranscodeProgress, Transcoder, TranscoderOptions};
 use djtool_ffmpeg as ffmpeg;
 use std::path::Path;
@@ -19,10 +26,10 @@ struct FFmpegTranscode<'a> {
     encoder: ffmpeg::codec::encoder::Audio,
     in_time_base: ffmpeg::Rational,
     out_time_base: ffmpeg::Rational,
-    duration: usize,
-    total_frames: usize,
+    duration: u64,
+    total_frames: u64,
+    frame: u64,
     started: Instant,
-    frame: usize,
     progress_handler: &'a mut ProgressHandlerFunc,
 }
 
@@ -56,7 +63,7 @@ impl<'a> FFmpegTranscode<'a> {
         let global = octx
             .format()
             .flags()
-            .contains(ffmpeg::format::flag::Flags::GLOBAL_HEADER);
+            .contains(ffmpeg::format::Flags::GLOBAL_HEADER);
 
         decoder.set_parameters(input.parameters())?;
 
@@ -65,7 +72,9 @@ impl<'a> FFmpegTranscode<'a> {
 
         let channel_layout = codec
             .channel_layouts()
-            .map_or(ffmpeg::channel_layout::ChannelLayout::STEREO, |cls| cls.best(decoder.channel_layout().channels()));
+            .map_or(ffmpeg::channel_layout::ChannelLayout::STEREO, |cls| {
+                cls.best(decoder.channel_layout().channels())
+            });
 
         if global {
             encoder.set_flags(ffmpeg::codec::flag::Flags::GLOBAL_HEADER);
@@ -112,6 +121,8 @@ impl<'a> FFmpegTranscode<'a> {
         let out_time_base = output.time_base();
         let started = Instant::now();
 
+        // this does not work for audio streams
+        let total_frames = input.duration() as f64 * f64::from(input.rate());
         Ok(Self {
             stream: input.index(),
             filter,
@@ -119,9 +130,8 @@ impl<'a> FFmpegTranscode<'a> {
             encoder,
             in_time_base,
             out_time_base,
-            duration: input.duration() as usize,
-            // this does not work for audio streams
-            total_frames: (input.duration() as f64 * f64::from(input.rate())) as usize,
+            duration: input.duration().unsigned_abs(),
+            total_frames: total_frames as u64,
             started,
             frame: 0,
             progress_handler,
@@ -280,6 +290,17 @@ impl<'a> FFmpegTranscode<'a> {
 pub struct FFmpegTranscoder {}
 
 impl FFmpegTranscoder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl FFmpegTranscoder {
+    /// Transcode input file to output path
+    ///
+    /// # Errors
+    /// If an ffmpeg error occurs during transcoding.
     pub fn transcode(
         &self,
         input_path: &Path,
@@ -323,14 +344,6 @@ impl FFmpegTranscoder {
         Ok(())
     }
 }
-
-impl FFmpegTranscoder {
-    #[must_use] pub fn new() -> Self {
-        Self {}
-    }
-}
-
-
 
 impl Transcoder for FFmpegTranscoder {
     fn transcode_blocking(
