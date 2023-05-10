@@ -1,26 +1,15 @@
-use djtool_model as model;
-use chrono::{Date, Utc};
 use futures::stream::Stream;
-use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 pub type PlaylistStream<'a> =
-    Pin<Box<dyn Stream<Item = Result<model::Playlist, Error>> + 'a + Send>>;
+    Pin<Box<dyn Stream<Item = Result<super::Playlist, Error>> + 'a + Send>>;
 
-pub type TrackStream<'a> = Pin<Box<dyn Stream<Item = Result<model::Track, Error>> + 'a + Send>>;
+pub type TrackStream<'a> = Pin<Box<dyn Stream<Item = Result<super::Track, Error>> + 'a + Send>>;
 
 pub type SearchResultStream<'a, R> = Pin<Box<dyn Stream<Item = Result<R, Error>> + 'a + Send>>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    // todo: add some common error types
-    // #[error("spotify error: `{0:?}`")]
-    // Spotify(#[from] spotify::Error),
-    // Spotify {
-    //     #[from]
-    //     source: spotify::Error,
-    //     // backtrace: std::backtrace::Backtrace,
-    // },
     #[error("not found")]
     NotFound,
     #[error("source error: `{0:?}`")]
@@ -89,26 +78,26 @@ pub struct QueryProgress {}
 
 #[async_trait::async_trait]
 pub trait Source {
-    fn id(&self) -> model::Service;
+    fn id(&self) -> super::Service;
     // get user info (username, profile picture)
 
     // get track and playlist info
-    async fn playlist_by_id(&self, id: &String) -> Result<Option<model::Playlist>, Error>;
+    async fn playlist_by_id(&self, id: &String) -> Result<Option<super::Playlist>, Error>;
 
-    async fn track_by_id(&self, id: &String) -> Result<Option<model::Track>, Error>;
+    async fn track_by_id(&self, id: &String) -> Result<Option<super::Track>, Error>;
 
     async fn search(
         &self,
         query: SearchQuery,
         progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> Vec<Result<model::Track, Error>>;
+    ) -> Vec<Result<super::Track, Error>>;
 
     // fn track_by_name_stream<'a>(
     //     &'a self,
     //     name: &str,
-    // ) -> source::SearchResultStream<model::Track>;
-    // Pin<Box<dyn Stream<Item = (model::Track)> + Send + 'a>>;
+    // ) -> source::SearchResultStream<super::Track>;
+    // Pin<Box<dyn Stream<Item = (super::Track)> + Send + 'a>>;
 
     // get stream of playlists
     fn user_playlists_stream<'a>(&'a self, user_id: &'a String) -> Result<PlaylistStream, Error>;
@@ -116,7 +105,7 @@ pub trait Source {
     fn user_playlist_tracks_stream<'a>(
         &'a self,
         // playlist_id: String,
-        playlist_id: model::Playlist,
+        playlist_id: super::Playlist,
     ) -> Result<TrackStream, Error>;
 
     // get stream of tracks based on name
@@ -125,14 +114,15 @@ pub trait Source {
         query: SearchQuery,
         progress: Box<dyn Fn(QueryProgress) -> () + Send + 'static>,
         limit: Option<usize>,
-    ) -> SearchResultStream<model::Track>;
+    ) -> SearchResultStream<super::Track>;
 
     async fn handle_user_login_callback(
         &self,
-        login: model::UserLoginCallback,
+        login: super::UserLoginCallback,
     ) -> Result<(), Error>;
 
-    async fn reauthenticate(&self) -> Result<Option<reqwest::Url>, Error>;
+    // async fn reauthenticate(&self) -> Result<Option<reqwest::Url>, Error>;
+  
     // fn user_playlist_tracks_stream<'a>(
     //     &'a self,
     //     playlist_id: &'a str,

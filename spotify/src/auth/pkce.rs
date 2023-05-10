@@ -2,18 +2,16 @@ use crate::auth::{join_scopes, Authenticator, Credentials, OAuth};
 use crate::config::Config;
 use crate::error::{ApiError, AuthError, Error};
 use crate::model;
-use djtool::utils::{random_string, Alphanumeric, PKCECodeVerifier};
-use djtool::config::{ConfigError, Persist};
+use library::{ConfigError, Persist};
 
 use chrono::{DateTime, Duration, Utc};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 pub mod api {
     pub const AUTHORIZE: &str = "https://accounts.spotify.com/authorize";
@@ -133,12 +131,12 @@ impl Authenticator for PkceAuthenticator {
 impl PkceAuthenticator {
     /// Generate the verifier code and the challenge code.
     fn generate_codes(&self, verifier_bytes: usize) -> (String, String) {
+        use super::utils::{random_string, PKCECodeVerifier};
         use base64::{
             alphabet,
             engine::{self, general_purpose},
             Engine,
         };
-
         println!("Generating PKCE codes");
 
         debug_assert!(verifier_bytes >= 43);

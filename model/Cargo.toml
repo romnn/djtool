@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 prost = "0.11"
 prost-types = "0.11"
+async-trait = "0"
+futures = "0.3"
 
-tonic = "0.9"
-tonic-web = "0.9"
+# tonic = "0.9"
+# tonic-web = "0.9"
 
 [build-dependencies]
 tonic-build = { version = "0.9", features = ["prost"] }

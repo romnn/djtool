@@ -1,12 +1,6 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json;
+use super::{Persist, Library};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncReadExt;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Library {
-    pub library_dir: PathBuf,
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -23,31 +17,6 @@ pub enum ConfigError {
     #[error("failed to parse config: {0}")]
     ParseError(#[from] serde_json::Error),
 }
-
-#[async_trait::async_trait]
-pub trait Persist: Serialize + DeserializeOwned {
-    async fn load<P: AsRef<Path> + Send + Sync>(config_file: P) -> Result<Self, ConfigError> {
-        let mut file = tokio::fs::File::open(config_file).await?;
-        let mut buf = String::new();
-        file.read_to_string(&mut buf).await?;
-        let test = buf.to_owned();
-        let deser =
-            serde_json::from_str::<Self>(&test).map_err(|err| ConfigError::ParseError(err))?;
-        Ok(deser)
-    }
-
-    async fn save<P: AsRef<Path> + Send + Sync>(&self, config_file: P) -> Result<(), ConfigError> {
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(config_file)?;
-        serde_json::to_writer(&file, &self)?;
-        Ok(())
-    }
-}
-
-impl Persist for Library {}
 
 impl Config {
     pub async fn open<T: AsRef<Path> + Send + Sync>(config_dir: T) -> Result<Self, ConfigError> {
@@ -66,14 +35,14 @@ impl Config {
                     .unwrap()
                     .join("djtool");
                 let empty = Library {
-                    library_dir: default_library_dir,
+                    path: default_library_dir,
                 };
                 empty.save(&config_file).await?;
                 empty
             }
             Ok(library) => library,
         };
-        let _ = tokio::fs::create_dir_all(&library.library_dir).await;
+        tokio::fs::create_dir_all(&library.path).await.ok();
 
         println!("loaded library: {:?}", library);
         Ok(Self {

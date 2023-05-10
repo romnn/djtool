@@ -39,7 +39,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::thread;
 use tempdir::TempDir;
-// use std::sync::{mpsc as smpsc};
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex, RwLock, Semaphore};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server as TonicServer, Code, Request, Response, Status};

@@ -6,6 +6,8 @@ pub mod error;
 pub mod model;
 pub mod source;
 pub mod stream;
+#[cfg(feature = "cli")]
+pub mod cli;
 
 use error::{ApiError, Error};
 use reqwest::header::HeaderMap;
@@ -56,7 +58,7 @@ impl Spotify {
 
     pub async fn search_page<'a>(
         &'a self,
-        search_query: djtool::source::SearchQuery,
+        search_query: djtool_model::source::SearchQuery,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<rspotify_model::SearchResult, Error> {

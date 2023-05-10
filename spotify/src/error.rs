@@ -1,4 +1,4 @@
-use djtool::config::ConfigError;
+use library::ConfigError;
 use crate::model;
 
 #[derive(Debug, thiserror::Error)]

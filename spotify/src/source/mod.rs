@@ -1,6 +1,6 @@
 use crate::error::{ApiError, AuthError, Error};
 use crate::{model, stream::paginate};
-use djtool::source;
+use djtool_model::source;
 use futures::{StreamExt, TryStreamExt};
 use std::sync::Arc;
 
@@ -12,13 +12,13 @@ impl source::Source for crate::Spotify {
         model::Service::Spotify
     }
 
-    async fn reauthenticate(&self) -> Result<Option<reqwest::Url>, source::Error> {
-        match self.authenticator.reauthenticate().await {
-            Err(Error::Auth(AuthError::RequireUserLogin { auth_url })) => Ok(Some(auth_url)),
-            Err(err) => Err(source::Error::Custom(err.into())),
-            Ok(_) => Ok(None),
-        }
-    }
+    // async fn reauthenticate(&self) -> Result<Option<reqwest::Url>, source::Error> {
+    //     match self.authenticator.reauthenticate().await {
+    //         Err(Error::Auth(AuthError::RequireUserLogin { auth_url })) => Ok(Some(auth_url)),
+    //         Err(err) => Err(source::Error::Custom(err.into())),
+    //         Ok(_) => Ok(None),
+    //     }
+    // }
 
     async fn playlist_by_id(&self, id: &String) -> Result<Option<model::Playlist>, source::Error> {
         let url = crate::api!(format!("playlists/{}", id))

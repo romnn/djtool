@@ -13,6 +13,7 @@ members = [
   "correlation",
   "transcode",
   "model",
+  "library",
   "download",
   "cli",
 ]
@@ -20,6 +21,18 @@ members = [
 [lib]
 # Disable doctests as a workaround for https://github.com/rust-lang/rust-bindgen/issues/1313
 # doctest = false
+
+# [[bin]]
+# name = "djtool"    
+# required-features = ["ui", "cli", "api"]
+#
+# [[bin]]
+# name = "djtool-cli"    
+# required-features = ["cli"]
+#
+# [[bin]]
+# name = "djtool-server"    
+# required-features = ["api"]
 
 [features]
 # default  = [
@@ -32,15 +45,18 @@ members = [
 default = [
   # "proto-build",
   # "youtube",
-  # "spotify",
   # "ffmpeg",
   # "youtube",
+  "spotify",
+  "cli",
 ]
 
 # "parallel-build",
-# cli = ["dep:dialoguer", "dep:indicatif"]
-# ui = ["dep:tauri", "dep:tauri-build"]
-# spotify = ["dep:rspotify-model"]
+cli = ["dep:dialoguer", "dep:indicatif"]
+ui = ["dep:tauri", "dep:tauri-build"]
+server = []
+
+spotify = ["dep:spotify"]
 # youtube = []
 # ffmpeg = ["dep:djtool-ffmpeg"]
 
@@ -70,14 +86,17 @@ features = ["json", "blocking", "rustls-tls", "stream"]
 version = "0"
 
 [dependencies]
-# anyhow = "1"
 djtool-model = { path = "./model" }
-# dotenv = "0"
+library = { path = "./library" }
+
+color-eyre = "0"
+dotenv = "0"
+clap = { version = "3", features = [ "derive", "env" ] }
 async-trait = "0"
 # regex = "1"
 # lazy_static = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# serde = { version = "1", features = ["derive"] }
+# serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 # tokio-stream = "0.1"
 sanitize-filename = "0"
@@ -85,7 +104,6 @@ rand = "0"
 # uuid = { version = "1", features = ["v4"] }
 # futures-util = "0.3"
 # url = "2"
-# clap = { version = "3", features = [ "derive", "env" ] }
 # rayon = "1"
 # strsim = "0"
 futures = "0.3"
@@ -98,7 +116,7 @@ thiserror = "1"
 # sha2 = "0"
 # webbrowser = "0"
 # warp = "0.3"
-dirs = "4"
+# dirs = "4"
 # async-stream = "0"
 # id3 = "0"
 # image = "0.24"
@@ -112,26 +130,25 @@ dirs = "4"
 # downcast-rs = "1"
 # boa_engine = "0"
 
-# factor out to spotify
-# rspotify-model = { version = "0", optional = true }
+spotify = { path = "./spotify", optional = true }
 
 # optional dependencies
 # djtool-ffmpeg = { path = "ffmpeg", optional = true }
 
 # optional cli dependencies
-# dialoguer = { version = "0", optional = true }
-# indicatif = { version = "0.16.2", optional = true }
+dialoguer = { version = "0", optional = true }
+indicatif = { version = "0.16.2", optional = true }
 
 # optional ui dependencies
-# [dependencies.tauri]
-# version = "1"
-# features = ["custom-protocol", "api-all"]
-# optional = true
+[dependencies.tauri]
+version = "1"
+features = ["custom-protocol", "api-all"]
+optional = true
 
 [build-dependencies]
 # anyhow = "1"
 # lazy_static = "1"
 # tonic-build = { version = "0.9", features = ["prost"] }
-#
-# # optional build dependencies
-# tauri-build = { version = "1", optional = true }
+
+# optional build dependencies
+tauri-build = { version = "1", optional = true }

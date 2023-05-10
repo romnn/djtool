@@ -3,6 +3,10 @@ name = "spotify"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["cli"]
+cli = ["dep:clap"]
+
 [dependencies]
 # todo: remove
 anyhow = "1"
@@ -15,14 +19,21 @@ async-stream = "0"
 async-trait = "0"
 base64 = "0"
 sha2 = "0"
+rand = "0"
 webbrowser = "0"
 chrono = { version = "0", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 
-djtool = { path = "../" }
 djtool-model = { path = "../model" }
+library = { path = "../library" }
+
+# optional cli dependencies
+[dependencies.clap ]
+version = "3"
+features = [ "derive", "env" ]
+optional = true
 
 [dependencies.reqwest]
 features = ["json", "blocking", "rustls-tls", "stream"]

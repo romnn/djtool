@@ -1,5 +1,3 @@
-use super::Error;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Response {
     pub content_len: Option<u64>,
@@ -14,10 +12,7 @@ pub struct Response {
 ///
 /// # Errors
 /// If the pre-flight request fails.
-pub async fn send(
-    client: &reqwest::Client,
-    url: reqwest::Url,
-) -> Result<Response, Error> {
+pub async fn send(client: &reqwest::Client, url: reqwest::Url) -> Result<Response, reqwest::Error> {
     let response = client
         .get(url)
         .header("Range", "bytes=0-0")
@@ -31,7 +26,7 @@ pub async fn send(
 
     let content_disposition_name = headers
         .get("content-disposition")
-        .and_then(|val| val.to_str().map(std::string::ToString::to_string).ok());
+        .and_then(|val| val.to_str().map(ToString::to_string).ok());
 
     if let Some(content_range) = headers
         .get("content-range")

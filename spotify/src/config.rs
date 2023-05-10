@@ -9,4 +9,4 @@ pub struct Config {
     pub user_id: Option<String>,
 }
 
-impl djtool::config::Persist for Config {}
+impl library::Persist for Config {}

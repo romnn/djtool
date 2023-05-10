@@ -1,9 +1,9 @@
 pub mod pkce;
+mod utils;
 
-use crate::error::Error;
 use crate::config::Config;
+use crate::error::Error;
 use djtool_model as model;
-use djtool::utils::{random_string, Alphanumeric, PKCECodeVerifier};
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
@@ -51,9 +51,9 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn pkce(client_id: &str) -> Self {
+    pub fn pkce(client_id: String) -> Self {
         Credentials {
-            client_id: client_id.to_owned(),
+            client_id,
             // secret: None,
         }
     }
@@ -79,9 +79,10 @@ pub struct OAuth {
 
 impl Default for OAuth {
     fn default() -> Self {
+        use rand::distributions::Alphanumeric;
         OAuth {
             redirect_uri: String::new(),
-            state: random_string(16, Alphanumeric),
+            state: utils::random_string(16, Alphanumeric),
             scopes: HashSet::new(),
             proxies: None,
         }
