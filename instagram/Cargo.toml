@@ -1,0 +1,15 @@
+[package]
+name = "instagram"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenv = "0"
+color-eyre = "0"
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+warp = "0"
+
+[dependencies.reqwest]
+features = ["json", "rustls-tls", "stream"]
+version = "0"

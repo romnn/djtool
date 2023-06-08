@@ -1,0 +1,7 @@
+[packages]
+instagrapi = "*"
+
+# [[instagram_web_api]]
+# git = "https://git@github.com/ping/instagram_private_api.git"
+# editable = true
+# ref = "1.6.0"
